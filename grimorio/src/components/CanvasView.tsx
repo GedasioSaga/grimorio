@@ -12,11 +12,13 @@ import {
 } from 'tldraw'
 import 'tldraw/tldraw.css'
 import { useApp } from '../state/store'
-import { CharacterCardShapeUtil } from './CharacterCardShape'
+import {
+  CARD_ALTURA_PADRAO,
+  CARD_LARGURA_PADRAO,
+  CharacterCardShapeUtil,
+} from './CharacterCardShape'
 
 const AUTOSAVE_DEBOUNCE_MS = 1000
-const CARD_LARGURA_PADRAO = 220
-const CARD_ALTURA_PADRAO = 120
 
 // Constantes em nível de módulo: arrays recriados a cada render remontam o editor.
 // `shapeUtilsCustom` vai na prop `shapeUtils` do <Tldraw> (que soma aos defaults);
@@ -114,14 +116,21 @@ export function CanvasView({ caminho, nome }: { caminho: string; nome: string })
   return (
     <div
       className="canvas-wrap"
-      onDragOver={(e) => {
-        if (e.dataTransfer.types.includes('application/x-grimorio-personagem')) e.preventDefault()
+      // Fase capture: o canvas interno do tldraw chama preventDefault +
+      // stopPropagation no drop, então handlers de bubble aqui nunca disparam.
+      // O guard pelo MIME type deixa drags alheios passarem intactos pro tldraw.
+      onDragOverCapture={(e) => {
+        if (e.dataTransfer.types.includes('application/x-grimorio-personagem')) {
+          e.preventDefault()
+          e.stopPropagation()
+        }
       }}
-      onDrop={(e) => {
+      onDropCapture={(e) => {
         const id = e.dataTransfer.getData('application/x-grimorio-personagem')
         const editor = editorRef.current
         if (!id || !editor) return
         e.preventDefault()
+        e.stopPropagation()
         const ponto = editor.screenToPage({ x: e.clientX, y: e.clientY })
         editor.createShape({
           id: createShapeId(),

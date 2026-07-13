@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react'
 import {
   BaseBoxShapeUtil,
   HTMLContainer,
@@ -7,6 +8,9 @@ import {
 } from 'tldraw'
 import { convertFileSrc } from '@tauri-apps/api/core'
 import { useApp } from '../state/store'
+
+export const CARD_LARGURA_PADRAO = 220
+export const CARD_ALTURA_PADRAO = 120
 
 // tldraw 4.x: shapes customizados entram no union TLShape via augmentation
 // do TLGlobalShapePropsMap (declarado em @tldraw/tlschema).
@@ -27,7 +31,7 @@ export class CharacterCardShapeUtil extends BaseBoxShapeUtil<CharacterCardShapeT
   }
 
   override getDefaultProps(): CharacterCardShapeType['props'] {
-    return { w: 220, h: 120, personagemId: '' }
+    return { w: CARD_LARGURA_PADRAO, h: CARD_ALTURA_PADRAO, personagemId: '' }
   }
 
   override canEdit() {
@@ -51,6 +55,14 @@ function CartaoPersonagem({ personagemId }: { personagemId: string }) {
   const p = useApp((s) => s.personagens[personagemId])
   const vaultPath = useApp((s) => s.vaultPath)
 
+  const retratoSrc = p?.retrato && vaultPath ? convertFileSrc(`${vaultPath}/${p.retrato}`) : null
+
+  // imagem quebrada → volta pro fallback de inicial; reseta se o retrato mudar
+  const [erroImg, setErroImg] = useState(false)
+  useEffect(() => {
+    setErroImg(false)
+  }, [retratoSrc])
+
   if (!p) {
     return (
       <HTMLContainer className="char-card char-card-removido" style={{ pointerEvents: 'all' }}>
@@ -59,18 +71,15 @@ function CartaoPersonagem({ personagemId }: { personagemId: string }) {
     )
   }
 
-  const retratoSrc = p.retrato && vaultPath ? convertFileSrc(`${vaultPath}/${p.retrato}`) : null
-
   return (
     <HTMLContainer className="char-card" style={{ pointerEvents: 'all' }}>
       <div className="char-card-retrato">
-        {retratoSrc ? (
+        {retratoSrc && !erroImg ? (
           <img
             src={retratoSrc}
             alt={p.nome}
-            onError={(e) => {
-              ;(e.target as HTMLImageElement).style.display = 'none'
-            }}
+            draggable={false}
+            onError={() => setErroImg(true)}
           />
         ) : (
           <span className="char-card-inicial">{p.nome.charAt(0).toUpperCase()}</span>
