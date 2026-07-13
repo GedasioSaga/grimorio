@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
 import {
   Tldraw,
+  createShapeId,
   createTLStore,
+  defaultShapeUtils,
   getSnapshot,
   loadSnapshot,
   type Editor,
@@ -10,19 +12,24 @@ import {
 } from 'tldraw'
 import 'tldraw/tldraw.css'
 import { useApp } from '../state/store'
+import { CharacterCardShapeUtil } from './CharacterCardShape'
 
 const AUTOSAVE_DEBOUNCE_MS = 1000
+const CARD_LARGURA_PADRAO = 220
+const CARD_ALTURA_PADRAO = 120
+
+// Constantes em nível de módulo: arrays recriados a cada render remontam o editor.
+// `shapeUtilsCustom` vai na prop `shapeUtils` do <Tldraw> (que soma aos defaults);
+// o store precisa do schema completo (defaults + customizados).
+const shapeUtilsCustom = [CharacterCardShapeUtil]
+const shapeUtilsDoStore = [...defaultShapeUtils, CharacterCardShapeUtil]
 
 /**
  * Ponto único de criação do store do tldraw.
- * Tasks futuras (shapes customizados, asset store) adicionam opções aqui.
- * IMPORTANTE: a Task 8 (shapes customizados) deve passar o mesmo array de
- * shapeUtils, em nível de módulo, tanto aqui (para o store) quanto na prop
- * `shapeUtils` do <Tldraw> abaixo — usar arrays diferentes (ou recriados a
- * cada render) faz o editor remontar.
+ * Tasks futuras (asset store) adicionam opções aqui.
  */
 function criarStoreCanvas(): TLStore {
-  return createTLStore()
+  return createTLStore({ shapeUtils: shapeUtilsDoStore })
 }
 
 export function CanvasView({ caminho, nome }: { caminho: string; nome: string }) {
@@ -105,9 +112,29 @@ export function CanvasView({ caminho, nome }: { caminho: string; nome: string })
   if (!store) return <div className="canvas-carregando">Carregando…</div>
 
   return (
-    <div className="canvas-wrap">
+    <div
+      className="canvas-wrap"
+      onDragOver={(e) => {
+        if (e.dataTransfer.types.includes('application/x-grimorio-personagem')) e.preventDefault()
+      }}
+      onDrop={(e) => {
+        const id = e.dataTransfer.getData('application/x-grimorio-personagem')
+        const editor = editorRef.current
+        if (!id || !editor) return
+        e.preventDefault()
+        const ponto = editor.screenToPage({ x: e.clientX, y: e.clientY })
+        editor.createShape({
+          id: createShapeId(),
+          type: 'character-card',
+          x: ponto.x - CARD_LARGURA_PADRAO / 2,
+          y: ponto.y - CARD_ALTURA_PADRAO / 2,
+          props: { personagemId: id },
+        })
+      }}
+    >
       <Tldraw
         store={store}
+        shapeUtils={shapeUtilsCustom}
         onMount={(editor) => {
           editorRef.current = editor
           editor.user.updateUserPreferences({ colorScheme: 'dark' })
