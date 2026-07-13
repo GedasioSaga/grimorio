@@ -16,15 +16,13 @@ const AUTOSAVE_DEBOUNCE_MS = 1000
 /**
  * Ponto único de criação do store do tldraw.
  * Tasks futuras (shapes customizados, asset store) adicionam opções aqui.
+ * IMPORTANTE: a Task 8 (shapes customizados) deve passar o mesmo array de
+ * shapeUtils, em nível de módulo, tanto aqui (para o store) quanto na prop
+ * `shapeUtils` do <Tldraw> abaixo — usar arrays diferentes (ou recriados a
+ * cada render) faz o editor remontar.
  */
 function criarStoreCanvas(): TLStore {
   return createTLStore()
-}
-
-interface MetaDoc {
-  id: string
-  nome: string
-  criadoEm: string
 }
 
 export function CanvasView({ caminho, nome }: { caminho: string; nome: string }) {
@@ -33,7 +31,6 @@ export function CanvasView({ caminho, nome }: { caminho: string; nome: string })
   const [erro, setErro] = useState<string | null>(null)
   const [salvandoErro, setSalvandoErro] = useState<string | null>(null)
   const editorRef = useRef<Editor | null>(null)
-  const docRef = useRef<MetaDoc | null>(null)
 
   // carrega o snapshot do arquivo e monta o store
   useEffect(() => {
@@ -43,7 +40,6 @@ export function CanvasView({ caminho, nome }: { caminho: string; nome: string })
       try {
         const doc = await repo.lerCanvasDoc(caminho)
         if (!ativo) return
-        docRef.current = { id: doc.id, nome: doc.nome, criadoEm: doc.criadoEm }
         const s = criarStoreCanvas()
         if (doc.documento) loadSnapshot(s, doc.documento as Partial<TLEditorSnapshot>)
         setStore(s)
@@ -65,17 +61,9 @@ export function CanvasView({ caminho, nome }: { caminho: string; nome: string })
     let timer: ReturnType<typeof setTimeout> | null = null
 
     async function salvar() {
-      const meta = docRef.current
-      if (!meta) return
       const { document, session } = getSnapshot(storeAtual)
       try {
-        await repoAtual.salvarCanvasDoc(caminho, {
-          id: meta.id,
-          nome: meta.nome,
-          criadoEm: meta.criadoEm,
-          modificadoEm: '', // salvarCanvasDoc sobrescreve
-          documento: { document, session },
-        })
+        await repoAtual.salvarDocumentoCanvas(caminho, { document, session })
         setSalvandoErro(null)
       } catch (e) {
         setSalvandoErro(String(e))
@@ -100,7 +88,7 @@ export function CanvasView({ caminho, nome }: { caminho: string; nome: string })
         // VaultRepo serializa escritas por caminho, então fire-and-forget é seguro.
         clearTimeout(timer)
         timer = null
-        void salvar()
+        salvar().catch((e) => console.error('Falha no save final do canvas:', e))
       }
     }
   }, [store, repo, caminho])

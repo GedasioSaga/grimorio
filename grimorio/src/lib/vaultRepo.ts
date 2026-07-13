@@ -110,6 +110,15 @@ export class VaultRepo {
     })
   }
 
+  /** Atualiza só o documento do canvas (read-modify-write na fila do caminho — não sobrescreve rename concorrente). */
+  async salvarDocumentoCanvas(caminho: string, documento: unknown): Promise<void> {
+    return this.naFila(caminho, async () => {
+      const atual: CanvasDoc = JSON.parse(await this.fs.readText(this.abs(caminho)))
+      const salvo = { ...atual, documento, modificadoEm: agora() }
+      await this.fs.writeTextAtomic(this.abs(caminho), JSON.stringify(salvo, null, 2))
+    })
+  }
+
   /** Renomeia o campo `nome` do item (arquivo e slug não mudam — referências continuam válidas). */
   async renomearItem(caminho: string, novoNome: string): Promise<void> {
     return this.naFila(caminho, async () => {

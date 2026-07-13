@@ -113,6 +113,17 @@ describe('VaultRepo', () => {
     expect(p.modificadoEm).toBe(antes)
   })
 
+  it('salvarDocumentoCanvas preserva nome renomeado concorrentemente', async () => {
+    await repo.inicializar()
+    const camp = await repo.criarCampanha('Teste')
+    const ref = await repo.criarCanvasDoc(`campanhas/${camp}/sessoes`, 'Sessão 01')
+    await repo.renomearItem(ref.caminho, 'Sessão 01 — Renomeada')
+    await repo.salvarDocumentoCanvas(ref.caminho, { document: {}, session: {} })
+    const doc = await repo.lerCanvasDoc(ref.caminho)
+    expect(doc.nome).toBe('Sessão 01 — Renomeada')
+    expect(doc.documento).toEqual({ document: {}, session: {} })
+  })
+
   it('escritas concorrentes no mesmo caminho são serializadas (última vence)', async () => {
     await repo.inicializar()
     const camp = await repo.criarCampanha('Teste')
