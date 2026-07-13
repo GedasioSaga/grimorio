@@ -6,12 +6,16 @@ import {
   defaultShapeUtils,
   getSnapshot,
   loadSnapshot,
+  uniqueId,
   type Editor,
+  type TLAssetStore,
   type TLEditorSnapshot,
   type TLStore,
 } from 'tldraw'
 import 'tldraw/tldraw.css'
+import { convertFileSrc } from '@tauri-apps/api/core'
 import { useApp } from '../state/store'
+import type { VaultRepo } from '../lib/vaultRepo'
 import {
   CARD_ALTURA_PADRAO,
   CARD_LARGURA_PADRAO,
@@ -26,16 +30,49 @@ const AUTOSAVE_DEBOUNCE_MS = 1000
 const shapeUtilsCustom = [CharacterCardShapeUtil]
 const shapeUtilsDoStore = [...defaultShapeUtils, CharacterCardShapeUtil]
 
+const BASE64_CHUNK = 8192
+
+/** Converte bytes para base64 em blocos (evita estourar a pilha com spread gigante). */
+function uint8ParaBase64(bytes: Uint8Array): string {
+  let bin = ''
+  for (let i = 0; i < bytes.length; i += BASE64_CHUNK) {
+    bin += String.fromCharCode(...bytes.subarray(i, i + BASE64_CHUNK))
+  }
+  return btoa(bin)
+}
+
 /**
- * Ponto único de criação do store do tldraw.
- * Tasks futuras (asset store) adicionam opções aqui.
+ * Asset store do tldraw: imagens coladas/arrastadas vão para `<cofre>/imagens-canvas/`.
+ * O snapshot guarda só o caminho RELATIVO em `meta.rel`; `resolve()` remonta a URL
+ * a partir do vaultPath atual — o cofre continua portátil entre máquinas.
  */
-function criarStoreCanvas(): TLStore {
-  return createTLStore({ shapeUtils: shapeUtilsDoStore })
+function criarAssetStore(vaultPath: string, repo: VaultRepo): TLAssetStore {
+  return {
+    async upload(_asset, file) {
+      const ext = (file.name.match(/\.([a-z0-9]+)$/i)?.[1] ?? 'png').toLowerCase()
+      const rel = `imagens-canvas/${uniqueId()}.${ext}`
+      const bytes = new Uint8Array(await file.arrayBuffer())
+      await repo.escreverBinario(rel, uint8ParaBase64(bytes))
+      return { src: convertFileSrc(`${vaultPath}/${rel}`), meta: { rel } }
+    },
+    resolve(asset) {
+      const rel = (asset.meta as { rel?: string } | undefined)?.rel
+      return rel ? convertFileSrc(`${vaultPath}/${rel}`) : asset.props.src
+    },
+  }
+}
+
+/** Ponto único de criação do store do tldraw. */
+function criarStoreCanvas(vaultPath: string, repo: VaultRepo): TLStore {
+  return createTLStore({
+    shapeUtils: shapeUtilsDoStore,
+    assets: criarAssetStore(vaultPath, repo),
+  })
 }
 
 export function CanvasView({ caminho, nome }: { caminho: string; nome: string }) {
   const repo = useApp((s) => s.repo)
+  const vaultPath = useApp((s) => s.vaultPath)
   const [store, setStore] = useState<TLStore | null>(null)
   const [erro, setErro] = useState<string | null>(null)
   const [salvandoErro, setSalvandoErro] = useState<string | null>(null)
@@ -45,11 +82,11 @@ export function CanvasView({ caminho, nome }: { caminho: string; nome: string })
   useEffect(() => {
     let ativo = true
     async function carregar() {
-      if (!repo) return
+      if (!repo || !vaultPath) return
       try {
         const doc = await repo.lerCanvasDoc(caminho)
         if (!ativo) return
-        const s = criarStoreCanvas()
+        const s = criarStoreCanvas(vaultPath, repo)
         if (doc.documento) loadSnapshot(s, doc.documento as Partial<TLEditorSnapshot>)
         setStore(s)
       } catch (e) {
@@ -60,7 +97,7 @@ export function CanvasView({ caminho, nome }: { caminho: string; nome: string })
     return () => {
       ativo = false
     }
-  }, [repo, caminho])
+  }, [repo, vaultPath, caminho])
 
   // autosave com debounce; descarrega gravação pendente ao desmontar
   useEffect(() => {

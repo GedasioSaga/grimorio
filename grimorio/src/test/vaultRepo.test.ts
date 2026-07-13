@@ -131,6 +131,12 @@ describe('VaultRepo', () => {
     expect(await fs.exists('C:/Cofre/campanhas/teste/assets/retrato.png')).toBe(true)
   })
 
+  it('escreve binário base64 em caminho relativo', async () => {
+    await repo.inicializar()
+    await repo.escreverBinario('imagens-canvas/a.png', 'aGVsbG8=')
+    expect(await fs.exists('C:/Cofre/imagens-canvas/a.png')).toBe(true)
+  })
+
   it('escritas concorrentes no mesmo caminho são serializadas (última vence)', async () => {
     await repo.inicializar()
     const camp = await repo.criarCampanha('Teste')

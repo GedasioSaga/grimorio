@@ -124,6 +124,11 @@ export class VaultRepo {
     await this.fs.copyFile(origemAbsoluta, this.abs(destinoRel))
   }
 
+  /** Grava conteúdo binário (base64) num caminho relativo ao cofre. */
+  async escreverBinario(destinoRel: string, base64: string): Promise<void> {
+    await this.fs.writeBinaryBase64(this.abs(destinoRel), base64)
+  }
+
   /** Renomeia o campo `nome` do item (arquivo e slug não mudam — referências continuam válidas). */
   async renomearItem(caminho: string, novoNome: string): Promise<void> {
     return this.naFila(caminho, async () => {
