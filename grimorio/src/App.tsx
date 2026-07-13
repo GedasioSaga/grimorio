@@ -29,7 +29,7 @@ export default function App() {
           <div className="app-empty">Selecione uma sessão ou canvas na barra lateral</div>
         )}
       </main>
-      {perfilAbertoId && <PerfilModal personagemId={perfilAbertoId} />}
+      {perfilAbertoId && <PerfilModal key={perfilAbertoId} personagemId={perfilAbertoId} />}
     </div>
   )
 }

@@ -1,3 +1,149 @@
-export function PerfilModal(_props: { personagemId: string }) {
-  return null
+import { useEffect, useRef, useState } from 'react'
+import { EditorContent, useEditor, useEditorState } from '@tiptap/react'
+import StarterKit from '@tiptap/starter-kit'
+import { open } from '@tauri-apps/plugin-dialog'
+import { convertFileSrc } from '@tauri-apps/api/core'
+import { useApp } from '../state/store'
+import type { Personagem } from '../lib/types'
+
+const AUTOSAVE_DEBOUNCE_MS = 800
+
+export function PerfilModal({ personagemId }: { personagemId: string }) {
+  const p = useApp((s) => s.personagens[personagemId])
+  const vaultPath = useApp((s) => s.vaultPath)
+  const repo = useApp((s) => s.repo)
+  const caminhoPorId = useApp((s) => s.caminhoPorId)
+  const fecharPerfil = useApp((s) => s.fecharPerfil)
+  const recarregarArvore = useApp((s) => s.recarregarArvore)
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const [salvarErro, setSalvarErro] = useState<string | null>(null)
+
+  const editor = useEditor({
+    extensions: [StarterKit],
+    content: p?.corpo ?? '',
+    onUpdate({ editor }) {
+      agendarSalvar({ corpo: editor.getHTML() })
+    },
+  })
+
+  // TipTap v3 não re-renderiza a cada transação; useEditorState observa o estado ativo da toolbar
+  const ativo = useEditorState({
+    editor,
+    selector: ({ editor }) => ({
+      bold: editor.isActive('bold'),
+      italic: editor.isActive('italic'),
+      h2: editor.isActive('heading', { level: 2 }),
+      h3: editor.isActive('heading', { level: 3 }),
+      bulletList: editor.isActive('bulletList'),
+      orderedList: editor.isActive('orderedList'),
+    }),
+  })
+
+  const retratoSrc = p?.retrato && vaultPath ? convertFileSrc(`${vaultPath}/${p.retrato}`) : null
+
+  // imagem quebrada → volta pro fallback de inicial; reseta se o retrato mudar
+  const [erroImg, setErroImg] = useState(false)
+  useEffect(() => {
+    setErroImg(false)
+  }, [retratoSrc])
+
+  // desmontou com gravação pendente: cancela o debounce e grava já (fire-and-forget;
+  // VaultRepo serializa escritas por caminho, mesmo padrão do CanvasView)
+  useEffect(() => () => {
+    if (timer.current) {
+      clearTimeout(timer.current)
+      timer.current = null
+      void salvar()
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  if (!p) return null
+
+  function agendarSalvar(mudancas: Partial<Personagem>) {
+    if (timer.current) clearTimeout(timer.current)
+    timer.current = setTimeout(() => { void salvar() }, AUTOSAVE_DEBOUNCE_MS)
+    // atualização otimista no cache (cartões refletem na hora)
+    useApp.setState((s) => ({
+      personagens: { ...s.personagens, [personagemId]: { ...s.personagens[personagemId], ...mudancas } },
+    }))
+  }
+
+  async function salvar() {
+    const atual = useApp.getState().personagens[personagemId]
+    const caminho = caminhoPorId[personagemId]
+    if (!repo || !caminho || !atual) return
+    try {
+      await repo.salvarPersonagem(caminho, { ...atual })
+      setSalvarErro(null)
+      await recarregarArvore()
+    } catch (e) {
+      // não relança: chamadas debounced são fire-and-forget e o fechamento não pode travar
+      console.error('Falha ao salvar perfil:', e)
+      setSalvarErro(String(e))
+    }
+  }
+
+  async function trocarRetrato() {
+    const caminho = caminhoPorId[personagemId]
+    if (!repo || !caminho || !vaultPath) return
+    try {
+      const arquivo = await open({
+        title: 'Escolher retrato',
+        filters: [{ name: 'Imagens', extensions: ['png', 'jpg', 'jpeg', 'webp', 'gif'] }],
+      })
+      if (typeof arquivo !== 'string') return
+      const ext = arquivo.split('.').pop() ?? 'png'
+      // assets/ da mesma campanha do personagem: campanhas/<slug>/personagens/x.json
+      const dirCampanha = caminho.split('/').slice(0, 2).join('/')
+      const destinoRel = `${dirCampanha}/assets/retrato-${personagemId}.${ext}`
+      await repo.copiarParaCofre(arquivo, destinoRel)
+      agendarSalvar({ retrato: destinoRel })
+    } catch (e) {
+      alert(`Falha ao trocar retrato: ${e}`)
+    }
+  }
+
+  async function fechar() {
+    if (timer.current) {
+      clearTimeout(timer.current)
+      timer.current = null
+      await salvar() // não lança — falha vira console.error + banner, e fecha mesmo assim
+    }
+    fecharPerfil()
+  }
+
+  return (
+    <div className="modal-overlay" onClick={() => void fechar()}>
+      <div className="perfil-modal" onClick={(e) => e.stopPropagation()}>
+        <div className="perfil-header">
+          <div className="perfil-retrato" onClick={() => void trocarRetrato()} title="Clique para trocar o retrato">
+            {retratoSrc && !erroImg
+              ? <img src={retratoSrc} alt={p.nome} onError={() => setErroImg(true)} />
+              : <span>{p.nome.charAt(0).toUpperCase()}</span>}
+          </div>
+          <div className="perfil-titulos">
+            <input className="perfil-nome" value={p.nome}
+              onChange={(e) => agendarSalvar({ nome: e.target.value })} />
+            <input className="perfil-resumo" placeholder="Resumo curto (aparece no cartão)"
+              value={p.resumo}
+              onChange={(e) => agendarSalvar({ resumo: e.target.value })} />
+          </div>
+          <button className="btn-icon perfil-fechar" onClick={() => void fechar()}>✕</button>
+        </div>
+        <div className="perfil-toolbar">
+          <button className={ativo.bold ? 'ativo' : ''} onClick={() => editor.chain().focus().toggleBold().run()}><b>B</b></button>
+          <button className={ativo.italic ? 'ativo' : ''} onClick={() => editor.chain().focus().toggleItalic().run()}><i>I</i></button>
+          <button className={ativo.h2 ? 'ativo' : ''} onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()}>H2</button>
+          <button className={ativo.h3 ? 'ativo' : ''} onClick={() => editor.chain().focus().toggleHeading({ level: 3 }).run()}>H3</button>
+          <button className={ativo.bulletList ? 'ativo' : ''} onClick={() => editor.chain().focus().toggleBulletList().run()}>• Lista</button>
+          <button className={ativo.orderedList ? 'ativo' : ''} onClick={() => editor.chain().focus().toggleOrderedList().run()}>1. Lista</button>
+        </div>
+        <EditorContent editor={editor} className="perfil-corpo" />
+        {salvarErro && (
+          <div className="perfil-salvar-erro">Falha ao salvar: {salvarErro}</div>
+        )}
+      </div>
+    </div>
+  )
 }

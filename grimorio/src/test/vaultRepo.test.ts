@@ -124,6 +124,13 @@ describe('VaultRepo', () => {
     expect(doc.documento).toEqual({ document: {}, session: {} })
   })
 
+  it('copia arquivo externo para dentro do cofre', async () => {
+    await repo.inicializar()
+    fs.arquivos.set('C:/Downloads/foto.png', '<bin>')
+    await repo.copiarParaCofre('C:/Downloads/foto.png', 'campanhas/teste/assets/retrato.png')
+    expect(await fs.exists('C:/Cofre/campanhas/teste/assets/retrato.png')).toBe(true)
+  })
+
   it('escritas concorrentes no mesmo caminho são serializadas (última vence)', async () => {
     await repo.inicializar()
     const camp = await repo.criarCampanha('Teste')

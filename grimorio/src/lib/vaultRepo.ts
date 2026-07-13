@@ -119,6 +119,11 @@ export class VaultRepo {
     })
   }
 
+  /** Copia um arquivo externo (caminho absoluto) para dentro do cofre (caminho relativo). */
+  async copiarParaCofre(origemAbsoluta: string, destinoRel: string): Promise<void> {
+    await this.fs.copyFile(origemAbsoluta, this.abs(destinoRel))
+  }
+
   /** Renomeia o campo `nome` do item (arquivo e slug não mudam — referências continuam válidas). */
   async renomearItem(caminho: string, novoNome: string): Promise<void> {
     return this.naFila(caminho, async () => {
