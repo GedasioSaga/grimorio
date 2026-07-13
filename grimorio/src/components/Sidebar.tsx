@@ -2,6 +2,14 @@ import { useState } from 'react'
 import { useApp } from '../state/store'
 import type { CampanhaNode, ItemRef } from '../lib/types'
 
+async function comAvisoDeErro(acao: () => Promise<void>) {
+  try {
+    await acao()
+  } catch (e) {
+    alert(`Operação falhou: ${e}`)
+  }
+}
+
 export function Sidebar() {
   const tree = useApp((s) => s.tree)
   const repo = useApp((s) => s.repo)
@@ -11,15 +19,19 @@ export function Sidebar() {
   async function novaCampanha() {
     const nome = prompt('Nome da campanha:')
     if (!nome || !repo) return
-    await repo.criarCampanha(nome)
-    await recarregar()
+    await comAvisoDeErro(async () => {
+      await repo.criarCampanha(nome)
+      await recarregar()
+    })
   }
 
   async function novoCanvasSolto() {
     const nome = prompt('Nome do canvas:')
     if (!nome || !repo) return
-    await repo.criarCanvasDoc('canvases-soltos', nome)
-    await recarregar()
+    await comAvisoDeErro(async () => {
+      await repo.criarCanvasDoc('canvases-soltos', nome)
+      await recarregar()
+    })
   }
 
   if (!tree) return <aside className="sidebar">Carregando…</aside>
@@ -62,16 +74,20 @@ function CampanhaItem({ camp, aoMudar }: { camp: CampanhaNode; aoMudar: () => Pr
     const rotulo = { sessao: 'sessão', personagem: 'personagem', canvas: 'canvas' }[tipo]
     const nome = prompt(`Nome da ${rotulo}:`)
     if (!nome) return
-    if (tipo === 'personagem') await repo.criarPersonagem(camp.slug, nome)
-    else await repo.criarCanvasDoc(`campanhas/${camp.slug}/${tipo === 'sessao' ? 'sessoes' : 'canvases'}`, nome)
-    await aoMudar()
+    await comAvisoDeErro(async () => {
+      if (tipo === 'personagem') await repo.criarPersonagem(camp.slug, nome)
+      else await repo.criarCanvasDoc(`campanhas/${camp.slug}/${tipo === 'sessao' ? 'sessoes' : 'canvases'}`, nome)
+      await aoMudar()
+    })
   }
 
   async function excluir() {
     if (!repo) return
     if (!confirm(`Excluir a campanha "${camp.nome}" e todo o conteúdo dela?`)) return
-    await repo.excluirCampanha(camp.slug)
-    await aoMudar()
+    await comAvisoDeErro(async () => {
+      await repo.excluirCampanha(camp.slug)
+      await aoMudar()
+    })
   }
 
   return (
@@ -116,7 +132,6 @@ function ItemLinha({ item, tipo, aoMudar }: {
   const abrirItem = useApp((s) => s.abrirItem)
   const abrirPerfil = useApp((s) => s.abrirPerfil)
   const caminhoPorId = useApp((s) => s.caminhoPorId)
-  const carregarPersonagens = useApp((s) => s.carregarPersonagens)
 
   const id = tipo === 'personagem'
     ? Object.entries(caminhoPorId).find(([, cam]) => cam === item.caminho)?.[0]
@@ -136,18 +151,20 @@ function ItemLinha({ item, tipo, aoMudar }: {
     if (!repo) return
     const nome = prompt('Novo nome:', item.nome)
     if (!nome) return
-    await repo.renomearItem(item.caminho, nome)
-    await aoMudar()
-    if (tipo === 'personagem') await carregarPersonagens()
+    await comAvisoDeErro(async () => {
+      await repo.renomearItem(item.caminho, nome)
+      await aoMudar()
+    })
   }
 
   async function excluir(e: React.MouseEvent) {
     e.stopPropagation()
     if (!repo) return
     if (!confirm(`Excluir "${item.nome}"?`)) return
-    await repo.excluirItem(item.caminho)
-    await aoMudar()
-    if (tipo === 'personagem') await carregarPersonagens()
+    await comAvisoDeErro(async () => {
+      await repo.excluirItem(item.caminho)
+      await aoMudar()
+    })
   }
 
   return (
