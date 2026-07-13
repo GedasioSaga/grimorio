@@ -15,10 +15,20 @@ function novoId(): string {
  * com separador '/'. A conversão para caminho absoluto acontece aqui dentro.
  */
 export class VaultRepo {
+  private filas = new Map<string, Promise<unknown>>()
+
   constructor(
     private raiz: string,
     private fs: FsBridge,
   ) {}
+
+  /** Serializa operações por caminho: nunca duas escritas simultâneas no mesmo arquivo. */
+  private naFila<T>(caminho: string, op: () => Promise<T>): Promise<T> {
+    const anterior = this.filas.get(caminho) ?? Promise.resolve()
+    const proxima = anterior.then(op, op)
+    this.filas.set(caminho, proxima)
+    return proxima
+  }
 
   abs(rel: string): string {
     return `${this.raiz}/${rel}`
@@ -83,8 +93,10 @@ export class VaultRepo {
   }
 
   async salvarPersonagem(caminho: string, p: Personagem): Promise<void> {
-    p.modificadoEm = agora()
-    await this.fs.writeTextAtomic(this.abs(caminho), JSON.stringify(p, null, 2))
+    return this.naFila(caminho, async () => {
+      const salvo = { ...p, modificadoEm: agora() }
+      await this.fs.writeTextAtomic(this.abs(caminho), JSON.stringify(salvo, null, 2))
+    })
   }
 
   async lerCanvasDoc(caminho: string): Promise<CanvasDoc> {
@@ -92,20 +104,26 @@ export class VaultRepo {
   }
 
   async salvarCanvasDoc(caminho: string, doc: CanvasDoc): Promise<void> {
-    doc.modificadoEm = agora()
-    await this.fs.writeTextAtomic(this.abs(caminho), JSON.stringify(doc, null, 2))
+    return this.naFila(caminho, async () => {
+      const salvo = { ...doc, modificadoEm: agora() }
+      await this.fs.writeTextAtomic(this.abs(caminho), JSON.stringify(salvo, null, 2))
+    })
   }
 
   /** Renomeia o campo `nome` do item (arquivo e slug não mudam — referências continuam válidas). */
   async renomearItem(caminho: string, novoNome: string): Promise<void> {
-    const obj = JSON.parse(await this.fs.readText(this.abs(caminho)))
-    obj.nome = novoNome
-    obj.modificadoEm = agora()
-    await this.fs.writeTextAtomic(this.abs(caminho), JSON.stringify(obj, null, 2))
+    return this.naFila(caminho, async () => {
+      const obj = JSON.parse(await this.fs.readText(this.abs(caminho)))
+      obj.nome = novoNome
+      obj.modificadoEm = agora()
+      await this.fs.writeTextAtomic(this.abs(caminho), JSON.stringify(obj, null, 2))
+    })
   }
 
   async excluirItem(caminho: string): Promise<void> {
-    await this.fs.removePath(this.abs(caminho))
+    return this.naFila(caminho, async () => {
+      await this.fs.removePath(this.abs(caminho))
+    })
   }
 
   async excluirCampanha(slug: string): Promise<void> {

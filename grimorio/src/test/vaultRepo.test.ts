@@ -102,4 +102,27 @@ describe('VaultRepo', () => {
     await repo.excluirItem(ref.caminho)
     expect(await fs.exists(`C:/Cofre/${ref.caminho}`)).toBe(false)
   })
+
+  it('salvar não muta o objeto passado', async () => {
+    await repo.inicializar()
+    const camp = await repo.criarCampanha('Teste')
+    const ref = await repo.criarPersonagem(camp, 'Baldur')
+    const p = await repo.lerPersonagem(ref.caminho)
+    const antes = p.modificadoEm
+    await repo.salvarPersonagem(ref.caminho, p)
+    expect(p.modificadoEm).toBe(antes)
+  })
+
+  it('escritas concorrentes no mesmo caminho são serializadas (última vence)', async () => {
+    await repo.inicializar()
+    const camp = await repo.criarCampanha('Teste')
+    const ref = await repo.criarPersonagem(camp, 'Baldur')
+    const p = await repo.lerPersonagem(ref.caminho)
+    await Promise.all([
+      repo.salvarPersonagem(ref.caminho, { ...p, resumo: 'primeiro' }),
+      repo.salvarPersonagem(ref.caminho, { ...p, resumo: 'segundo' }),
+    ])
+    const final = await repo.lerPersonagem(ref.caminho)
+    expect(final.resumo).toBe('segundo')
+  })
 })
