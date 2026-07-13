@@ -18,7 +18,7 @@
     "@tiptap/starter-kit": "^3.27.4",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
-    "tldraw": "^5.2.4",
+    "tldraw": "^4.5.12",
     "zustand": "^5.0.14"
   },
   "devDependencies": {
