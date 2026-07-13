@@ -19,6 +19,8 @@ interface AppState {
   /** id -> caminho relativo (para resolver referências) */
   caminhoPorId: Record<string, string>
   perfilAbertoId: string | null
+  carregando: boolean
+  erroCofre: string | null
 
   abrirCofre(path: string): Promise<void>
   recarregarArvore(): Promise<void>
@@ -37,14 +39,26 @@ export const useApp = create<AppState>((set, get) => ({
   personagens: {},
   caminhoPorId: {},
   perfilAbertoId: null,
+  carregando: false,
+  erroCofre: null,
 
   async abrirCofre(path) {
-    const repo = new VaultRepo(path.replace(/\\/g, '/'), tauriFs)
-    await repo.inicializar()
-    localStorage.setItem('grimorio.vault', path)
-    set({ vaultPath: path.replace(/\\/g, '/'), repo })
-    await get().recarregarArvore()
-    await get().carregarPersonagens()
+    if (get().carregando) return
+    set({ carregando: true, erroCofre: null })
+    try {
+      const norm = path.replace(/\\/g, '/')
+      const repo = new VaultRepo(norm, tauriFs)
+      await repo.inicializar()
+      localStorage.setItem('grimorio.vault', path)
+      set({ vaultPath: norm, repo })
+      await get().recarregarArvore()
+      await get().carregarPersonagens()
+    } catch (e) {
+      set({ erroCofre: `Não foi possível abrir o cofre: ${e}` })
+      throw e
+    } finally {
+      set({ carregando: false })
+    }
   },
 
   async recarregarArvore() {
