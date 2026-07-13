@@ -162,7 +162,8 @@ export function CanvasView({ caminho, nome }: { caminho: string; nome: string })
         await repo.escreverBinarioAbsoluto(destino, uint8ParaBase64(buf))
       } else {
         const svg = await editor.getSvgString(ids, { background: true, darkMode: true })
-        if (svg) await repo.escreverTextoAbsoluto(destino, svg.svg)
+        if (!svg) throw new Error('não foi possível gerar o SVG')
+        await repo.escreverTextoAbsoluto(destino, svg.svg)
       }
     } catch (e) {
       alert(`Falha ao exportar: ${e}`)
