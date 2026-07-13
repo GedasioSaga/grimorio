@@ -11,6 +11,11 @@ describe('slugify', () => {
   it('nome vazio vira "sem-nome"', () => {
     expect(slugify('   ')).toBe('sem-nome')
   })
+  it('nomes reservados do Windows ganham sufixo', () => {
+    expect(slugify('Con')).toBe('con-item')
+    expect(slugify('NUL')).toBe('nul-item')
+    expect(slugify('com3')).toBe('com3-item')
+  })
 })
 
 describe('slugUnico', () => {
