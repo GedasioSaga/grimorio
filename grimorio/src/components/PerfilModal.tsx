@@ -39,7 +39,10 @@ export function PerfilModal({ personagemId }: { personagemId: string }) {
     }),
   })
 
-  const retratoSrc = p?.retrato && vaultPath ? convertFileSrc(`${vaultPath}/${p.retrato}`) : null
+  // ?v= força refetch quando o retrato é trocado pelo mesmo nome de arquivo (mesma extensão)
+  const retratoSrc = p?.retrato && vaultPath
+    ? `${convertFileSrc(`${vaultPath}/${p.retrato}`)}?v=${encodeURIComponent(p.modificadoEm)}`
+    : null
 
   // imagem quebrada → volta pro fallback de inicial; reseta se o retrato mudar
   const [erroImg, setErroImg] = useState(false)
@@ -62,25 +65,30 @@ export function PerfilModal({ personagemId }: { personagemId: string }) {
 
   function agendarSalvar(mudancas: Partial<Personagem>) {
     if (timer.current) clearTimeout(timer.current)
-    timer.current = setTimeout(() => { void salvar() }, AUTOSAVE_DEBOUNCE_MS)
+    timer.current = setTimeout(() => {
+      timer.current = null
+      void salvar()
+    }, AUTOSAVE_DEBOUNCE_MS)
     // atualização otimista no cache (cartões refletem na hora)
     useApp.setState((s) => ({
       personagens: { ...s.personagens, [personagemId]: { ...s.personagens[personagemId], ...mudancas } },
     }))
   }
 
-  async function salvar() {
+  async function salvar(): Promise<boolean> {
     const atual = useApp.getState().personagens[personagemId]
     const caminho = caminhoPorId[personagemId]
-    if (!repo || !caminho || !atual) return
+    if (!repo || !caminho || !atual) return true
     try {
       await repo.salvarPersonagem(caminho, { ...atual })
       setSalvarErro(null)
       await recarregarArvore()
+      return true
     } catch (e) {
-      // não relança: chamadas debounced são fire-and-forget e o fechamento não pode travar
+      // não relança: chamadas debounced são fire-and-forget
       console.error('Falha ao salvar perfil:', e)
       setSalvarErro(String(e))
+      return false
     }
   }
 
@@ -93,12 +101,14 @@ export function PerfilModal({ personagemId }: { personagemId: string }) {
         filters: [{ name: 'Imagens', extensions: ['png', 'jpg', 'jpeg', 'webp', 'gif'] }],
       })
       if (typeof arquivo !== 'string') return
-      const ext = arquivo.split('.').pop() ?? 'png'
+      const nomeArquivo = arquivo.split(/[\\/]/).pop() ?? ''
+      const ext = (nomeArquivo.includes('.') ? nomeArquivo.split('.').pop()! : 'png').toLowerCase()
       // assets/ da mesma campanha do personagem: campanhas/<slug>/personagens/x.json
       const dirCampanha = caminho.split('/').slice(0, 2).join('/')
       const destinoRel = `${dirCampanha}/assets/retrato-${personagemId}.${ext}`
       await repo.copiarParaCofre(arquivo, destinoRel)
-      agendarSalvar({ retrato: destinoRel })
+      // modificadoEm novo muda o ?v= do retratoSrc na hora (cache-bust otimista)
+      agendarSalvar({ retrato: destinoRel, modificadoEm: new Date().toISOString() })
     } catch (e) {
       alert(`Falha ao trocar retrato: ${e}`)
     }
@@ -108,7 +118,8 @@ export function PerfilModal({ personagemId }: { personagemId: string }) {
     if (timer.current) {
       clearTimeout(timer.current)
       timer.current = null
-      await salvar() // não lança — falha vira console.error + banner, e fecha mesmo assim
+      const ok = await salvar()
+      if (!ok) return // banner explica a falha; segundo ✕ (sem save pendente) ainda fecha
     }
     fecharPerfil()
   }
