@@ -1,5 +1,7 @@
 use std::path::Path;
 
+const RENAME_RETRY_DELAYS_MS: [u64; 2] = [50, 100];
+
 #[tauri::command]
 fn read_text_file(path: String) -> Result<String, String> {
     std::fs::read_to_string(&path).map_err(|e| e.to_string())
@@ -11,9 +13,26 @@ fn write_text_file_atomic(path: String, content: String) -> Result<(), String> {
     if let Some(parent) = p.parent() {
         std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
     }
-    let tmp = p.with_extension("json.tmp");
+    let file_name = p
+        .file_name()
+        .ok_or("caminho sem nome de arquivo")?
+        .to_string_lossy();
+    let tmp = p.with_file_name(format!("{file_name}.tmp"));
     std::fs::write(&tmp, &content).map_err(|e| e.to_string())?;
-    std::fs::rename(&tmp, p).map_err(|e| e.to_string())
+
+    // OneDrive pode segurar handle transiente no arquivo; tenta o rename ate 3x.
+    let mut result = std::fs::rename(&tmp, p);
+    for delay_ms in RENAME_RETRY_DELAYS_MS {
+        if result.is_ok() {
+            break;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(delay_ms));
+        result = std::fs::rename(&tmp, p);
+    }
+    result.map_err(|e| {
+        let _ = std::fs::remove_file(&tmp);
+        e.to_string()
+    })
 }
 
 #[tauri::command]
