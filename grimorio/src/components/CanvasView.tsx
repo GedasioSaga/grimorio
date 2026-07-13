@@ -14,8 +14,10 @@ import {
 } from 'tldraw'
 import 'tldraw/tldraw.css'
 import { convertFileSrc } from '@tauri-apps/api/core'
+import { save } from '@tauri-apps/plugin-dialog'
 import { useApp } from '../state/store'
 import type { VaultRepo } from '../lib/vaultRepo'
+import { slugify } from '../lib/slug'
 import {
   CARD_ALTURA_PADRAO,
   CARD_LARGURA_PADRAO,
@@ -139,6 +141,34 @@ export function CanvasView({ caminho, nome }: { caminho: string; nome: string })
     }
   }, [store, repo, caminho])
 
+  async function exportar(formato: 'png' | 'svg') {
+    const editor = editorRef.current
+    if (!editor || !repo) return
+    const selecionados = editor.getSelectedShapeIds()
+    const ids = selecionados.length > 0 ? selecionados : [...editor.getCurrentPageShapeIds()]
+    if (ids.length === 0) return
+
+    const destino = await save({
+      title: `Exportar ${formato.toUpperCase()}`,
+      defaultPath: `${slugify(nome)}.${formato}`,
+      filters: [{ name: formato.toUpperCase(), extensions: [formato] }],
+    })
+    if (!destino) return
+
+    try {
+      if (formato === 'png') {
+        const { blob } = await editor.toImage(ids, { format: 'png', background: true, scale: 2, darkMode: true })
+        const buf = new Uint8Array(await blob.arrayBuffer())
+        await repo.escreverBinarioAbsoluto(destino, uint8ParaBase64(buf))
+      } else {
+        const svg = await editor.getSvgString(ids, { background: true, darkMode: true })
+        if (svg) await repo.escreverTextoAbsoluto(destino, svg.svg)
+      }
+    } catch (e) {
+      alert(`Falha ao exportar: ${e}`)
+    }
+  }
+
   if (erro) {
     return (
       <div className="canvas-erro">
@@ -178,6 +208,11 @@ export function CanvasView({ caminho, nome }: { caminho: string; nome: string })
         })
       }}
     >
+      <div className="canvas-toolbar">
+        <span className="canvas-titulo">{nome}</span>
+        <button onClick={() => void exportar('png')}>Exportar PNG</button>
+        <button onClick={() => void exportar('svg')}>Exportar SVG</button>
+      </div>
       <Tldraw
         store={store}
         shapeUtils={shapeUtilsCustom}

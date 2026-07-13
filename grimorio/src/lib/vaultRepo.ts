@@ -129,6 +129,16 @@ export class VaultRepo {
     await this.fs.writeBinaryBase64(this.abs(destinoRel), base64)
   }
 
+  /** Grava texto num caminho ABSOLUTO fora do cofre (ex.: destino de export escolhido pelo usuário). */
+  async escreverTextoAbsoluto(caminhoAbsoluto: string, conteudo: string): Promise<void> {
+    await this.fs.writeTextAtomic(caminhoAbsoluto, conteudo)
+  }
+
+  /** Grava binário (base64) num caminho ABSOLUTO fora do cofre (ex.: destino de export escolhido pelo usuário). */
+  async escreverBinarioAbsoluto(caminhoAbsoluto: string, base64: string): Promise<void> {
+    await this.fs.writeBinaryBase64(caminhoAbsoluto, base64)
+  }
+
   /** Renomeia o campo `nome` do item (arquivo e slug não mudam — referências continuam válidas). */
   async renomearItem(caminho: string, novoNome: string): Promise<void> {
     return this.naFila(caminho, async () => {

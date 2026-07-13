@@ -149,4 +149,11 @@ describe('VaultRepo', () => {
     const final = await repo.lerPersonagem(ref.caminho)
     expect(final.resumo).toBe('segundo')
   })
+
+  it('escreve texto e binário em caminho absoluto (export)', async () => {
+    await repo.escreverTextoAbsoluto('C:/Saida/canvas.svg', '<svg/>')
+    await repo.escreverBinarioAbsoluto('C:/Saida/canvas.png', 'aGVsbG8=')
+    expect(await fs.exists('C:/Saida/canvas.svg')).toBe(true)
+    expect(await fs.exists('C:/Saida/canvas.png')).toBe(true)
+  })
 })
