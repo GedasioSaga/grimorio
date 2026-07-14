@@ -14,10 +14,13 @@ type PaginaComSlug = Pagina & { slug: string; erro?: boolean }
 /**
  * Caderno = pasta de páginas JSON. `raiz` é o caminho ABSOLUTO da pasta do caderno.
  * Arquivos nomeados por slug; identidade por `id`; hierarquia por `paiId`/`ordem`.
- * Escritas no mesmo arquivo são serializadas (mesma ideia do VaultRepo.naFila).
+ * Todas as mutações passam por uma fila única (app single-user): o rail (moverPagina)
+ * e o editor (salvarCorpo) compartilham a mesma instância, então arrastar-reordenar
+ * concorre com o autosave — sem serialização isso vira lost update / delete-resurrect.
  */
 export class NotebookRepo {
   private filas = new Map<string, Promise<unknown>>()
+  private readonly CHAVE_FILA = '__caderno__'
 
   constructor(
     private raiz: string,
@@ -28,10 +31,15 @@ export class NotebookRepo {
     return `${this.raiz}/${slug}.json`
   }
 
-  private naFila<T>(slug: string, op: () => Promise<T>): Promise<T> {
-    const anterior = this.filas.get(slug) ?? Promise.resolve()
+  /**
+   * Serializa uma mutação na fila. Um método enfileirado NUNCA pode chamar outro
+   * enfileirado na mesma chave (deadlock): dentro do `op` só valem leituras
+   * (listaComSlug, inicializar) e acesso direto ao `fs`.
+   */
+  private naFila<T>(chave: string, op: () => Promise<T>): Promise<T> {
+    const anterior = this.filas.get(chave) ?? Promise.resolve()
     const proxima = anterior.then(op, op)
-    this.filas.set(slug, proxima)
+    this.filas.set(chave, proxima)
     return proxima
   }
 
@@ -64,16 +72,18 @@ export class NotebookRepo {
   }
 
   async criarPagina(titulo: string, paiId: string | null): Promise<PaginaRef> {
-    await this.inicializar()
-    const lista = await this.listaComSlug()
-    const slug = slugUnico(slugify(titulo), lista.map((p) => p.slug))
-    const ordem = lista.filter((p) => p.paiId === paiId).reduce((m, p) => Math.max(m, p.ordem), -1) + 1
-    const pag: Pagina = {
-      id: novoId(), titulo, paiId, ordem, corpo: '',
-      criadoEm: agora(), modificadoEm: agora(),
-    }
-    await this.fs.writeTextAtomic(this.abs(slug), JSON.stringify(pag, null, 2))
-    return { slug, id: pag.id, titulo }
+    return this.naFila(this.CHAVE_FILA, async () => {
+      await this.inicializar()
+      const lista = await this.listaComSlug()
+      const slug = slugUnico(slugify(titulo), lista.map((p) => p.slug))
+      const ordem = lista.filter((p) => p.paiId === paiId).reduce((m, p) => Math.max(m, p.ordem), -1) + 1
+      const pag: Pagina = {
+        id: novoId(), titulo, paiId, ordem, corpo: '',
+        criadoEm: agora(), modificadoEm: agora(),
+      }
+      await this.fs.writeTextAtomic(this.abs(slug), JSON.stringify(pag, null, 2))
+      return { slug, id: pag.id, titulo }
+    })
   }
 
   async lerPagina(slug: string): Promise<Pagina> {
@@ -81,7 +91,7 @@ export class NotebookRepo {
   }
 
   async salvarCorpo(slug: string, corpo: string): Promise<void> {
-    return this.naFila(slug, async () => {
+    return this.naFila(this.CHAVE_FILA, async () => {
       const atual: Pagina = JSON.parse(await this.fs.readText(this.abs(slug)))
       const salvo = { ...atual, corpo, modificadoEm: agora() }
       await this.fs.writeTextAtomic(this.abs(slug), JSON.stringify(salvo, null, 2))
@@ -89,7 +99,7 @@ export class NotebookRepo {
   }
 
   async renomearPagina(slug: string, novoTitulo: string): Promise<void> {
-    return this.naFila(slug, async () => {
+    return this.naFila(this.CHAVE_FILA, async () => {
       const atual: Pagina = JSON.parse(await this.fs.readText(this.abs(slug)))
       const salvo = { ...atual, titulo: novoTitulo, modificadoEm: agora() }
       await this.fs.writeTextAtomic(this.abs(slug), JSON.stringify(salvo, null, 2))
@@ -98,58 +108,64 @@ export class NotebookRepo {
 
   /** Exclui a página e todas as descendentes. */
   async excluirPagina(slug: string): Promise<void> {
-    const lista = await this.listaComSlug()
-    const alvo = lista.find((p) => p.slug === slug)
-    if (!alvo) {
-      await this.fs.removePath(this.abs(slug))
-      return
-    }
-    const remover = new Set<string>()
-    const coletar = (id: string) => {
-      remover.add(id)
-      for (const f of lista.filter((p) => p.paiId === id)) coletar(f.id)
-    }
-    coletar(alvo.id)
-    for (const p of lista.filter((p) => remover.has(p.id))) {
-      await this.fs.removePath(this.abs(p.slug))
-    }
+    return this.naFila(this.CHAVE_FILA, async () => {
+      const lista = await this.listaComSlug()
+      const alvo = lista.find((p) => p.slug === slug)
+      if (!alvo) {
+        await this.fs.removePath(this.abs(slug))
+        return
+      }
+      const remover = new Set<string>()
+      const coletar = (id: string) => {
+        remover.add(id)
+        for (const f of lista.filter((p) => p.paiId === id)) coletar(f.id)
+      }
+      coletar(alvo.id)
+      for (const p of lista.filter((p) => remover.has(p.id))) {
+        await this.fs.removePath(this.abs(p.slug))
+      }
+    })
   }
 
   /** Move a página (por id) para novo pai e posição; renumera os irmãos do destino. */
   async moverPagina(id: string, novoPaiId: string | null, novaOrdem: number): Promise<void> {
-    const lista = await this.listaComSlug()
-    const movida = lista.find((p) => p.id === id)
-    if (!movida) return
+    return this.naFila(this.CHAVE_FILA, async () => {
+      const lista = await this.listaComSlug()
+      const movida = lista.find((p) => p.id === id)
+      if (!movida) return
 
-    // guarda de ciclo: novo pai não pode ser a própria página nem descendente dela
-    const descendencia = new Set<string>()
-    const coletar = (pid: string) => {
-      descendencia.add(pid)
-      for (const f of lista.filter((p) => p.paiId === pid)) coletar(f.id)
-    }
-    coletar(id)
-    if (novoPaiId && descendencia.has(novoPaiId)) return
+      // guarda de ciclo: novo pai não pode ser a própria página nem descendente dela
+      const descendencia = new Set<string>()
+      const coletar = (pid: string) => {
+        descendencia.add(pid)
+        for (const f of lista.filter((p) => p.paiId === pid)) coletar(f.id)
+      }
+      coletar(id)
+      if (novoPaiId && descendencia.has(novoPaiId)) return
 
-    const irmaos = lista
-      .filter((p) => p.paiId === novoPaiId && p.id !== id)
-      .sort((a, b) => a.ordem - b.ordem)
-    const idx = Math.max(0, Math.min(novaOrdem, irmaos.length))
-    irmaos.splice(idx, 0, { ...movida, paiId: novoPaiId })
+      const irmaos = lista
+        .filter((p) => p.paiId === novoPaiId && p.id !== id)
+        .sort((a, b) => a.ordem - b.ordem)
+      const idx = Math.max(0, Math.min(novaOrdem, irmaos.length))
+      irmaos.splice(idx, 0, { ...movida, paiId: novoPaiId })
 
-    for (let i = 0; i < irmaos.length; i++) {
-      const alvo = lista.find((x) => x.id === irmaos[i].id)!
-      const precisa = alvo.ordem !== i || alvo.paiId !== novoPaiId || alvo.id === id
-      if (!precisa) continue
-      const arquivo: Pagina = JSON.parse(await this.fs.readText(this.abs(alvo.slug)))
-      const salvo = { ...arquivo, paiId: novoPaiId, ordem: i, modificadoEm: agora() }
-      await this.fs.writeTextAtomic(this.abs(alvo.slug), JSON.stringify(salvo, null, 2))
-    }
+      for (let i = 0; i < irmaos.length; i++) {
+        const alvo = lista.find((x) => x.id === irmaos[i].id)!
+        const precisa = alvo.ordem !== i || alvo.paiId !== novoPaiId || alvo.id === id
+        if (!precisa) continue
+        const arquivo: Pagina = JSON.parse(await this.fs.readText(this.abs(alvo.slug)))
+        const salvo = { ...arquivo, paiId: novoPaiId, ordem: i, modificadoEm: agora() }
+        await this.fs.writeTextAtomic(this.abs(alvo.slug), JSON.stringify(salvo, null, 2))
+      }
+    })
   }
 
   async montarArvore(): Promise<PaginaNode[]> {
     const lista = await this.listaComSlug()
     const nodes = new Map<string, PaginaNode>()
     for (const p of lista) {
+      // nota: se o OneDrive gerar cópia com mesmo id interno e slug diferente, a duplicata
+      // é colapsada aqui (some da árvore; o arquivo permanece no disco). Limitação conhecida.
       nodes.set(p.id, {
         slug: p.slug, id: p.id, titulo: p.titulo, erro: p.erro,
         paiId: p.paiId, ordem: p.ordem, filhos: [],

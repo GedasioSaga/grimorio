@@ -95,4 +95,40 @@ describe('NotebookRepo', () => {
     expect(quebrada?.erro).toBe(true)
     expect(arv.find((n) => n.titulo === 'Boa')).toBeTruthy()
   })
+
+  it('mover para dentro de outro pai reparenta e ordena os filhos do destino', async () => {
+    const p = await repo.criarPagina('P', null)
+    const x = await repo.criarPagina('X', p.id)
+    await repo.criarPagina('Y', p.id)
+    const s = await repo.criarPagina('Solta', null)
+    await repo.moverPagina(s.id, p.id, 1) // entra entre X e Y
+    expect((await repo.lerPagina(s.slug)).paiId).toBe(p.id)
+    const arv = await repo.montarArvore()
+    const noP = arv.find((n) => n.id === p.id)!
+    expect(noP.filhos.map((f) => f.titulo)).toEqual(['X', 'Solta', 'Y'])
+    expect(noP.filhos.map((f) => f.ordem)).toEqual([0, 1, 2])
+    expect(x.id).toBeTruthy()
+  })
+
+  it('excluir remove só a subárvore, irmão sobrevive; slug inexistente não quebra', async () => {
+    const alvo = await repo.criarPagina('Alvo', null)
+    const irmao = await repo.criarPagina('Irmão', null)
+    await repo.excluirPagina(alvo.slug)
+    expect(await fs.exists(`C:/Cofre/campanhas/x/escrita/${irmao.slug}.json`)).toBe(true)
+    await repo.excluirPagina('nao-existe') // não lança
+    expect((await repo.montarArvore()).map((n) => n.titulo)).toEqual(['Irmão'])
+  })
+
+  it('salvarCorpo e moverPagina concorrentes na mesma página não se sobrescrevem', async () => {
+    const a = await repo.criarPagina('A', null)
+    await repo.criarPagina('B', null)
+    // dispara os dois sem aguardar o primeiro
+    await Promise.all([
+      repo.salvarCorpo(a.slug, '<p>corpo novo</p>'),
+      repo.moverPagina(a.id, null, 1),
+    ])
+    const p = await repo.lerPagina(a.slug)
+    expect(p.corpo).toBe('<p>corpo novo</p>') // texto sobreviveu
+    expect(p.ordem).toBe(1)                    // move sobreviveu
+  })
 })
