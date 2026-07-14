@@ -15,10 +15,13 @@ export function GaleriaPersonagem({
   personagemId,
   imagens,
   onImagensChange,
+  dirAssets,
 }: {
-  personagemId: string
+  personagemId?: string
   imagens: ImagemPersonagem[]
   onImagensChange: (novo: ImagemPersonagem[]) => void
+  /** destino das cópias; default = assets/ da campanha do personagem */
+  dirAssets?: string
 }) {
   const vaultPath = useApp((s) => s.vaultPath)
   const repo = useApp((s) => s.repo)
@@ -35,10 +38,10 @@ export function GaleriaPersonagem({
   }, [ampliadaRel])
 
   async function adicionar() {
-    const caminho = caminhoPorId[personagemId]
-    if (!repo || !caminho) return
-    // assets/ da mesma pasta do personagem (igual ao retrato)
-    const dirAssets = `${caminho.split('/').slice(0, 2).join('/')}/assets`
+    const caminho = personagemId ? caminhoPorId[personagemId] : null
+    // assets/ da mesma pasta do personagem (igual ao retrato), salvo destino explícito
+    const dir = dirAssets ?? (caminho ? `${caminho.split('/').slice(0, 2).join('/')}/assets` : null)
+    if (!repo || !dir) return
     let lista = imagens
     try {
       const escolha = await open({
@@ -50,7 +53,7 @@ export function GaleriaPersonagem({
       for (const arquivo of arquivos) {
         const nomeArquivo = arquivo.split(/[\\/]/).pop() ?? ''
         const ext = (nomeArquivo.includes('.') ? nomeArquivo.split('.').pop()! : 'png').toLowerCase()
-        const destinoRel = `${dirAssets}/galeria-${crypto.randomUUID()}.${ext}`
+        const destinoRel = `${dir}/galeria-${crypto.randomUUID()}.${ext}`
         await repo.copiarParaCofre(arquivo, destinoRel)
         lista = adicionarImagem(lista, destinoRel)
       }
