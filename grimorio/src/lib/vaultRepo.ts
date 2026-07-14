@@ -299,6 +299,22 @@ export class VaultRepo {
   }
 
   /**
+   * Move o diretório do cenário para dentro de dirDestinoPai (pasta ou cenário).
+   * Guardas: nunca para dentro de si mesmo/descendente; no-op se já está lá.
+   */
+  async moverCenario(dirOrigem: string, dirDestinoPai: string): Promise<void> {
+    if (dirDestinoPai === dirOrigem || dirDestinoPai.startsWith(`${dirOrigem}/`)) {
+      throw new Error('não é possível mover um cenário para dentro dele mesmo')
+    }
+    const slugAtual = dirOrigem.split('/').pop() ?? ''
+    const dirPaiAtual = dirOrigem.slice(0, dirOrigem.length - slugAtual.length - 1)
+    if (dirPaiAtual === dirDestinoPai) return
+    await this.fs.mkdirAll(this.abs(dirDestinoPai))
+    const slug = slugUnico(slugAtual, await this.nomesDeDirs(dirDestinoPai))
+    await this.fs.rename(this.abs(dirOrigem), this.abs(`${dirDestinoPai}/${slug}`))
+  }
+
+  /**
    * Monta a árvore da seção de cenários: dir com cenario.json = cenário;
    * qualquer outro dir (fora de cenário) = pasta organizacional.
    */

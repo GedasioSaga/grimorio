@@ -152,3 +152,57 @@ describe('VaultRepo — árvore de cenários', () => {
     expect(tree.cenarios.cenarios[0].nome).toBe('Floresta')
   })
 })
+
+describe('VaultRepo — moverCenario', () => {
+  it('move cenário para outra pasta levando filhos', async () => {
+    const pasta = await repo.criarPasta('cenarios', 'Reino')
+    const cidade = await repo.criarCenarioEm('cenarios', 'Cidade')
+    await repo.criarCenarioEm(cidade.caminho, 'Bairro')
+    await repo.moverCenario(cidade.caminho, pasta)
+    const raiz = await repo.montarArvoreCenarios()
+    expect(raiz.cenarios).toEqual([])
+    const movida = raiz.subpastas[0].cenarios[0]
+    expect(movida.caminho).toBe('cenarios/reino/cidade')
+    expect(movida.filhos[0].nome).toBe('Bairro')
+  })
+
+  it('reparent: cenário vira sub-cenário de outro', async () => {
+    const cidade = await repo.criarCenarioEm('cenarios', 'Cidade')
+    const floresta = await repo.criarCenarioEm('cenarios', 'Floresta')
+    await repo.moverCenario(floresta.caminho, cidade.caminho)
+    const raiz = await repo.montarArvoreCenarios()
+    expect(raiz.cenarios).toHaveLength(1)
+    expect(raiz.cenarios[0].filhos[0].nome).toBe('Floresta')
+  })
+
+  it('recusa mover para dentro de si mesmo ou de descendente', async () => {
+    const cidade = await repo.criarCenarioEm('cenarios', 'Cidade')
+    const bairro = await repo.criarCenarioEm(cidade.caminho, 'Bairro')
+    await expect(repo.moverCenario(cidade.caminho, cidade.caminho)).rejects.toThrow()
+    await expect(repo.moverCenario(cidade.caminho, bairro.caminho)).rejects.toThrow()
+  })
+
+  it('no-op se já está no destino', async () => {
+    const cidade = await repo.criarCenarioEm('cenarios', 'Cidade')
+    await repo.moverCenario(cidade.caminho, 'cenarios')
+    expect(await fs.exists('C:/Cofre/cenarios/cidade/cenario.json')).toBe(true)
+  })
+
+  it('colisão de slug no destino ganha sufixo', async () => {
+    const pasta = await repo.criarPasta('cenarios', 'Reino')
+    await repo.criarCenarioEm(pasta, 'Cidade')
+    const solta = await repo.criarCenarioEm('cenarios', 'Cidade')
+    await repo.moverCenario(solta.caminho, pasta)
+    expect(await fs.exists('C:/Cofre/cenarios/reino/cidade-2/cenario.json')).toBe(true)
+  })
+
+  it('conteúdo do cenário sobrevive ao move (vínculos inclusive)', async () => {
+    const cidade = await repo.criarCenarioEm('cenarios', 'Cidade')
+    const c = await repo.lerCenario(cidade.caminho)
+    await repo.salvarCenario(cidade.caminho, { ...c, personagens: ['p1'] })
+    const pasta = await repo.criarPasta('cenarios', 'Reino')
+    await repo.moverCenario(cidade.caminho, pasta)
+    const relido = await repo.lerCenario('cenarios/reino/cidade')
+    expect(relido.personagens).toEqual(['p1'])
+  })
+})
