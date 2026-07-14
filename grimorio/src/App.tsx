@@ -47,6 +47,7 @@ export default function App() {
             chaveSplit={aberto.caminho}
             cadernoDirRel={aberto.caminho}
             cadernoDirAbs={`${vaultPath}/${aberto.caminho}`}
+            titulo={aberto.nome}
           />
         )}
       </main>

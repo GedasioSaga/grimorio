@@ -32,12 +32,13 @@ function salvarSplit(chave: string, e: EstadoSplit) {
  * chaveSplit: identificador estável para lembrar o layout (ex.: caminho da sessão).
  */
 export function Workspace({
-  cadernoDirAbs, cadernoDirRel, chaveSplit, mapa,
+  cadernoDirAbs, cadernoDirRel, chaveSplit, mapa, titulo,
 }: {
   cadernoDirAbs: string
   cadernoDirRel: string
   chaveSplit: string
   mapa?: { caminho: string; nome: string }
+  titulo?: string
 }) {
   const slugAtivo = useApp((s) => s.paginaAtivaPorCaderno[cadernoDirRel] ?? null)
   // UMA instância de NotebookRepo compartilhada entre rail e editor: serializa
@@ -80,7 +81,7 @@ export function Workspace({
     <div className={`workspace${redimensionando ? ' arrastando' : ''}`} ref={wrapRef}>
       <div className={`ws-escrita${notasRecolhida ? ' ws-recolhido' : ''}`} style={{ flexGrow: escritaFlex, flexBasis: 0 }}>
         <div className="ws-cabecalho">
-          {!notasRecolhida && <span className="ws-titulo">{mapa?.nome ?? 'Escrita'}</span>}
+          {!notasRecolhida && <span className="ws-titulo">{mapa?.nome ?? titulo ?? 'Escrita'}</span>}
           {temMapa && (
             <button className="btn-icon" title={notasRecolhida ? 'Expandir notas' : 'Recolher notas'}
               onClick={() => setSplit((s) => ({ ...s, recolhido: proximoRecolhido(s.recolhido, 'notas') }))}>
