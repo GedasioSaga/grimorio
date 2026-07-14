@@ -269,3 +269,17 @@ button:hover { border-color: var(--dourado); color: var(--dourado-claro); }
 .rail-chip:hover { border-color: var(--dourado); }
 .rail-chip.ativa { border-color: var(--dourado); color: var(--dourado-claro); }
 .rail-chip:disabled { opacity: 0.5; cursor: default; }
+
+/* ---- galeria de personagem ---- */
+.galeria { flex: 1; overflow-y: auto; padding: 16px 20px; }
+.galeria-topo { margin-bottom: 12px; }
+.galeria-vazia { color: var(--texto-fraco); font-size: 13px; }
+.galeria-grade { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 10px; }
+.galeria-item { padding: 0; border: 1px solid var(--borda); border-radius: 4px; overflow: hidden; aspect-ratio: 1; cursor: pointer; background: var(--fundo); }
+.galeria-item:hover { border-color: var(--dourado); }
+.galeria-item img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.galeria-lightbox { position: fixed; inset: 0; background: rgba(0, 0, 0, 0.8); display: flex; align-items: center; justify-content: center; z-index: 1100; }
+.galeria-lightbox-conteudo { display: flex; flex-direction: column; gap: 10px; max-width: 80vw; max-height: 85vh; }
+.galeria-lightbox-conteudo img { max-width: 80vw; max-height: 65vh; object-fit: contain; border-radius: 6px; border: 1px solid var(--borda); }
+.galeria-legenda { background: var(--fundo-elevado); border: 1px solid var(--borda); border-radius: 4px; color: var(--texto); padding: 6px 8px; resize: vertical; min-height: 40px; font-family: inherit; }
+.galeria-lightbox-acoes { display: flex; gap: 8px; justify-content: flex-end; }
