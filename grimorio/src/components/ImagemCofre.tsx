@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react'
 import Image from '@tiptap/extension-image'
 import { NodeViewWrapper, ReactNodeViewRenderer, type ReactNodeViewProps } from '@tiptap/react'
 import { convertFileSrc } from '@tauri-apps/api/core'
@@ -7,17 +8,28 @@ import { caminhoAbsolutoImagem } from '../lib/caminhos'
 function ImagemView(props: ReactNodeViewProps) {
   const vaultPath = useApp((s) => s.vaultPath)
   const rel = (props.node.attrs.rel as string | null) ?? null
+  const alt = (props.node.attrs.alt as string | null) ?? ''
   const src = rel && vaultPath ? convertFileSrc(caminhoAbsolutoImagem(vaultPath, rel)) : ''
+  // arquivo referenciado pode não existir no cofre atual (cofre é portável entre PCs)
+  const [erroImg, setErroImg] = useState(false)
+  useEffect(() => {
+    setErroImg(false)
+  }, [src])
   return (
-    <NodeViewWrapper as="span" className="nota-img">
-      <img
-        src={src}
-        draggable
-        onDragStart={(e) => {
-          if (rel) e.dataTransfer.setData('application/x-grimorio-imagem', rel)
-        }}
-        alt=""
-      />
+    <NodeViewWrapper as="div" className="nota-img">
+      {src && !erroImg ? (
+        <img
+          src={src}
+          draggable
+          onDragStart={(e) => {
+            if (rel) e.dataTransfer.setData('application/x-grimorio-imagem', rel)
+          }}
+          onError={() => setErroImg(true)}
+          alt={alt}
+        />
+      ) : (
+        <span className="nota-img-faltando">imagem não encontrada</span>
+      )}
     </NodeViewWrapper>
   )
 }
@@ -47,6 +59,12 @@ export const ImagemCofre = Image.extend({
   // `img[src]` e não casaria — casamos por `data-rel` para o round-trip da página.
   parseHTML() {
     return [{ tag: 'img[data-rel]' }]
+  },
+  // desabilita o atalho markdown `![alt](url)` do Image base: criaria um node sem `rel`
+  // (renderiza quebrado e some ao reabrir, pois parseHTML só casa `img[data-rel]`).
+  // Imagens deste node entram só via insertContent com `rel`, vindas do cofre.
+  addInputRules() {
+    return []
   },
   addNodeView() {
     return ReactNodeViewRenderer(ImagemView)
