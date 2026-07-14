@@ -256,6 +256,16 @@ button:hover { border-color: var(--dourado); color: var(--dourado-claro); }
 .ws-escrita-corpo.rail-recolhida { flex-direction: column; }
 .rail-miniatura {
   padding: 4px 8px; border-bottom: 1px solid var(--borda);
-  background: var(--fundo-painel); display: flex; align-items: center;
+  background: var(--fundo-painel); display: flex; align-items: center; gap: 8px;
 }
 .rail-miniatura .btn-icon { font-size: 12px; }
+/* chips das páginas na barra recolhida: linha única com scroll horizontal */
+.rail-chips { display: flex; gap: 4px; overflow-x: auto; white-space: nowrap; flex: 1; min-width: 0; scrollbar-width: thin; }
+.rail-chip {
+  flex: 0 0 auto; font-size: 11px; padding: 2px 8px; border-radius: 10px;
+  border: 1px solid var(--borda); background: var(--fundo-elevado); cursor: pointer;
+  max-width: 160px; overflow: hidden; text-overflow: ellipsis;
+}
+.rail-chip:hover { border-color: var(--dourado); }
+.rail-chip.ativa { border-color: var(--dourado); color: var(--dourado-claro); }
+.rail-chip:disabled { opacity: 0.5; cursor: default; }
