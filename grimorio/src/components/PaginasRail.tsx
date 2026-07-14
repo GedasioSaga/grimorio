@@ -22,7 +22,7 @@ function coletarSlugs(nodes: PaginaNode[], acc: Set<string>): Set<string> {
  * pela mesma fila `naFila` e nunca se sobrescrevam.
  * cadernoDirRel = caminho relativo ao cofre (chave da página ativa no store).
  */
-export function PaginasRail({ repo, cadernoDirRel }: { repo: NotebookRepo; cadernoDirRel: string }) {
+export function PaginasRail({ repo, cadernoDirRel, onRecolher }: { repo: NotebookRepo; cadernoDirRel: string; onRecolher?: () => void }) {
   const [arvore, setArvore] = useState<PaginaNode[] | null>(null)
   const ativa = useApp((s) => s.paginaAtivaPorCaderno[cadernoDirRel] ?? null)
   const setPaginaAtiva = useApp((s) => s.setPaginaAtiva)
@@ -74,7 +74,8 @@ export function PaginasRail({ repo, cadernoDirRel }: { repo: NotebookRepo; cader
       }}
     >
       <div className="rail-header">
-        <span>Páginas</span>
+        {onRecolher && <button className="btn-icon" title="Recolher páginas" onClick={onRecolher}>‹</button>}
+        <span className="rail-header-titulo">Páginas</span>
         <button className="btn-icon" title="Nova página" onClick={() => void nova(null)}>+</button>
       </div>
       {arvore.length === 0 && <div className="rail-vazio">Sem páginas ainda.</div>}

@@ -10,17 +10,18 @@ import { useApp } from '../state/store'
 interface EstadoSplit {
   proporcao: number // fração larg. das Notas (0..1) quando ambos abertos
   recolhido: Recolhido
+  railRecolhida: boolean // árvore de páginas recolhida em miniatura no topo
 }
 
 function lerSplit(chave: string, recolhidoPadrao: Recolhido): EstadoSplit {
-  const padrao: EstadoSplit = { proporcao: 0.5, recolhido: recolhidoPadrao }
+  const padrao: EstadoSplit = { proporcao: 0.5, recolhido: recolhidoPadrao, railRecolhida: false }
   try {
     const s = localStorage.getItem(`grimorio.split.${chave}`)
     if (!s) return padrao
     const o = JSON.parse(s) as Partial<EstadoSplit>
     const proporcao = typeof o.proporcao === 'number' && o.proporcao >= 0.15 && o.proporcao <= 0.85 ? o.proporcao : 0.5
     const recolhido: Recolhido = o.recolhido === 'notas' || o.recolhido === 'mapa' ? o.recolhido : 'nenhum'
-    return { proporcao, recolhido }
+    return { proporcao, recolhido, railRecolhida: o.railRecolhida === true }
   } catch { return padrao }
 }
 function salvarSplit(chave: string, e: EstadoSplit) {
@@ -99,8 +100,14 @@ export function Workspace({
         )}
       </div>
       {!notasRecolhida && (
-        <div className="ws-escrita-corpo">
-          <PaginasRail repo={repo} cadernoDirRel={cadernoDirRel} />
+        <div className={`ws-escrita-corpo${split.railRecolhida ? ' rail-recolhida' : ''}`}>
+          {split.railRecolhida
+            ? (
+              <div className="rail-miniatura">
+                <button className="btn-icon" title="Abrir páginas" onClick={() => setSplit((s) => ({ ...s, railRecolhida: false }))}>☰ Páginas</button>
+              </div>
+            )
+            : <PaginasRail repo={repo} cadernoDirRel={cadernoDirRel} onRecolher={() => setSplit((s) => ({ ...s, railRecolhida: true }))} />}
           {slugAtivo
             ? <NotasEditor key={slugAtivo} repo={repo} slug={slugAtivo} />
             : <div className="notas-vazio">Selecione ou crie uma página.</div>}
