@@ -55,6 +55,28 @@ export function criarFakeFs(): FsBridge & { arquivos: Map<string, string>; atras
       if (c === undefined) throw new Error(`não existe: ${from}`)
       arquivos.set(norm(to), c)
     },
+    async rename(from, to) {
+      const f = norm(from)
+      const t = norm(to)
+      const existe =
+        arquivos.has(f) || dirs.has(f) || [...arquivos.keys(), ...dirs].some((k) => k.startsWith(f + '/'))
+      if (!existe) throw new Error(`não existe: ${from}`)
+      for (const k of [...arquivos.keys()]) {
+        if (k === f) {
+          arquivos.set(t, arquivos.get(k)!)
+          arquivos.delete(k)
+        } else if (k.startsWith(f + '/')) {
+          arquivos.set(t + k.slice(f.length), arquivos.get(k)!)
+          arquivos.delete(k)
+        }
+      }
+      for (const d of [...dirs]) {
+        if (d === f || d.startsWith(f + '/')) {
+          dirs.add(t + d.slice(f.length))
+          dirs.delete(d)
+        }
+      }
+    },
     async exists(path) {
       const p = norm(path)
       return arquivos.has(p) || dirs.has(p) || [...arquivos.keys(), ...dirs].some((k) => k.startsWith(p + '/'))

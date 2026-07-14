@@ -8,6 +8,7 @@ export interface FsBridge {
   mkdirAll(path: string): Promise<void>
   removePath(path: string): Promise<void>
   copyFile(from: string, to: string): Promise<void>
+  rename(from: string, to: string): Promise<void>
   exists(path: string): Promise<boolean>
 }
 
@@ -22,5 +23,6 @@ export const tauriFs: FsBridge = {
   mkdirAll: (path) => invoke('mkdir_all', { path }),
   removePath: (path) => invoke('remove_path', { path }),
   copyFile: (from, to) => invoke('copy_file', { from, to }),
+  rename: (from, to) => invoke('rename_path', { from, to }),
   exists: (path) => invoke('path_exists', { path }),
 }
