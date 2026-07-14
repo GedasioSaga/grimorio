@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import {
+  AssetRecordType,
   Tldraw,
   createShapeId,
   createTLStore,
@@ -18,6 +19,7 @@ import { save } from '@tauri-apps/plugin-dialog'
 import { useApp } from '../state/store'
 import type { VaultRepo } from '../lib/vaultRepo'
 import { slugify } from '../lib/slug'
+import { caminhoAbsolutoImagem } from '../lib/caminhos'
 import {
   CARD_ALTURA_PADRAO,
   CARD_LARGURA_PADRAO,
@@ -33,6 +35,10 @@ const shapeUtilsCustom = [CharacterCardShapeUtil]
 const shapeUtilsDoStore = [...defaultShapeUtils, CharacterCardShapeUtil]
 
 const BASE64_CHUNK = 8192
+
+// Fallback quando o tamanho natural da imagem não pôde ser lido (arquivo ausente/corrompido).
+const IMG_FALLBACK_LARGURA = 320
+const IMG_FALLBACK_ALTURA = 240
 
 /** Converte bytes para base64 em blocos (evita estourar a pilha com spread gigante). */
 function uint8ParaBase64(bytes: Uint8Array): string {
@@ -69,6 +75,67 @@ function criarStoreCanvas(vaultPath: string, repo: VaultRepo): TLStore {
   return createTLStore({
     shapeUtils: shapeUtilsDoStore,
     assets: criarAssetStore(vaultPath, repo),
+  })
+}
+
+/** Deriva o mimeType da imagem a partir da extensão do arquivo. */
+function mimeDaExtensao(rel: string): string {
+  const ext = (rel.split('.').pop() ?? 'png').toLowerCase()
+  if (ext === 'jpg' || ext === 'jpeg') return 'image/jpeg'
+  if (ext === 'webp') return 'image/webp'
+  if (ext === 'gif') return 'image/gif'
+  return 'image/png'
+}
+
+/** Lê o tamanho natural da imagem; devolve fallback se o arquivo não carregar. */
+function medirImagem(url: string): Promise<{ w: number; h: number }> {
+  return new Promise((resolve) => {
+    const img = new Image()
+    img.onload = () =>
+      resolve({ w: img.naturalWidth || IMG_FALLBACK_LARGURA, h: img.naturalHeight || IMG_FALLBACK_ALTURA })
+    img.onerror = () => resolve({ w: IMG_FALLBACK_LARGURA, h: IMG_FALLBACK_ALTURA })
+    img.src = url
+  })
+}
+
+/**
+ * Solta no mapa uma imagem que referencia o MESMO arquivo do cofre (ex.: imagens-notas/…),
+ * sem copiar. O asset guarda `meta.rel`; o `resolve()` do asset store remonta o `src` a partir
+ * do vaultPath atual — portável entre máquinas, igual às imagens coladas no canvas.
+ */
+async function soltarImagemNoMapa(
+  editor: Editor,
+  vaultPath: string,
+  rel: string,
+  clientX: number,
+  clientY: number,
+) {
+  const url = convertFileSrc(caminhoAbsolutoImagem(vaultPath, rel))
+  const dims = await medirImagem(url)
+  const assetId = AssetRecordType.createId()
+  editor.createAssets([
+    {
+      id: assetId,
+      typeName: 'asset',
+      type: 'image',
+      props: {
+        name: rel.split('/').pop() ?? 'imagem',
+        src: url,
+        w: dims.w,
+        h: dims.h,
+        mimeType: mimeDaExtensao(rel),
+        isAnimated: false,
+      },
+      meta: { rel },
+    },
+  ])
+  const ponto = editor.screenToPage({ x: clientX, y: clientY })
+  editor.createShape({
+    id: createShapeId(),
+    type: 'image',
+    x: ponto.x - dims.w / 2,
+    y: ponto.y - dims.h / 2,
+    props: { assetId, w: dims.w, h: dims.h },
   })
 }
 
@@ -188,12 +255,26 @@ export function CanvasView({ caminho, nome }: { caminho: string; nome: string })
       // stopPropagation no drop, então handlers de bubble aqui nunca disparam.
       // O guard pelo MIME type deixa drags alheios passarem intactos pro tldraw.
       onDragOverCapture={(e) => {
-        if (e.dataTransfer.types.includes('application/x-grimorio-personagem')) {
+        if (
+          e.dataTransfer.types.includes('application/x-grimorio-personagem') ||
+          e.dataTransfer.types.includes('application/x-grimorio-imagem')
+        ) {
           e.preventDefault()
           e.stopPropagation()
         }
       }}
       onDropCapture={(e) => {
+        // imagem arrastada de uma nota: referencia o mesmo arquivo do cofre (sem copiar)
+        const relImg = e.dataTransfer.getData('application/x-grimorio-imagem')
+        if (relImg) {
+          const editor = editorRef.current
+          if (editor && vaultPath) {
+            e.preventDefault()
+            e.stopPropagation()
+            void soltarImagemNoMapa(editor, vaultPath, relImg, e.clientX, e.clientY)
+          }
+          return
+        }
         const id = e.dataTransfer.getData('application/x-grimorio-personagem')
         const editor = editorRef.current
         if (!id || !editor) return
