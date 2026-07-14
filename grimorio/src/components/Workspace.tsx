@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { PaginasRail } from './PaginasRail'
+import { PaginasChips } from './PaginasChips'
 import { NotasEditor } from './NotasEditor'
 import { CanvasView } from './CanvasView'
 import { tauriFs } from '../lib/fsBridge'
@@ -105,6 +106,7 @@ export function Workspace({
             ? (
               <div className="rail-miniatura">
                 <button className="btn-icon" title="Abrir páginas" onClick={() => setSplit((s) => ({ ...s, railRecolhida: false }))}>☰ Páginas</button>
+                <PaginasChips repo={repo} cadernoDirRel={cadernoDirRel} />
               </div>
             )
             : <PaginasRail repo={repo} cadernoDirRel={cadernoDirRel} onRecolher={() => setSplit((s) => ({ ...s, railRecolhida: true }))} />}
