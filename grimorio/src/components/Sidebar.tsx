@@ -4,6 +4,7 @@ import type { TipoAberto } from '../state/store'
 import type { CampanhaNode, ItemRef } from '../lib/types'
 import { escritaDirDaCampanha } from '../lib/caminhos'
 import { PersonagensSoltos } from './PersonagensSoltos'
+import { CenariosSoltos } from './CenariosSoltos'
 
 async function comAvisoDeErro(acao: () => Promise<void>) {
   try {
@@ -18,6 +19,7 @@ export function Sidebar({ recolhida, onToggle }: { recolhida: boolean; onToggle:
   const repo = useApp((s) => s.repo)
   const recarregar = useApp((s) => s.recarregarArvore)
   const carregarPersonagens = useApp((s) => s.carregarPersonagens)
+  const carregarCenarios = useApp((s) => s.carregarCenarios)
 
   if (recolhida) {
     return (
@@ -75,6 +77,8 @@ export function Sidebar({ recolhida, onToggle }: { recolhida: boolean; onToggle:
       </div>
 
       <PersonagensSoltos raiz={tree.personagensSoltos} aoMudar={async () => { await recarregar(); await carregarPersonagens() }} />
+
+      <CenariosSoltos raiz={tree.cenarios} aoMudar={async () => { await recarregar(); await carregarCenarios() }} />
     </aside>
   )
 }
