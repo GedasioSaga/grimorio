@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { open } from '@tauri-apps/plugin-dialog'
 import { convertFileSrc } from '@tauri-apps/api/core'
 import { useApp } from '../state/store'
@@ -27,11 +27,19 @@ export function GaleriaPersonagem({
 
   const ampliada = imagens.find((i) => i.rel === ampliadaRel) ?? null
 
+  useEffect(() => {
+    if (!ampliadaRel) return
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setAmpliadaRel(null) }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  }, [ampliadaRel])
+
   async function adicionar() {
     const caminho = caminhoPorId[personagemId]
     if (!repo || !caminho) return
     // assets/ da mesma pasta do personagem (igual ao retrato)
     const dirAssets = `${caminho.split('/').slice(0, 2).join('/')}/assets`
+    let lista = imagens
     try {
       const escolha = await open({
         title: 'Escolher imagens',
@@ -39,7 +47,6 @@ export function GaleriaPersonagem({
         filters: [{ name: 'Imagens', extensions: ['png', 'jpg', 'jpeg', 'webp', 'gif'] }],
       })
       const arquivos = Array.isArray(escolha) ? escolha : escolha ? [escolha] : []
-      let lista = imagens
       for (const arquivo of arquivos) {
         const nomeArquivo = arquivo.split(/[\\/]/).pop() ?? ''
         const ext = (nomeArquivo.includes('.') ? nomeArquivo.split('.').pop()! : 'png').toLowerCase()
@@ -49,6 +56,7 @@ export function GaleriaPersonagem({
       }
       if (lista !== imagens) onImagensChange(lista)
     } catch (e) {
+      if (lista !== imagens) onImagensChange(lista) // persiste o que já copiou antes do erro
       alert(`Falha ao adicionar imagens: ${e}`)
     }
   }
