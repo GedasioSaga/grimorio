@@ -1,5 +1,5 @@
 import type { FsBridge } from './fsBridge'
-import type { Campanha, CampanhaNode, CanvasDoc, ItemRef, Personagem, VaultTree } from './types'
+import type { Campanha, CampanhaNode, CanvasDoc, ItemRef, PastaNode, Personagem, VaultTree } from './types'
 import { slugify, slugUnico } from './slug'
 
 function agora(): string {
@@ -54,7 +54,12 @@ export class VaultRepo {
   }
 
   async criarPersonagem(campanhaSlug: string, nome: string): Promise<ItemRef> {
-    const dir = `campanhas/${campanhaSlug}/personagens`
+    return this.criarPersonagemEm(`campanhas/${campanhaSlug}/personagens`, nome)
+  }
+
+  /** Cria um personagem em qualquer diretório (usado tanto por campanha quanto pela área solta). */
+  async criarPersonagemEm(dir: string, nome: string): Promise<ItemRef> {
+    await this.fs.mkdirAll(this.abs(dir))
     const slug = await this.slugLivre(dir, nome)
     const p: Personagem = {
       id: novoId(), nome, retrato: null, resumo: '', corpo: '',
@@ -72,6 +77,32 @@ export class VaultRepo {
     const caminho = `${dir}/${slug}.json`
     await this.fs.writeTextAtomic(this.abs(caminho), JSON.stringify(doc, null, 2))
     return { slug, nome, caminho }
+  }
+
+  /** Cria uma pasta (com pasta.json guardando o nome) dentro de dirPai. Retorna o caminho da nova pasta. */
+  async criarPasta(dirPai: string, nome: string): Promise<string> {
+    let existentes: string[] = []
+    try {
+      existentes = (await this.fs.listDir(this.abs(dirPai))).filter((e) => e.isDir).map((e) => e.name)
+    } catch { /* dirPai ainda não existe */ }
+    const slug = slugUnico(slugify(nome), existentes)
+    const dir = `${dirPai}/${slug}`
+    await this.fs.mkdirAll(this.abs(dir))
+    await this.fs.writeTextAtomic(this.abs(`${dir}/pasta.json`), JSON.stringify({ nome, criadoEm: agora() }, null, 2))
+    return dir
+  }
+
+  /** Move o arquivo .json de um personagem para outro diretório (copiar + remover). No-op se já estiver lá. */
+  async moverPersonagem(caminhoOrigem: string, dirDestino: string): Promise<void> {
+    const nomeArquivo = caminhoOrigem.split('/').pop() ?? ''
+    const dirOrigem = caminhoOrigem.slice(0, caminhoOrigem.length - nomeArquivo.length - 1)
+    if (dirOrigem === dirDestino) return
+    await this.fs.mkdirAll(this.abs(dirDestino))
+    const slugBase = nomeArquivo.replace(/\.json$/, '')
+    const slug = await this.slugLivre(dirDestino, slugBase)
+    const destino = `${dirDestino}/${slug}.json`
+    await this.fs.copyFile(this.abs(caminhoOrigem), this.abs(destino))
+    await this.fs.removePath(this.abs(caminhoOrigem))
   }
 
   private async slugLivre(dir: string, nome: string): Promise<string> {
@@ -193,7 +224,46 @@ export class VaultRepo {
         escritas: await this.listarItens(`${base}/escrita`),
       })
     }
-    return { campanhas, canvasesSoltos: await this.listarItens('canvases-soltos') }
+    return {
+      campanhas,
+      canvasesSoltos: await this.listarItens('canvases-soltos'),
+      personagensSoltos: await this.montarArvorePastas('personagens-soltos'),
+    }
+  }
+
+  /** Monta recursivamente a árvore de pastas + personagens de um diretório raiz. */
+  async montarArvorePastas(dir: string): Promise<PastaNode> {
+    let entries: { name: string; isDir: boolean }[] = []
+    try {
+      entries = await this.fs.listDir(this.abs(dir))
+    } catch {
+      // diretório ainda não existe
+    }
+    const subpastas: PastaNode[] = []
+    const personagens: ItemRef[] = []
+    for (const e of entries) {
+      if (e.isDir) {
+        subpastas.push(await this.montarArvorePastas(`${dir}/${e.name}`))
+      } else if (e.name.endsWith('.json') && e.name !== 'pasta.json') {
+        const slug = e.name.replace(/\.json$/, '')
+        const caminho = `${dir}/${e.name}`
+        try {
+          const obj = JSON.parse(await this.fs.readText(this.abs(caminho)))
+          personagens.push({ slug, nome: obj.nome ?? slug, caminho })
+        } catch {
+          personagens.push({ slug, nome: slug, caminho, erro: true })
+        }
+      }
+    }
+    let nome = dir.split('/').pop() ?? dir
+    try {
+      nome = (JSON.parse(await this.fs.readText(this.abs(`${dir}/pasta.json`))) as { nome: string }).nome
+    } catch {
+      // raiz ou pasta sem metadados
+    }
+    subpastas.sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'))
+    personagens.sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'))
+    return { slug: dir.split('/').pop() ?? dir, nome, caminho: dir, subpastas, personagens }
   }
 
   private async listarDirs(rel: string): Promise<{ name: string }[]> {

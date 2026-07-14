@@ -156,4 +156,46 @@ describe('VaultRepo', () => {
     expect(await fs.exists('C:/Saida/canvas.svg')).toBe(true)
     expect(await fs.exists('C:/Saida/canvas.png')).toBe(true)
   })
+
+  // ---- personagens fora da campanha (pastas aninhadas) ----
+
+  it('cria pasta com metadados e personagem dentro dela', async () => {
+    const dir = await repo.criarPasta('personagens-soltos', 'Vilões')
+    expect(dir).toBe('personagens-soltos/viloes')
+    expect(await fs.exists('C:/Cofre/personagens-soltos/viloes/pasta.json')).toBe(true)
+    const ref = await repo.criarPersonagemEm(dir, 'Strahd')
+    expect(ref.caminho).toBe('personagens-soltos/viloes/strahd.json')
+    expect((await repo.lerPersonagem(ref.caminho)).nome).toBe('Strahd')
+  })
+
+  it('monta a árvore de pastas aninhadas com nome vindo do pasta.json', async () => {
+    const vil = await repo.criarPasta('personagens-soltos', 'Vilões')
+    await repo.criarPasta(vil, 'Chefes')
+    await repo.criarPersonagemEm(vil, 'Strahd')
+    await repo.criarPersonagemEm('personagens-soltos', 'Andarilho')
+    const raiz = await repo.montarArvorePastas('personagens-soltos')
+    expect(raiz.personagens.map((p) => p.nome)).toEqual(['Andarilho'])
+    const noVil = raiz.subpastas.find((s) => s.nome === 'Vilões')!
+    expect(noVil.personagens.map((p) => p.nome)).toEqual(['Strahd'])
+    expect(noVil.subpastas.map((s) => s.nome)).toEqual(['Chefes'])
+  })
+
+  it('move personagem de uma campanha para uma pasta solta', async () => {
+    await repo.inicializar()
+    const camp = await repo.criarCampanha('Teste')
+    const ref = await repo.criarPersonagem(camp, 'Baldur')
+    const idAntes = (await repo.lerPersonagem(ref.caminho)).id
+    const dir = await repo.criarPasta('personagens-soltos', 'Aliados')
+    await repo.moverPersonagem(ref.caminho, dir)
+    expect(await fs.exists(`C:/Cofre/${ref.caminho}`)).toBe(false)
+    const p = await repo.lerPersonagem(`${dir}/baldur.json`)
+    expect(p.nome).toBe('Baldur')
+    expect(p.id).toBe(idAntes)
+  })
+
+  it('mover para o mesmo diretório é no-op', async () => {
+    const ref = await repo.criarPersonagemEm('personagens-soltos', 'Solo')
+    await repo.moverPersonagem(ref.caminho, 'personagens-soltos')
+    expect(await fs.exists(`C:/Cofre/${ref.caminho}`)).toBe(true)
+  })
 })

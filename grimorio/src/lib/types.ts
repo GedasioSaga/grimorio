@@ -42,9 +42,20 @@ export interface CampanhaNode {
   escritas: ItemRef[]
 }
 
+/** Nó de pasta na área de Personagens soltos (pastas aninhadas + personagens). */
+export interface PastaNode {
+  slug: string
+  nome: string
+  caminho: string // dir relativo ao cofre, ex.: "personagens-soltos/vilões"
+  subpastas: PastaNode[]
+  personagens: ItemRef[]
+}
+
 export interface VaultTree {
   campanhas: CampanhaNode[]
   canvasesSoltos: ItemRef[]
+  /** raiz da área de personagens fora de campanha (caminho = "personagens-soltos") */
+  personagensSoltos: PastaNode
 }
 
 export interface Pagina {
