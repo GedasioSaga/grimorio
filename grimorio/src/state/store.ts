@@ -1,7 +1,8 @@
 import { create } from 'zustand'
-import type { ItemRef, PastaNode, Personagem, VaultTree } from '../lib/types'
+import type { Cenario, ItemRef, PastaNode, Personagem, VaultTree } from '../lib/types'
 import { tauriFs } from '../lib/fsBridge'
 import { VaultRepo } from '../lib/vaultRepo'
+import { coletarCenarioRefs } from '../lib/cenarioArvore'
 
 export type TipoAberto = 'sessao' | 'canvas' | 'escrita'
 
@@ -10,6 +11,9 @@ const SALVAR_PARCIAL_DEBOUNCE_MS = 800
 // timers por personagem em nível de módulo: o debounce sobrevive ao unmount do
 // card no canvas (tldraw desmonta shapes fora da viewport) sem perder a gravação
 const timersSalvarParcial = new Map<string, ReturnType<typeof setTimeout>>()
+
+// mesmo racional para cenários (cards no canvas desmontam fora da viewport)
+const timersSalvarCenario = new Map<string, ReturnType<typeof setTimeout>>()
 
 export interface ItemAberto {
   tipo: TipoAberto
@@ -30,6 +34,11 @@ interface AppState {
   /** id -> caminho relativo (para resolver referências) */
   caminhoPorId: Record<string, string>
   perfilAbertoId: string | null
+  /** cache de cenários do cofre: id -> Cenario */
+  cenarios: Record<string, Cenario>
+  /** id -> dir do cenário relativo ao cofre */
+  caminhoCenarioPorId: Record<string, string>
+  cenarioAbertoId: string | null
   carregando: boolean
   erroCofre: string | null
 
@@ -43,6 +52,11 @@ interface AppState {
   salvarPersonagemParcial(id: string, mudancas: Partial<Personagem>): void
   abrirPerfil(id: string): void
   fecharPerfil(): void
+  carregarCenarios(): Promise<void>
+  /** Merge otimista no cache + gravação debounced (modal e card do canvas). */
+  salvarCenarioParcial(id: string, mudancas: Partial<Cenario>): void
+  abrirCenario(id: string): void
+  fecharCenario(): void
 }
 
 export const useApp = create<AppState>((set, get) => ({
@@ -54,6 +68,9 @@ export const useApp = create<AppState>((set, get) => ({
   personagens: {},
   caminhoPorId: {},
   perfilAbertoId: null,
+  cenarios: {},
+  caminhoCenarioPorId: {},
+  cenarioAbertoId: null,
   carregando: false,
   erroCofre: null,
 
@@ -68,6 +85,7 @@ export const useApp = create<AppState>((set, get) => ({
       set({ vaultPath: norm, repo })
       await get().recarregarArvore()
       await get().carregarPersonagens()
+      await get().carregarCenarios()
     } catch (e) {
       set({ erroCofre: `Não foi possível abrir o cofre: ${e}` })
       throw e
@@ -151,5 +169,57 @@ export const useApp = create<AppState>((set, get) => ({
 
   fecharPerfil() {
     set({ perfilAbertoId: null })
+  },
+
+  async carregarCenarios() {
+    const { repo, tree } = get()
+    if (!repo || !tree) return
+    const cenarios: Record<string, Cenario> = {}
+    const caminhoCenarioPorId: Record<string, string> = {}
+    for (const ref of coletarCenarioRefs(tree.cenarios)) {
+      // id vazio = cenario.json sem id (normalização geraria id novo a cada load)
+      if (ref.erro || !ref.id) continue
+      try {
+        const c = await repo.lerCenario(ref.caminho)
+        cenarios[c.id] = c
+        caminhoCenarioPorId[c.id] = ref.caminho
+      } catch {
+        // ignora corrompido; sidebar já marca erro
+      }
+    }
+    set({ cenarios, caminhoCenarioPorId })
+  },
+
+  salvarCenarioParcial(id, mudancas) {
+    const atual = get().cenarios[id]
+    if (!atual) return
+    set((s) => ({
+      cenarios: { ...s.cenarios, [id]: { ...s.cenarios[id], ...mudancas } },
+    }))
+    const pendente = timersSalvarCenario.get(id)
+    if (pendente) clearTimeout(pendente)
+    timersSalvarCenario.set(
+      id,
+      setTimeout(() => {
+        timersSalvarCenario.delete(id)
+        // caminho re-resolvido no disparo: após mover/excluir não grava no lugar antigo
+        const { repo, caminhoCenarioPorId, cenarios } = get()
+        const caminho = caminhoCenarioPorId[id]
+        const c = cenarios[id]
+        if (!repo || !caminho || !c) return
+        // fire-and-forget: VaultRepo serializa escritas por caminho
+        repo.salvarCenario(caminho, { ...c }).catch((e) => {
+          console.error('Falha ao salvar cenário:', e)
+        })
+      }, SALVAR_PARCIAL_DEBOUNCE_MS),
+    )
+  },
+
+  abrirCenario(id) {
+    set({ cenarioAbertoId: id })
+  },
+
+  fecharCenario() {
+    set({ cenarioAbertoId: null })
   },
 }))
