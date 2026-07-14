@@ -47,6 +47,24 @@ describe('VaultRepo', () => {
     expect((p as unknown as { corpo?: string }).corpo).toBeUndefined()
   })
 
+  it('migra arquivo legado: abrir e salvar remove `corpo` do disco', async () => {
+    await repo.inicializar()
+    const camp = await repo.criarCampanha('Teste')
+    const caminho = `campanhas/${camp}/personagens/legado.json`
+    // grava um personagem no formato legado (com corpo, sem os campos de seção)
+    await fs.writeTextAtomic(`C:/Cofre/${caminho}`, JSON.stringify({
+      id: 'x', nome: 'Legado', retrato: null, resumo: 'r',
+      corpo: '<p>antigo</p>',
+      criadoEm: '2020-01-01T00:00:00.000Z', modificadoEm: '2020-01-01T00:00:00.000Z',
+    }))
+    const p = await repo.lerPersonagem(caminho)
+    expect(p.descricao).toBe('<p>antigo</p>')
+    await repo.salvarPersonagem(caminho, p)
+    const cru = JSON.parse(await fs.readText(`C:/Cofre/${caminho}`))
+    expect(cru.corpo).toBeUndefined()
+    expect(cru.descricao).toBe('<p>antigo</p>')
+  })
+
   it('salva e recarrega personagem preservando id', async () => {
     await repo.inicializar()
     const camp = await repo.criarCampanha('Teste')
