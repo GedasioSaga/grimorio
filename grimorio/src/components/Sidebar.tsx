@@ -140,7 +140,7 @@ function ItemLinha({ item, tipo, aoMudar }: {
   function abrir() {
     if (item.erro) return
     if (tipo === 'canvas') {
-      abrirItem(item.caminho, item.nome)
+      abrirItem('canvas', item.caminho, item.nome)
     } else {
       if (id) abrirPerfil(id)
     }

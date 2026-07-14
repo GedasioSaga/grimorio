@@ -3,8 +3,11 @@ import type { Personagem, VaultTree } from '../lib/types'
 import { tauriFs } from '../lib/fsBridge'
 import { VaultRepo } from '../lib/vaultRepo'
 
+export type TipoAberto = 'sessao' | 'canvas' | 'escrita'
+
 export interface ItemAberto {
-  tipo: 'canvas' // sessões e canvases abrem igual; personagem abre em modal
+  tipo: TipoAberto
+  /** sessao/canvas: caminho do .json do mapa. escrita: caminho da pasta do caderno (relativo ao cofre). */
   caminho: string
   nome: string
 }
@@ -14,6 +17,8 @@ interface AppState {
   repo: VaultRepo | null
   tree: VaultTree | null
   aberto: ItemAberto | null
+  /** slug da página ativa por caderno (chave = dir do caderno relativo ao cofre) */
+  paginaAtivaPorCaderno: Record<string, string | null>
   /** cache de personagens do cofre: id -> Personagem */
   personagens: Record<string, Personagem>
   /** id -> caminho relativo (para resolver referências) */
@@ -24,8 +29,9 @@ interface AppState {
 
   abrirCofre(path: string): Promise<void>
   recarregarArvore(): Promise<void>
-  abrirItem(caminho: string, nome: string): void
+  abrirItem(tipo: TipoAberto, caminho: string, nome: string): void
   fecharItem(): void
+  setPaginaAtiva(cadernoDir: string, slug: string | null): void
   carregarPersonagens(): Promise<void>
   abrirPerfil(id: string): void
   fecharPerfil(): void
@@ -36,6 +42,7 @@ export const useApp = create<AppState>((set, get) => ({
   repo: null,
   tree: null,
   aberto: null,
+  paginaAtivaPorCaderno: {},
   personagens: {},
   caminhoPorId: {},
   perfilAbertoId: null,
@@ -67,12 +74,16 @@ export const useApp = create<AppState>((set, get) => ({
     set({ tree: await repo.montarArvore() })
   },
 
-  abrirItem(caminho, nome) {
-    set({ aberto: { tipo: 'canvas', caminho, nome } })
+  abrirItem(tipo, caminho, nome) {
+    set({ aberto: { tipo, caminho, nome } })
   },
 
   fecharItem() {
     set({ aberto: null })
+  },
+
+  setPaginaAtiva(cadernoDir, slug) {
+    set((s) => ({ paginaAtivaPorCaderno: { ...s.paginaAtivaPorCaderno, [cadernoDir]: slug } }))
   },
 
   async carregarPersonagens() {
