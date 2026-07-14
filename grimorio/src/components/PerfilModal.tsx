@@ -20,9 +20,9 @@ export function PerfilModal({ personagemId }: { personagemId: string }) {
 
   const editor = useEditor({
     extensions: [StarterKit],
-    content: p?.corpo ?? '',
+    content: p?.descricao ?? '',
     onUpdate({ editor }) {
-      agendarSalvar({ corpo: editor.getHTML() })
+      agendarSalvar({ descricao: editor.getHTML() })
     },
   })
 

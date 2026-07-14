@@ -8,7 +8,11 @@ export interface Personagem {
   nome: string
   retrato: string | null // caminho relativo ao cofre, ex.: "campanhas/x/assets/foo.png"
   resumo: string
-  corpo: string // HTML gerado pelo TipTap
+  descricao: string // HTML gerado pelo TipTap (era `corpo`)
+  historia: string  // HTML
+  extras: string    // HTML
+  anotacoes: string // HTML
+  imagens: ImagemPersonagem[]
   criadoEm: string // ISO-8601
   modificadoEm: string
 }

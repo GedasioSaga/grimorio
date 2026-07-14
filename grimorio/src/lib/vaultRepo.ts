@@ -11,6 +11,28 @@ function novoId(): string {
 }
 
 /**
+ * Normaliza um personagem lido do disco para o formato atual.
+ * Migração lazy: `corpo` legado vira `descricao`; campos faltando ganham vazios.
+ */
+export function normalizarPersonagem(
+  raw: Partial<Personagem> & { corpo?: string },
+): Personagem {
+  return {
+    id: raw.id ?? novoId(),
+    nome: raw.nome ?? '',
+    retrato: raw.retrato ?? null,
+    resumo: raw.resumo ?? '',
+    descricao: raw.descricao ?? raw.corpo ?? '',
+    historia: raw.historia ?? '',
+    extras: raw.extras ?? '',
+    anotacoes: raw.anotacoes ?? '',
+    imagens: raw.imagens ?? [],
+    criadoEm: raw.criadoEm ?? agora(),
+    modificadoEm: raw.modificadoEm ?? agora(),
+  }
+}
+
+/**
  * Acesso ao cofre. Todos os caminhos de item são RELATIVOS à raiz do cofre,
  * com separador '/'. A conversão para caminho absoluto acontece aqui dentro.
  */
@@ -62,7 +84,8 @@ export class VaultRepo {
     await this.fs.mkdirAll(this.abs(dir))
     const slug = await this.slugLivre(dir, nome)
     const p: Personagem = {
-      id: novoId(), nome, retrato: null, resumo: '', corpo: '',
+      id: novoId(), nome, retrato: null, resumo: '',
+      descricao: '', historia: '', extras: '', anotacoes: '', imagens: [],
       criadoEm: agora(), modificadoEm: agora(),
     }
     const caminho = `${dir}/${slug}.json`
@@ -120,7 +143,7 @@ export class VaultRepo {
   // ---------- leitura/escrita ----------
 
   async lerPersonagem(caminho: string): Promise<Personagem> {
-    return JSON.parse(await this.fs.readText(this.abs(caminho)))
+    return normalizarPersonagem(JSON.parse(await this.fs.readText(this.abs(caminho))))
   }
 
   async salvarPersonagem(caminho: string, p: Personagem): Promise<void> {
@@ -153,6 +176,11 @@ export class VaultRepo {
   /** Copia um arquivo externo (caminho absoluto) para dentro do cofre (caminho relativo). */
   async copiarParaCofre(origemAbsoluta: string, destinoRel: string): Promise<void> {
     await this.fs.copyFile(origemAbsoluta, this.abs(destinoRel))
+  }
+
+  /** Apaga um arquivo do cofre por caminho relativo (ex.: imagem removida da galeria). */
+  async removerArquivoCofre(rel: string): Promise<void> {
+    await this.fs.removePath(this.abs(rel))
   }
 
   /** Grava conteúdo binário (base64) num caminho relativo ao cofre. */

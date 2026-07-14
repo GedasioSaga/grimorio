@@ -34,6 +34,19 @@ describe('VaultRepo', () => {
     expect(p.id).toBeTruthy()
   })
 
+  it('cria personagem já no formato de seções (sem corpo)', async () => {
+    await repo.inicializar()
+    const camp = await repo.criarCampanha('Teste')
+    const ref = await repo.criarPersonagem(camp, 'Baldur')
+    const p = await repo.lerPersonagem(ref.caminho)
+    expect(p.descricao).toBe('')
+    expect(p.historia).toBe('')
+    expect(p.extras).toBe('')
+    expect(p.anotacoes).toBe('')
+    expect(p.imagens).toEqual([])
+    expect((p as unknown as { corpo?: string }).corpo).toBeUndefined()
+  })
+
   it('salva e recarrega personagem preservando id', async () => {
     await repo.inicializar()
     const camp = await repo.criarCampanha('Teste')
@@ -129,6 +142,15 @@ describe('VaultRepo', () => {
     fs.arquivos.set('C:/Downloads/foto.png', '<bin>')
     await repo.copiarParaCofre('C:/Downloads/foto.png', 'campanhas/teste/assets/retrato.png')
     expect(await fs.exists('C:/Cofre/campanhas/teste/assets/retrato.png')).toBe(true)
+  })
+
+  it('remove arquivo do cofre por caminho relativo', async () => {
+    await repo.inicializar()
+    fs.arquivos.set('C:/Downloads/foto.png', '<bin>')
+    await repo.copiarParaCofre('C:/Downloads/foto.png', 'campanhas/teste/assets/galeria-1.png')
+    expect(await fs.exists('C:/Cofre/campanhas/teste/assets/galeria-1.png')).toBe(true)
+    await repo.removerArquivoCofre('campanhas/teste/assets/galeria-1.png')
+    expect(await fs.exists('C:/Cofre/campanhas/teste/assets/galeria-1.png')).toBe(false)
   })
 
   it('escreve binário base64 em caminho relativo', async () => {
