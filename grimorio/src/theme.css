@@ -224,7 +224,25 @@ button:hover { border-color: var(--dourado); color: var(--dourado-claro); }
 .notas-corpo h1, .notas-corpo h2, .notas-corpo h3 { font-family: var(--serif); color: var(--dourado-claro); }
 .notas-corpo blockquote { border-left: 3px solid var(--dourado); margin: 8px 0; padding-left: 12px; color: var(--texto-fraco); }
 .notas-corpo hr { border: none; border-top: 1px solid var(--borda); margin: 16px 0; }
-.nota-img img { max-width: 100%; border-radius: 4px; border: 1px solid var(--borda); cursor: grab; }
+.nota-img { position: relative; display: flex; flex-direction: column; margin: 10px 0; }
+.nota-img[data-align="left"] { align-items: flex-start; }
+.nota-img[data-align="center"] { align-items: center; }
+.nota-img[data-align="right"] { align-items: flex-end; }
+.nota-img-frame { position: relative; display: inline-block; max-width: 100%; line-height: 0; }
+.nota-img-frame img { display: block; width: 100%; height: auto; border-radius: 4px; border: 1px solid var(--borda); cursor: grab; }
+.ProseMirror-selectednode .nota-img-frame img { outline: 2px solid var(--dourado); }
+.nota-img-alca { position: absolute; width: 12px; height: 12px; background: var(--dourado); border: 1px solid var(--fundo); border-radius: 2px; z-index: 2; }
+.canto-no { top: -6px; left: -6px; cursor: nwse-resize; }
+.canto-ne { top: -6px; right: -6px; cursor: nesw-resize; }
+.canto-so { bottom: -6px; left: -6px; cursor: nesw-resize; }
+.canto-se { bottom: -6px; right: -6px; cursor: nwse-resize; }
+.nota-img-barra { position: absolute; top: -34px; left: 50%; transform: translateX(-50%); display: flex; gap: 2px; align-items: center; padding: 3px 5px; background: var(--fundo-elevado); border: 1px solid var(--borda); border-radius: 6px; z-index: 3; white-space: nowrap; }
+.nota-img-barra button { font-size: 11px; padding: 2px 6px; line-height: 1.2; }
+.nota-img-barra button.ativo { border-color: var(--dourado); color: var(--dourado-claro); }
+.nota-img-barra .sep { width: 1px; height: 16px; background: var(--borda); margin: 0 3px; }
+.nota-legenda, .nota-legenda-input { margin-top: 6px; width: 100%; text-align: center; color: var(--texto-fraco); font-size: 13px; font-style: italic; box-sizing: border-box; }
+.nota-legenda-input { background: transparent; border: none; resize: none; outline: none; font-family: inherit; overflow: hidden; padding: 0; }
+.nota-legenda-input::placeholder { color: var(--texto-fraco); opacity: 0.6; }
 .nota-img-faltando {
   display: inline-block; padding: 8px 12px; border: 1px dashed var(--borda);
   border-radius: 4px; color: var(--texto-fraco); font-size: 12px; font-style: italic;
