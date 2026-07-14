@@ -93,6 +93,24 @@ fn copy_file(from: String, to: String) -> Result<(), String> {
 }
 
 #[tauri::command]
+fn rename_path(from: String, to: String) -> Result<(), String> {
+    let destino = Path::new(&to);
+    if let Some(parent) = destino.parent() {
+        std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+    }
+    // OneDrive pode segurar handle transiente; mesmo retry do write atomico.
+    let mut result = std::fs::rename(&from, &to);
+    for delay_ms in RENAME_RETRY_DELAYS_MS {
+        if result.is_ok() {
+            break;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(delay_ms));
+        result = std::fs::rename(&from, &to);
+    }
+    result.map_err(|e| e.to_string())
+}
+
+#[tauri::command]
 fn path_exists(path: String) -> Result<bool, String> {
     Ok(Path::new(&path).exists())
 }
@@ -110,6 +128,7 @@ pub fn run() {
             mkdir_all,
             remove_path,
             copy_file,
+            rename_path,
             path_exists
         ])
         .run(tauri::generate_context!())
