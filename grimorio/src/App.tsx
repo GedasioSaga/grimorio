@@ -2,10 +2,9 @@ import { useEffect } from 'react'
 import { useApp } from './state/store'
 import { VaultPicker } from './components/VaultPicker'
 import { Sidebar } from './components/Sidebar'
-import { CanvasView } from './components/CanvasView'
 import { Workspace } from './components/Workspace'
 import { PerfilModal } from './components/PerfilModal'
-import { dirNotasDaSessao } from './lib/caminhos'
+import { dirNotasDoMapa } from './lib/caminhos'
 import './theme.css'
 
 export default function App() {
@@ -27,16 +26,23 @@ export default function App() {
       <main className="app-main">
         {!aberto && <div className="app-empty">Selecione uma sessão, canvas ou a Escrita na barra lateral</div>}
 
-        {aberto?.tipo === 'canvas' && (
-          <CanvasView key={aberto.caminho} caminho={aberto.caminho} nome={aberto.nome} />
+        {aberto?.tipo === 'canvas' && vaultPath && (
+          <Workspace
+            key={aberto.caminho}
+            chaveSplit={aberto.caminho}
+            cadernoDirRel={dirNotasDoMapa(aberto.caminho)}
+            cadernoDirAbs={`${vaultPath}/${dirNotasDoMapa(aberto.caminho)}`}
+            mapa={{ caminho: aberto.caminho, nome: aberto.nome }}
+            notasLado="direita"
+          />
         )}
 
         {aberto?.tipo === 'sessao' && vaultPath && (
           <Workspace
             key={aberto.caminho}
             chaveSplit={aberto.caminho}
-            cadernoDirRel={dirNotasDaSessao(aberto.caminho)}
-            cadernoDirAbs={`${vaultPath}/${dirNotasDaSessao(aberto.caminho)}`}
+            cadernoDirRel={dirNotasDoMapa(aberto.caminho)}
+            cadernoDirAbs={`${vaultPath}/${dirNotasDoMapa(aberto.caminho)}`}
             mapa={{ caminho: aberto.caminho, nome: aberto.nome }}
           />
         )}

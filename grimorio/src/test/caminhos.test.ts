@@ -1,10 +1,13 @@
 import { describe, expect, it } from 'vitest'
-import { dirNotasDaSessao, escritaDirDaCampanha, caminhoAbsolutoImagem } from '../lib/caminhos'
+import { dirNotasDoMapa, escritaDirDaCampanha, caminhoAbsolutoImagem } from '../lib/caminhos'
 
-describe('dirNotasDaSessao', () => {
-  it('troca .json por .notas', () => {
-    expect(dirNotasDaSessao('campanhas/x/sessoes/sessao-01.json'))
+describe('dirNotasDoMapa', () => {
+  it('troca .json por .notas (sessão)', () => {
+    expect(dirNotasDoMapa('campanhas/x/sessoes/sessao-01.json'))
       .toBe('campanhas/x/sessoes/sessao-01.notas')
+  })
+  it('serve canvas solto também', () => {
+    expect(dirNotasDoMapa('canvases-soltos/rabisco.json')).toBe('canvases-soltos/rabisco.notas')
   })
 })
 

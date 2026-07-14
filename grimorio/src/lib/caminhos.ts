@@ -1,6 +1,6 @@
-/** Pasta do caderno de uma sessão: irmã do arquivo do mapa. */
-export function dirNotasDaSessao(caminhoSessao: string): string {
-  return caminhoSessao.replace(/\.json$/, '.notas')
+/** Pasta do caderno de um mapa (sessão ou canvas): irmã do arquivo `.json`. */
+export function dirNotasDoMapa(caminhoMapa: string): string {
+  return caminhoMapa.replace(/\.json$/, '.notas')
 }
 
 /** Pasta do caderno livre de uma campanha. */
