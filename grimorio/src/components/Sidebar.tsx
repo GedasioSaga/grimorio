@@ -1,6 +1,8 @@
 import { useState } from 'react'
 import { useApp } from '../state/store'
+import type { TipoAberto } from '../state/store'
 import type { CampanhaNode, ItemRef } from '../lib/types'
+import { escritaDirDaCampanha } from '../lib/caminhos'
 
 async function comAvisoDeErro(acao: () => Promise<void>) {
   try {
@@ -67,6 +69,7 @@ export function Sidebar() {
 
 function CampanhaItem({ camp, aoMudar }: { camp: CampanhaNode; aoMudar: () => Promise<void> }) {
   const repo = useApp((s) => s.repo)
+  const abrirItem = useApp((s) => s.abrirItem)
   const [expandida, setExpandida] = useState(true)
 
   async function criar(tipo: 'sessao' | 'personagem' | 'canvas') {
@@ -104,7 +107,13 @@ function CampanhaItem({ camp, aoMudar }: { camp: CampanhaNode; aoMudar: () => Pr
       </div>
       {expandida && (
         <div className="campanha-conteudo">
-          <Grupo titulo="Sessões" itens={camp.sessoes} tipo="canvas" aoMudar={aoMudar} />
+          <div
+            className="item-linha"
+            onClick={() => abrirItem('escrita', escritaDirDaCampanha(camp.slug), `Escrita — ${camp.nome}`)}
+          >
+            <span className="item-nome">✍ Escrita</span>
+          </div>
+          <Grupo titulo="Sessões" itens={camp.sessoes} tipo="canvas" tipoAbertura="sessao" aoMudar={aoMudar} />
           <Grupo titulo="Personagens" itens={camp.personagens} tipo="personagem" aoMudar={aoMudar} />
           <Grupo titulo="Canvases" itens={camp.canvases} tipo="canvas" aoMudar={aoMudar} />
         </div>
@@ -113,20 +122,20 @@ function CampanhaItem({ camp, aoMudar }: { camp: CampanhaNode; aoMudar: () => Pr
   )
 }
 
-function Grupo({ titulo, itens, tipo, aoMudar }: {
-  titulo: string; itens: ItemRef[]; tipo: 'canvas' | 'personagem'; aoMudar: () => Promise<void>
+function Grupo({ titulo, itens, tipo, tipoAbertura, aoMudar }: {
+  titulo: string; itens: ItemRef[]; tipo: 'canvas' | 'personagem'; tipoAbertura?: TipoAberto; aoMudar: () => Promise<void>
 }) {
   if (itens.length === 0) return null
   return (
     <div className="grupo">
       <div className="grupo-titulo">{titulo}</div>
-      {itens.map((i) => <ItemLinha key={i.caminho} item={i} tipo={tipo} aoMudar={aoMudar} />)}
+      {itens.map((i) => <ItemLinha key={i.caminho} item={i} tipo={tipo} tipoAbertura={tipoAbertura} aoMudar={aoMudar} />)}
     </div>
   )
 }
 
-function ItemLinha({ item, tipo, aoMudar }: {
-  item: ItemRef; tipo: 'canvas' | 'personagem'; aoMudar: () => Promise<void>
+function ItemLinha({ item, tipo, tipoAbertura, aoMudar }: {
+  item: ItemRef; tipo: 'canvas' | 'personagem'; tipoAbertura?: TipoAberto; aoMudar: () => Promise<void>
 }) {
   const repo = useApp((s) => s.repo)
   const abrirItem = useApp((s) => s.abrirItem)
@@ -140,7 +149,7 @@ function ItemLinha({ item, tipo, aoMudar }: {
   function abrir() {
     if (item.erro) return
     if (tipo === 'canvas') {
-      abrirItem('canvas', item.caminho, item.nome)
+      abrirItem(tipoAbertura ?? 'canvas', item.caminho, item.nome)
     } else {
       if (id) abrirPerfil(id)
     }
