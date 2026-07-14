@@ -4,8 +4,20 @@ import { convertFileSrc } from '@tauri-apps/api/core'
 import { useApp } from '../state/store'
 import type { Personagem } from '../lib/types'
 import { EditorTexto } from './EditorTexto'
+import { GaleriaPersonagem } from './GaleriaPersonagem'
 
 const AUTOSAVE_DEBOUNCE_MS = 800
+
+type Aba = 'descricao' | 'historia' | 'imagens' | 'extras' | 'anotacoes'
+type AbaTexto = Exclude<Aba, 'imagens'>
+
+const ABAS: { id: Aba; rotulo: string }[] = [
+  { id: 'descricao', rotulo: 'Descrição' },
+  { id: 'historia', rotulo: 'História' },
+  { id: 'imagens', rotulo: 'Imagens' },
+  { id: 'extras', rotulo: 'Extras' },
+  { id: 'anotacoes', rotulo: 'Anotações' },
+]
 
 export function PerfilModal({ personagemId }: { personagemId: string }) {
   const p = useApp((s) => s.personagens[personagemId])
@@ -16,6 +28,7 @@ export function PerfilModal({ personagemId }: { personagemId: string }) {
   const recarregarArvore = useApp((s) => s.recarregarArvore)
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [salvarErro, setSalvarErro] = useState<string | null>(null)
+  const [aba, setAba] = useState<Aba>('descricao')
 
   // ?v= força refetch quando o retrato é trocado pelo mesmo nome de arquivo (mesma extensão)
   const retratoSrc = p?.retrato && vaultPath
@@ -120,7 +133,26 @@ export function PerfilModal({ personagemId }: { personagemId: string }) {
           </div>
           <button className="btn-icon perfil-fechar" onClick={() => void fechar()}>✕</button>
         </div>
-        <EditorTexto value={p.descricao} onChange={(html) => agendarSalvar({ descricao: html })} />
+        <div className="perfil-abas">
+          {ABAS.map((a) => (
+            <button key={a.id} className={aba === a.id ? 'ativo' : ''} onClick={() => setAba(a.id)}>
+              {a.rotulo}
+            </button>
+          ))}
+        </div>
+        {aba === 'imagens' ? (
+          <GaleriaPersonagem
+            personagemId={personagemId}
+            imagens={p.imagens}
+            onImagensChange={(imagens) => agendarSalvar({ imagens })}
+          />
+        ) : (
+          <EditorTexto
+            key={aba}
+            value={p[aba as AbaTexto]}
+            onChange={(html) => agendarSalvar({ [aba]: html } as Partial<Personagem>)}
+          />
+        )}
         {salvarErro && (
           <div className="perfil-salvar-erro">Falha ao salvar: {salvarErro}</div>
         )}
