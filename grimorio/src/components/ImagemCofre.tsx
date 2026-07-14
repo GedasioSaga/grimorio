@@ -50,6 +50,27 @@ export const ImagemCofre = Image.extend({
         parseHTML: (el: HTMLElement) => el.getAttribute('data-rel'),
         renderHTML: (attrs: { rel?: string | null }) => (attrs.rel ? { 'data-rel': attrs.rel } : {}),
       },
+      largura: {
+        default: null,
+        parseHTML: (el: HTMLElement) => {
+          const v = el.getAttribute('data-largura')
+          return v ? Number(v) : null
+        },
+        renderHTML: (attrs: { largura?: number | null }) =>
+          attrs.largura != null ? { 'data-largura': String(attrs.largura) } : {},
+      },
+      align: {
+        default: null,
+        parseHTML: (el: HTMLElement) => el.getAttribute('data-align'),
+        renderHTML: (attrs: { align?: string | null }) =>
+          attrs.align ? { 'data-align': attrs.align } : {},
+      },
+      legenda: {
+        default: null,
+        parseHTML: (el: HTMLElement) => el.getAttribute('data-legenda'),
+        renderHTML: (attrs: { legenda?: string | null }) =>
+          attrs.legenda ? { 'data-legenda': attrs.legenda } : {},
+      },
       // neutraliza `src`: precisa vir DEPOIS do spread para sobrescrever o do Image
       // base e nunca serializar o caminho absoluto da máquina no HTML salvo.
       src: { default: null, renderHTML: () => ({}) },
