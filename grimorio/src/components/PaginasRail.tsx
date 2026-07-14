@@ -11,6 +11,11 @@ async function comAviso(acao: () => Promise<void>) {
   }
 }
 
+function coletarSlugs(nodes: PaginaNode[], acc: Set<string>): Set<string> {
+  for (const n of nodes) { acc.add(n.slug); coletarSlugs(n.filhos, acc) }
+  return acc
+}
+
 /**
  * `repo` é a MESMA instância do NotebookRepo usada pelo NotasEditor (criada no Workspace),
  * para que rename/mover (rail) e salvarCorpo (editor) da mesma página sejam serializados
@@ -23,11 +28,19 @@ export function PaginasRail({ repo, cadernoDirRel }: { repo: NotebookRepo; cader
   const setPaginaAtiva = useApp((s) => s.setPaginaAtiva)
 
   async function recarregar() {
-    setArvore(await repo.montarArvore())
+    const arv = await repo.montarArvore()
+    setArvore(arv)
+    const ativaAtual = useApp.getState().paginaAtivaPorCaderno[cadernoDirRel] ?? null
+    if (ativaAtual && !coletarSlugs(arv, new Set()).has(ativaAtual)) {
+      setPaginaAtiva(cadernoDirRel, null)
+    }
   }
 
   useEffect(() => {
-    repo.inicializar().then(recarregar)
+    repo.inicializar().then(recarregar).catch((e) => {
+      console.error('Falha ao abrir caderno:', e)
+      setArvore([])
+    })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [repo])
 
@@ -97,7 +110,6 @@ function LinhaPagina({
   cadernoDirRel: string
 }) {
   const [aberto, setAberto] = useState(true)
-  const setPaginaAtiva = useApp((s) => s.setPaginaAtiva)
 
   async function renomear(e: React.MouseEvent) {
     e.stopPropagation()
@@ -114,7 +126,6 @@ function LinhaPagina({
     if (!confirm(`Excluir "${node.titulo}" e as subpáginas?`)) return
     await comAviso(async () => {
       await repo.excluirPagina(node.slug)
-      if (ativa === node.slug) setPaginaAtiva(cadernoDirRel, null)
       await recarregar()
     })
   }
@@ -127,8 +138,9 @@ function LinhaPagina({
         onClick={() => !node.erro && onAbrir(node.slug)}
         draggable={!node.erro}
         onDragStart={(e) => e.dataTransfer.setData('application/x-grimorio-pagina', node.id)}
-        onDragOver={(e) => { if (e.dataTransfer.types.includes('application/x-grimorio-pagina')) { e.preventDefault(); e.stopPropagation() } }}
+        onDragOver={(e) => { if (!node.erro && e.dataTransfer.types.includes('application/x-grimorio-pagina')) { e.preventDefault(); e.stopPropagation() } }}
         onDrop={(e) => {
+          if (node.erro) return
           e.stopPropagation()
           const id = e.dataTransfer.getData('application/x-grimorio-pagina')
           if (id) onReparent(id, node.id) // soltar em cima = vira filho desta
