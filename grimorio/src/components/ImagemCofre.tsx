@@ -8,10 +8,10 @@ import { calcularLarguraPct } from '../lib/imagem'
 
 type Align = 'left' | 'center' | 'right'
 const PRESETS = [25, 50, 100] as const
-const ALINHAMENTOS: { valor: Align; rotulo: string }[] = [
-  { valor: 'left', rotulo: '⬅' },
-  { valor: 'center', rotulo: '⬍' },
-  { valor: 'right', rotulo: '➡' },
+const ALINHAMENTOS: { valor: Align; rotulo: string; titulo: string }[] = [
+  { valor: 'left', rotulo: '⬅', titulo: 'Imagem à esquerda, texto flui à direita' },
+  { valor: 'center', rotulo: '⬛', titulo: 'Centralizada, texto acima e abaixo' },
+  { valor: 'right', rotulo: '➡', titulo: 'Imagem à direita, texto flui à esquerda' },
 ]
 
 function ImagemView(props: ReactNodeViewProps) {
@@ -20,8 +20,10 @@ function ImagemView(props: ReactNodeViewProps) {
   const alt = (props.node.attrs.alt as string | null) ?? ''
   const legenda = (props.node.attrs.legenda as string | null) ?? ''
   const largura = (props.node.attrs.largura as number | null) ?? null
-  const align = (props.node.attrs.align as Align | null) ?? 'left'
+  const align = (props.node.attrs.align as Align | null) ?? 'center'
   const src = rel && vaultPath ? convertFileSrc(caminhoAbsolutoImagem(vaultPath, rel)) : ''
+  // [DEBUG-TEMP] diagnóstico da Fase 1 — remover após confirmar
+  console.debug('[imagem] render', { selected: props.selected, largura, align, legenda, attrs: props.node.attrs })
   // arquivo referenciado pode não existir no cofre atual (cofre é portável entre PCs)
   const [erroImg, setErroImg] = useState(false)
   const frameRef = useRef<HTMLDivElement>(null)
@@ -40,38 +42,47 @@ function ImagemView(props: ReactNodeViewProps) {
     e.preventDefault()
     e.stopPropagation()
     const frame = frameRef.current
-    if (!frame) return
-    const container = frame.parentElement
-    const containerPx = (container ?? frame).getBoundingClientRect().width
+    const wrapper = frame?.parentElement
+    if (!frame || !wrapper) return
+    // referência = largura da coluna de texto (raiz do ProseMirror), estável mesmo
+    // quando a imagem flutua — o pai imediato passa a ter a largura da própria imagem.
+    const containerPx = props.editor.view.dom.clientWidth
     const inicialPx = frame.getBoundingClientRect().width
     const startX = e.clientX
     const dir = lado === 'dir' ? 1 : -1
     const onMove = (ev: MouseEvent) => {
       const pct = calcularLarguraPct(inicialPx, (ev.clientX - startX) * dir, containerPx)
-      frame.style.width = pct + '%'
+      wrapper.style.width = pct + '%'
     }
     const onUp = () => {
       document.removeEventListener('mousemove', onMove)
       document.removeEventListener('mouseup', onUp)
-      const pct = Math.round(parseFloat(frame.style.width))
+      const pct = Math.round(parseFloat(wrapper.style.width))
       if (!Number.isNaN(pct)) atualizar({ largura: pct })
     }
     document.addEventListener('mousemove', onMove)
     document.addEventListener('mouseup', onUp)
   }
 
-  const estiloFrame = largura != null ? { width: largura + '%' } : undefined
+  // largura vive no wrapper (.nota-img): float precisa de largura definida na coluna,
+  // senão o `%` do frame resolve contra um pai encolhido e quebra o layout.
+  const estiloWrapper = largura != null ? { width: largura + '%' } : undefined
 
   return (
-    <NodeViewWrapper as="div" className="nota-img" data-align={align}>
-      <div className="nota-img-frame" ref={frameRef} style={estiloFrame}>
+    <NodeViewWrapper as="div" className="nota-img" data-align={align} style={estiloWrapper}>
+      <div className="nota-img-frame" ref={frameRef}>
         {src && !erroImg ? (
           <img
             src={src}
             draggable
+            // seleciona no mousedown: como a imagem é `draggable`, um clique com
+            // micro-movimento vira dragstart e o onClick nunca dispara — aí a
+            // barra/alças/legenda não apareciam ("às vezes clico e não abre").
+            onMouseDown={selecionar}
             onClick={selecionar}
             onDragStart={(e) => {
               if (rel) e.dataTransfer.setData('application/x-grimorio-imagem', rel)
+              console.log('[DND-TEMP] dragstart rel=', rel, 'types=', Array.from(e.dataTransfer.types)) // [DEBUG-TEMP] remover
             }}
             onError={() => setErroImg(true)}
             alt={alt}
@@ -89,7 +100,7 @@ function ImagemView(props: ReactNodeViewProps) {
                   type="button"
                   className={largura === p ? 'ativo' : ''}
                   onMouseDown={(e) => e.preventDefault()}
-                  onClick={() => atualizar({ largura: p })}
+                  onClick={() => { console.debug('[imagem] preset', p); atualizar({ largura: p }) }}
                 >
                   {p}%
                 </button>
@@ -99,9 +110,10 @@ function ImagemView(props: ReactNodeViewProps) {
                 <button
                   key={a.valor}
                   type="button"
+                  title={a.titulo}
                   className={align === a.valor ? 'ativo' : ''}
                   onMouseDown={(e) => e.preventDefault()}
-                  onClick={() => atualizar({ align: a.valor })}
+                  onClick={() => { console.debug('[imagem] align', a.valor); atualizar({ align: a.valor }) }}
                 >
                   {a.rotulo}
                 </button>
@@ -113,26 +125,28 @@ function ImagemView(props: ReactNodeViewProps) {
             <span className="nota-img-alca canto-se" onMouseDown={(e) => iniciarResize(e, 'dir')} />
           </>
         )}
-
-        {props.selected ? (
-          <textarea
-            className="nota-legenda-input"
-            value={legenda}
-            placeholder="escreva uma legenda…"
-            rows={1}
-            onMouseDown={(e) => e.stopPropagation()}
-            onKeyDown={(e) => e.stopPropagation()}
-            onChange={(e) => atualizar({ legenda: e.target.value ? e.target.value : null })}
-            onInput={(e) => {
-              const t = e.currentTarget
-              t.style.height = 'auto'
-              t.style.height = t.scrollHeight + 'px'
-            }}
-          />
-        ) : legenda ? (
-          <figcaption className="nota-legenda">{legenda}</figcaption>
-        ) : null}
       </div>
+
+      {/* legenda FORA do frame: assim o frame (contexto das alças) delimita só a
+          imagem e as alças de baixo ficam na base da imagem, não abaixo da legenda. */}
+      {props.selected ? (
+        <textarea
+          className="nota-legenda-input"
+          value={legenda}
+          placeholder="escreva uma legenda…"
+          rows={1}
+          onMouseDown={(e) => e.stopPropagation()}
+          onKeyDown={(e) => e.stopPropagation()}
+          onChange={(e) => { console.debug('[imagem] legenda', e.target.value); atualizar({ legenda: e.target.value ? e.target.value : null }) }}
+          onInput={(e) => {
+            const t = e.currentTarget
+            t.style.height = 'auto'
+            t.style.height = t.scrollHeight + 'px'
+          }}
+        />
+      ) : legenda ? (
+        <figcaption className="nota-legenda">{legenda}</figcaption>
+      ) : null}
     </NodeViewWrapper>
   )
 }

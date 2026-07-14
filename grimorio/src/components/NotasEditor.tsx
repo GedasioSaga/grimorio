@@ -4,6 +4,7 @@ import StarterKit from '@tiptap/starter-kit'
 import { open } from '@tauri-apps/plugin-dialog'
 import type { NotebookRepo } from '../lib/notebookRepo'
 import { ImagemCofre } from './ImagemCofre'
+import { ParagrafoFinal } from './paragrafoFinal'
 import { uint8ParaBase64 } from '../lib/bin'
 import { useApp } from '../state/store'
 
@@ -40,7 +41,7 @@ function EditorInterno({ repo, slug, corpoInicial }: { repo: NotebookRepo; slug:
   const htmlRef = useRef<string>(corpoInicial)
 
   const editor = useEditor({
-    extensions: [StarterKit, ImagemCofre],
+    extensions: [StarterKit, ImagemCofre, ParagrafoFinal],
     content: corpoInicial,
     editorProps: {
       // colar imagem (Ctrl+V): grava no cofre e insere como imagem portável

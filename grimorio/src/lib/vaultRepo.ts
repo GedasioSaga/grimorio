@@ -23,6 +23,7 @@ export function normalizarPersonagem(
     retrato: raw.retrato ?? null,
     resumo: raw.resumo ?? '',
     descricao: raw.descricao ?? raw.corpo ?? '',
+    informacao: raw.informacao ?? '',
     historia: raw.historia ?? '',
     extras: raw.extras ?? '',
     anotacoes: raw.anotacoes ?? '',
@@ -85,7 +86,7 @@ export class VaultRepo {
     const slug = await this.slugLivre(dir, nome)
     const p: Personagem = {
       id: novoId(), nome, retrato: null, resumo: '',
-      descricao: '', historia: '', extras: '', anotacoes: '', imagens: [],
+      descricao: '', informacao: '', historia: '', extras: '', anotacoes: '', imagens: [],
       criadoEm: agora(), modificadoEm: agora(),
     }
     const caminho = `${dir}/${slug}.json`

@@ -5,6 +5,12 @@ import { VaultRepo } from '../lib/vaultRepo'
 
 export type TipoAberto = 'sessao' | 'canvas' | 'escrita'
 
+const SALVAR_PARCIAL_DEBOUNCE_MS = 800
+
+// timers por personagem em nível de módulo: o debounce sobrevive ao unmount do
+// card no canvas (tldraw desmonta shapes fora da viewport) sem perder a gravação
+const timersSalvarParcial = new Map<string, ReturnType<typeof setTimeout>>()
+
 export interface ItemAberto {
   tipo: TipoAberto
   /** sessao/canvas: caminho do .json do mapa. escrita: caminho da pasta do caderno (relativo ao cofre). */
@@ -33,6 +39,8 @@ interface AppState {
   fecharItem(): void
   setPaginaAtiva(cadernoDir: string, slug: string | null): void
   carregarPersonagens(): Promise<void>
+  /** Merge otimista no cache + gravação debounced (edição inline no card do canvas). */
+  salvarPersonagemParcial(id: string, mudancas: Partial<Personagem>): void
   abrirPerfil(id: string): void
   fecharPerfil(): void
 }
@@ -111,6 +119,30 @@ export const useApp = create<AppState>((set, get) => ({
       }
     }
     set({ personagens, caminhoPorId })
+  },
+
+  salvarPersonagemParcial(id, mudancas) {
+    const atual = get().personagens[id]
+    if (!atual) return
+    set((s) => ({
+      personagens: { ...s.personagens, [id]: { ...s.personagens[id], ...mudancas } },
+    }))
+    const pendente = timersSalvarParcial.get(id)
+    if (pendente) clearTimeout(pendente)
+    timersSalvarParcial.set(
+      id,
+      setTimeout(() => {
+        timersSalvarParcial.delete(id)
+        const { repo, caminhoPorId, personagens } = get()
+        const caminho = caminhoPorId[id]
+        const p = personagens[id]
+        if (!repo || !caminho || !p) return
+        // fire-and-forget: VaultRepo serializa escritas por caminho
+        repo.salvarPersonagem(caminho, { ...p }).catch((e) => {
+          console.error('Falha ao salvar personagem (edição no card):', e)
+        })
+      }, SALVAR_PARCIAL_DEBOUNCE_MS),
+    )
   },
 
   abrirPerfil(id) {

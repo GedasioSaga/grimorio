@@ -8,11 +8,12 @@ import { GaleriaPersonagem } from './GaleriaPersonagem'
 
 const AUTOSAVE_DEBOUNCE_MS = 800
 
-type Aba = 'descricao' | 'historia' | 'imagens' | 'extras' | 'anotacoes'
+type Aba = 'descricao' | 'informacao' | 'historia' | 'imagens' | 'extras' | 'anotacoes'
 type AbaTexto = Exclude<Aba, 'imagens'>
 
 const ABAS: { id: Aba; rotulo: string }[] = [
   { id: 'descricao', rotulo: 'Descrição' },
+  { id: 'informacao', rotulo: 'Informações' },
   { id: 'historia', rotulo: 'História' },
   { id: 'imagens', rotulo: 'Imagens' },
   { id: 'extras', rotulo: 'Extras' },

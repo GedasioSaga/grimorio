@@ -15,6 +15,7 @@ describe('normalizarPersonagem', () => {
   it('preenche campos faltando com vazios', () => {
     const p = normalizarPersonagem({ id: '1', nome: 'X' })
     expect(p.descricao).toBe('')
+    expect(p.informacao).toBe('')
     expect(p.historia).toBe('')
     expect(p.extras).toBe('')
     expect(p.anotacoes).toBe('')
@@ -24,7 +25,7 @@ describe('normalizarPersonagem', () => {
   it('preserva o formato novo intocado', () => {
     const novo = {
       id: '1', nome: 'X', retrato: null, resumo: 'r',
-      descricao: '<p>d</p>', historia: '<p>h</p>', extras: '<p>e</p>', anotacoes: '<p>a</p>',
+      descricao: '<p>d</p>', informacao: '<p>i</p>', historia: '<p>h</p>', extras: '<p>e</p>', anotacoes: '<p>a</p>',
       imagens: [{ rel: 'a/x.png', legenda: 'oi' }],
       criadoEm: '2020-01-01T00:00:00.000Z', modificadoEm: '2020-01-02T00:00:00.000Z',
     }

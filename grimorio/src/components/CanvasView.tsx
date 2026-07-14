@@ -25,6 +25,7 @@ import {
   CARD_ALTURA_PADRAO,
   CARD_LARGURA_PADRAO,
   CharacterCardShapeUtil,
+  type CharacterCardShapeType,
 } from './CharacterCardShape'
 
 const AUTOSAVE_DEBOUNCE_MS = 1000
@@ -244,6 +245,9 @@ export function CanvasView({ caminho, nome }: { caminho: string; nome: string })
       // Fase capture: o canvas interno do tldraw chama preventDefault +
       // stopPropagation no drop, então handlers de bubble aqui nunca disparam.
       // O guard pelo MIME type deixa drags alheios passarem intactos pro tldraw.
+      onDragEnterCapture={(e) => {
+        console.log('[DND-TEMP] canvas dragenter types=', Array.from(e.dataTransfer.types)) // [DEBUG-TEMP] remover
+      }}
       onDragOverCapture={(e) => {
         if (
           e.dataTransfer.types.includes('application/x-grimorio-personagem') ||
@@ -292,6 +296,23 @@ export function CanvasView({ caminho, nome }: { caminho: string; nome: string })
         onMount={(editor) => {
           editorRef.current = editor
           editor.user.updateUserPreferences({ colorScheme: 'dark' })
+          // espaço com um card de personagem selecionado abre o cartão completo
+          // (duplo clique no card só expande/recolhe a descrição). Fase capture:
+          // dispara antes dos atalhos do tldraw (que usam espaço para o pan).
+          const aoTeclar = (e: KeyboardEvent) => {
+            if (e.key !== ' ' || e.repeat) return
+            if (editor.getEditingShapeId()) return
+            const alvo = e.target as HTMLElement | null
+            if (alvo?.closest('input, textarea, [contenteditable="true"]')) return
+            const shape = editor.getOnlySelectedShape()
+            if (!shape || shape.type !== 'character-card') return
+            e.preventDefault()
+            e.stopPropagation()
+            useApp.getState().abrirPerfil((shape as CharacterCardShapeType).props.personagemId)
+          }
+          const container = editor.getContainer()
+          container.addEventListener('keydown', aoTeclar, { capture: true })
+          return () => container.removeEventListener('keydown', aoTeclar, { capture: true })
         }}
       />
       {salvandoErro && (

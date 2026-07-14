@@ -40,6 +40,7 @@ describe('VaultRepo', () => {
     const ref = await repo.criarPersonagem(camp, 'Baldur')
     const p = await repo.lerPersonagem(ref.caminho)
     expect(p.descricao).toBe('')
+    expect(p.informacao).toBe('')
     expect(p.historia).toBe('')
     expect(p.extras).toBe('')
     expect(p.anotacoes).toBe('')

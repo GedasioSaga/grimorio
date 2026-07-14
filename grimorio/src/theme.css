@@ -113,21 +113,54 @@ button:hover { border-color: var(--dourado); color: var(--dourado-claro); }
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
 }
 .char-card-removido { border-color: var(--erro); opacity: 0.7; }
+/* coluna da esquerda: retrato + nome + resumo (o painel de descrição entra à direita) */
+.char-card-principal { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 8px; }
 .char-card-retrato {
-  width: 56px; height: 56px; min-width: 56px; border-radius: 50%;
+  flex: 1; min-height: 0; width: 100%; border-radius: 4px;
   border: 1px solid var(--borda); overflow: hidden;
   display: flex; align-items: center; justify-content: center;
   background: var(--fundo); color: var(--dourado-claro);
-  font-family: var(--serif); font-size: 24px;
+  font-family: var(--serif); font-size: 40px;
 }
-.char-card-retrato img { width: 100%; height: 100%; object-fit: cover; }
-.char-card-inicial { font-family: var(--serif); font-size: 24px; color: var(--dourado-claro); }
-.char-card-texto {
-  flex: 1; min-width: 0; overflow: hidden;
-  display: flex; flex-direction: column; justify-content: center;
-}
+/* imagem inteira, nunca corta (contain); centralizada na moldura */
+.char-card-retrato img { max-width: 100%; max-height: 100%; object-fit: contain; }
+.char-card-inicial { font-family: var(--serif); font-size: 40px; color: var(--dourado-claro); }
+.char-card-texto { flex-shrink: 0; min-width: 0; }
 .char-card-nome { font-family: var(--serif); font-size: 16px; color: var(--dourado-claro); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .char-card-resumo { font-size: 12px; color: var(--texto-fraco); margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* painel (abre com duplo clique), sempre à direita da imagem: caixas de Descrição e Informações */
+.char-card-painel {
+  flex: 0 0 auto; min-height: 0; overflow-y: auto;
+  display: flex; flex-direction: column; gap: 8px;
+}
+.char-card-secao {
+  background: var(--fundo); border: 1px solid var(--borda); border-radius: 6px;
+  padding: 8px 10px;
+}
+.char-card-secao-header { display: flex; align-items: center; justify-content: space-between; gap: 6px; margin-bottom: 4px; }
+.char-card-secao-acoes { display: flex; align-items: center; gap: 4px; }
+.char-card-secao-titulo { font-family: var(--serif); font-size: 13px; color: var(--dourado-claro); }
+.char-card-info-toggle {
+  border: none; background: transparent; padding: 0;
+  font-family: var(--serif); font-size: 13px; color: var(--dourado-claro); cursor: pointer;
+}
+.char-card-info-toggle:hover { color: var(--dourado); }
+.char-card-btn-editar {
+  border: none; background: transparent; padding: 0 2px; font-size: 13px;
+  color: var(--texto-fraco); cursor: pointer; line-height: 1;
+}
+.char-card-btn-editar:hover { color: var(--dourado-claro); }
+.char-card-sem-descricao { font-size: 13px; color: var(--texto-fraco); font-style: italic; }
+.char-card-descricao { font-size: 14px; color: var(--texto); line-height: 1.45; }
+.char-card-descricao p { margin: 0 0 5px; }
+.char-card-descricao ul, .char-card-descricao ol { margin: 0 0 5px; padding-left: 18px; }
+.char-card-descricao h2, .char-card-descricao h3 { font-family: var(--serif); font-size: 15px; color: var(--dourado-claro); margin: 5px 0 3px; }
+/* edição inline no card: mesma tipografia da leitura + moldura sutil indicando modo edição */
+.char-card-editor { border: 1px solid var(--dourado); border-radius: 4px; padding: 4px 6px; cursor: text; }
+.char-card-editor .tiptap { outline: none; font-size: 14px; color: var(--texto); line-height: 1.45; min-height: 40px; }
+.char-card-editor .tiptap p { margin: 0 0 5px; }
+.char-card-editor .tiptap ul, .char-card-editor .tiptap ol { margin: 0 0 5px; padding-left: 18px; }
+.char-card-editor .tiptap h2, .char-card-editor .tiptap h3 { font-family: var(--serif); font-size: 15px; color: var(--dourado-claro); margin: 5px 0 3px; }
 
 /* ---- modal de perfil ---- */
 .modal-overlay {
@@ -219,20 +252,35 @@ button:hover { border-color: var(--dourado); color: var(--dourado-claro); }
 .chevron, .chevron-vazio { width: 12px; font-size: 10px; color: var(--texto-fraco); }
 
 /* ========== Escrita: editor de notas ========== */
-.notas { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+/* min-height:0 obrigatório: sem ele o item flex cresce até a altura do conteúdo
+   (imagens altas) e a área de scroll (.notas-corpo) nunca ativa o overflow. */
+.notas { flex: 1; display: flex; flex-direction: column; min-width: 0; min-height: 0; }
 .notas-toolbar { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; padding: 6px 10px; border-bottom: 1px solid var(--borda); }
 .notas-toolbar .sep { width: 1px; height: 18px; background: var(--borda); margin: 0 4px; }
 .notas-toolbar button.ativo { border-color: var(--dourado); color: var(--dourado-claro); }
-.notas-corpo { flex: 1; overflow-y: auto; padding: 20px 28px; }
+/* padding-top: espaço p/ a barra de opções da imagem (fica -34px acima dela) não
+   ser cortada em imagens no topo. padding-bottom: rolar além do último bloco. */
+.notas-corpo { flex: 1; min-height: 0; overflow-y: auto; padding: 40px 28px 120px; }
 .notas-corpo .tiptap { outline: none; min-height: 100%; line-height: 1.6; }
+/* contém os floats das imagens para não vazarem além do fim do texto */
+.notas-corpo .tiptap::after { content: ""; display: block; clear: both; }
 .notas-corpo h1, .notas-corpo h2, .notas-corpo h3 { font-family: var(--serif); color: var(--dourado-claro); }
 .notas-corpo blockquote { border-left: 3px solid var(--dourado); margin: 8px 0; padding-left: 12px; color: var(--texto-fraco); }
 .notas-corpo hr { border: none; border-top: 1px solid var(--borda); margin: 16px 0; }
-.nota-img { position: relative; display: flex; flex-direction: column; margin: 10px 0; }
-.nota-img[data-align="left"] { align-items: flex-start; }
-.nota-img[data-align="center"] { align-items: center; }
-.nota-img[data-align="right"] { align-items: flex-end; }
-.nota-img-frame { position: relative; display: inline-block; max-width: 100%; line-height: 0; }
+/* width:fit-content = tamanho natural da imagem (não estica p/ largura total);
+   uma largura definida (preset/alça, inline) sobrepõe isto. */
+/* display:flow-root força um BFC: sem ele, uma imagem centralizada logo após uma
+   imagem flutuante fica com a caixa ao lado do float e o conteúdo desce — as alças
+   e a barra descolam da imagem. Com BFC a caixa abraça a imagem. */
+.nota-img { position: relative; margin: 12px 0; width: fit-content; max-width: 100%; display: flow-root; }
+/* centralizada: bloco parado, texto acima e abaixo (só faz efeito com largura definida) */
+.nota-img[data-align="center"] { margin-left: auto; margin-right: auto; }
+/* esquerda/direita: imagem flutua e o texto seguinte flui do lado oposto */
+.nota-img[data-align="left"] { float: left; margin: 4px 22px 10px 0; }
+.nota-img[data-align="right"] { float: right; margin: 4px 0 10px 22px; }
+/* teto de largura ao flutuar, para sempre sobrar coluna de texto ao lado */
+.nota-img[data-align="left"], .nota-img[data-align="right"] { max-width: 55%; }
+.nota-img-frame { position: relative; display: block; width: 100%; max-width: 100%; line-height: 0; }
 .nota-img-frame img { display: block; width: 100%; height: auto; border-radius: 4px; border: 1px solid var(--borda); cursor: grab; }
 .ProseMirror-selectednode .nota-img-frame img { outline: 2px solid var(--dourado); }
 .nota-img-alca { position: absolute; width: 12px; height: 12px; background: var(--dourado); border: 1px solid var(--fundo); border-radius: 2px; z-index: 2; }
