@@ -18,7 +18,7 @@ export function PaginasChips({ repo, cadernoDirRel }: { repo: NotebookRepo; cade
     repo.inicializar()
       .then(() => repo.montarArvore())
       .then((arv) => { if (vivo) setPaginas(achatarPaginas(arv)) })
-      .catch(() => { if (vivo) setPaginas([]) })
+      .catch((e) => { console.error('Falha ao carregar páginas (chips):', e); if (vivo) setPaginas([]) })
     return () => { vivo = false }
   }, [repo])
 
