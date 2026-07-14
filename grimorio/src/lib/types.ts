@@ -105,6 +105,8 @@ export interface VaultTree {
   canvasesSoltos: ItemRef[]
   /** raiz da área de personagens fora de campanha (caminho = "personagens-soltos") */
   personagensSoltos: PastaNode
+  /** raiz da seção de cenários (caminho = "cenarios") */
+  cenarios: PastaCenarioNode
 }
 
 export interface Pagina {

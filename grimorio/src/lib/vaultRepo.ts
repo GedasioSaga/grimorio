@@ -1,5 +1,5 @@
 import type { FsBridge } from './fsBridge'
-import type { Campanha, CampanhaNode, CanvasDoc, Cenario, CenarioRef, ItemRef, PastaNode, Personagem, VaultTree } from './types'
+import type { Campanha, CampanhaNode, CanvasDoc, Cenario, CenarioNode, CenarioRef, ItemRef, PastaCenarioNode, PastaNode, Personagem, VaultTree } from './types'
 import { slugify, slugUnico } from './slug'
 
 function agora(): string {
@@ -298,6 +298,71 @@ export class VaultRepo {
     await this.fs.removePath(this.abs(dir))
   }
 
+  /**
+   * Monta a árvore da seção de cenários: dir com cenario.json = cenário;
+   * qualquer outro dir (fora de cenário) = pasta organizacional.
+   */
+  async montarArvoreCenarios(dir = 'cenarios'): Promise<PastaCenarioNode> {
+    let entries: { name: string; isDir: boolean }[] = []
+    try {
+      entries = await this.fs.listDir(this.abs(dir))
+    } catch {
+      // diretório ainda não existe (criado sob demanda na primeira criação)
+    }
+    const subpastas: PastaCenarioNode[] = []
+    const cenarios: CenarioNode[] = []
+    for (const e of entries) {
+      if (!e.isDir || e.name.endsWith('.notas')) continue
+      const caminho = `${dir}/${e.name}`
+      if (await this.fs.exists(this.abs(`${caminho}/cenario.json`))) {
+        cenarios.push(await this.montarCenarioNode(caminho))
+      } else {
+        subpastas.push(await this.montarArvoreCenarios(caminho))
+      }
+    }
+    let nome = dir.split('/').pop() ?? dir
+    try {
+      nome = (JSON.parse(await this.fs.readText(this.abs(`${dir}/pasta.json`))) as { nome: string }).nome
+    } catch {
+      // raiz ou pasta sem metadados
+    }
+    subpastas.sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'))
+    cenarios.sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'))
+    return { slug: dir.split('/').pop() ?? dir, nome, caminho: dir, subpastas, cenarios }
+  }
+
+  /** Nó de um cenário: lê id/nome do cenario.json e varre sub-cenários (dirs com cenario.json). */
+  private async montarCenarioNode(dir: string): Promise<CenarioNode> {
+    const slug = dir.split('/').pop() ?? dir
+    let id = ''
+    let nome = slug
+    let erro: boolean | undefined
+    try {
+      const obj = JSON.parse(await this.fs.readText(this.abs(`${dir}/cenario.json`)))
+      id = obj.id ?? ''
+      nome = obj.nome ?? slug
+    } catch {
+      erro = true
+    }
+    const filhos: CenarioNode[] = []
+    let entries: { name: string; isDir: boolean }[] = []
+    try {
+      entries = await this.fs.listDir(this.abs(dir))
+    } catch {
+      // sem filhos
+    }
+    for (const e of entries) {
+      if (!e.isDir || e.name.endsWith('.notas')) continue
+      const sub = `${dir}/${e.name}`
+      // dirs sem cenario.json dentro de cenário (ex.: assets) são ignorados
+      if (await this.fs.exists(this.abs(`${sub}/cenario.json`))) {
+        filhos.push(await this.montarCenarioNode(sub))
+      }
+    }
+    filhos.sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'))
+    return { id, slug, nome, caminho: dir, erro, filhos }
+  }
+
   // ---------- árvore ----------
 
   async montarArvore(): Promise<VaultTree> {
@@ -325,6 +390,7 @@ export class VaultRepo {
       campanhas,
       canvasesSoltos: await this.listarItens('canvases-soltos'),
       personagensSoltos: await this.montarArvorePastas('personagens-soltos'),
+      cenarios: await this.montarArvoreCenarios(),
     }
   }
 

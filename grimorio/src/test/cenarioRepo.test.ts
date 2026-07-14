@@ -98,3 +98,57 @@ describe('VaultRepo — cenários CRUD', () => {
     expect(await fs.exists('C:/Cofre/cenarios/cidade')).toBe(false)
   })
 })
+
+describe('VaultRepo — árvore de cenários', () => {
+  it('raiz ausente vira raiz vazia', async () => {
+    const raiz = await repo.montarArvoreCenarios()
+    expect(raiz.caminho).toBe('cenarios')
+    expect(raiz.subpastas).toEqual([])
+    expect(raiz.cenarios).toEqual([])
+  })
+
+  it('monta pastas + cenários aninhados em profundidade', async () => {
+    const pasta = await repo.criarPasta('cenarios', 'Reino do Norte')
+    const cidade = await repo.criarCenarioEm(pasta, 'Cidade Alta')
+    const bairro = await repo.criarCenarioEm(cidade.caminho, 'Bairro do Porto')
+    await repo.criarCenarioEm(bairro.caminho, 'Casa do Ferreiro')
+    const raiz = await repo.montarArvoreCenarios()
+    expect(raiz.subpastas).toHaveLength(1)
+    expect(raiz.subpastas[0].nome).toBe('Reino do Norte')
+    const noCidade = raiz.subpastas[0].cenarios[0]
+    expect(noCidade.nome).toBe('Cidade Alta')
+    expect(noCidade.id).toBe(cidade.id)
+    expect(noCidade.filhos[0].nome).toBe('Bairro do Porto')
+    expect(noCidade.filhos[0].filhos[0].nome).toBe('Casa do Ferreiro')
+  })
+
+  it('cenário raiz fora de pasta aparece na raiz', async () => {
+    await repo.criarCenarioEm('cenarios', 'Floresta')
+    const raiz = await repo.montarArvoreCenarios()
+    expect(raiz.cenarios[0].nome).toBe('Floresta')
+  })
+
+  it('cenario.json corrompido vira nó com erro, filhos ainda varridos', async () => {
+    const cidade = await repo.criarCenarioEm('cenarios', 'Cidade')
+    await repo.criarCenarioEm(cidade.caminho, 'Bairro')
+    await fs.writeTextAtomic('C:/Cofre/cenarios/cidade/cenario.json', '{nao é json')
+    const raiz = await repo.montarArvoreCenarios()
+    expect(raiz.cenarios[0].erro).toBe(true)
+    expect(raiz.cenarios[0].filhos).toHaveLength(1)
+  })
+
+  it('ignora dirs .notas e dirs sem cenario.json dentro de cenário', async () => {
+    const cidade = await repo.criarCenarioEm('cenarios', 'Cidade')
+    await fs.mkdirAll(`C:/Cofre/${cidade.caminho}/mapa.notas`)
+    await fs.mkdirAll(`C:/Cofre/${cidade.caminho}/assets`)
+    const raiz = await repo.montarArvoreCenarios()
+    expect(raiz.cenarios[0].filhos).toEqual([])
+  })
+
+  it('montarArvore inclui a raiz de cenários', async () => {
+    await repo.inicializar()
+    await repo.criarCenarioEm('cenarios', 'Floresta')
+    const tree = await repo.montarArvore()
+    expect(tree.cenarios.cenarios[0].nome).toBe('Floresta')
+  })
+})
