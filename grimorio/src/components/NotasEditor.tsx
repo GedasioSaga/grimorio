@@ -4,6 +4,7 @@ import StarterKit from '@tiptap/starter-kit'
 import { open } from '@tauri-apps/plugin-dialog'
 import type { NotebookRepo } from '../lib/notebookRepo'
 import { ImagemCofre } from './ImagemCofre'
+import { uint8ParaBase64 } from '../lib/bin'
 import { useApp } from '../state/store'
 
 const AUTOSAVE_MS = 800
@@ -41,6 +42,24 @@ function EditorInterno({ repo, slug, corpoInicial }: { repo: NotebookRepo; slug:
   const editor = useEditor({
     extensions: [StarterKit, ImagemCofre],
     content: corpoInicial,
+    editorProps: {
+      // colar imagem (Ctrl+V): grava no cofre e insere como imagem portável
+      handlePaste(_view, event) {
+        const items = event.clipboardData?.items
+        if (!items) return false
+        for (const item of Array.from(items)) {
+          if (item.kind === 'file' && item.type.startsWith('image/')) {
+            const file = item.getAsFile()
+            if (file) {
+              event.preventDefault()
+              void inserirImagemDeArquivo(file)
+              return true
+            }
+          }
+        }
+        return false
+      },
+    },
     onUpdate({ editor }) {
       htmlRef.current = editor.getHTML()
       agendarSalvar()
@@ -93,6 +112,23 @@ function EditorInterno({ repo, slug, corpoInicial }: { repo: NotebookRepo; slug:
       editor.chain().focus().insertContent({ type: 'image', attrs: { rel } }).run()
     } catch (e) {
       alert(`Falha ao inserir imagem: ${e}`)
+    }
+  }
+
+  /** Grava uma imagem vinda do clipboard (Ctrl+V) no cofre e insere na página. */
+  async function inserirImagemDeArquivo(file: File) {
+    if (!editor) return
+    try {
+      const repoCofre = useApp.getState().repo
+      if (!repoCofre) throw new Error('cofre não carregado')
+      const subtipo = (file.type.split('/')[1] || 'png').toLowerCase()
+      const ext = subtipo === 'jpeg' ? 'jpg' : subtipo
+      const rel = `imagens-notas/${idImagem()}.${ext}`
+      const bytes = new Uint8Array(await file.arrayBuffer())
+      await repoCofre.escreverBinario(rel, uint8ParaBase64(bytes))
+      editor.chain().focus().insertContent({ type: 'image', attrs: { rel } }).run()
+    } catch (e) {
+      alert(`Falha ao colar imagem: ${e}`)
     }
   }
 

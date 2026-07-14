@@ -12,11 +12,19 @@ async function comAvisoDeErro(acao: () => Promise<void>) {
   }
 }
 
-export function Sidebar() {
+export function Sidebar({ recolhida, onToggle }: { recolhida: boolean; onToggle: () => void }) {
   const tree = useApp((s) => s.tree)
   const repo = useApp((s) => s.repo)
   const recarregar = useApp((s) => s.recarregarArvore)
   const carregarPersonagens = useApp((s) => s.carregarPersonagens)
+
+  if (recolhida) {
+    return (
+      <aside className="sidebar recolhida">
+        <button className="btn-icon" title="Expandir barra" onClick={onToggle}>›</button>
+      </aside>
+    )
+  }
 
   async function novaCampanha() {
     const nome = prompt('Nome da campanha:')
@@ -42,6 +50,7 @@ export function Sidebar() {
     <aside className="sidebar">
       <div className="sidebar-header">
         <span className="sidebar-title">Grimório</span>
+        <button className="btn-icon" title="Recolher barra" onClick={onToggle}>‹</button>
       </div>
 
       <div className="sidebar-section">

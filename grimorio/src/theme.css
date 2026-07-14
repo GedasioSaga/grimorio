@@ -50,8 +50,13 @@ button:hover { border-color: var(--dourado); color: var(--dourado-claro); }
   width: 280px; min-width: 280px; height: 100vh; overflow-y: auto;
   background: var(--fundo-painel); border-right: 1px solid var(--borda);
   padding: 12px;
+  transition: width 200ms ease, min-width 200ms ease;
 }
-.sidebar-header { padding: 4px 8px 16px; }
+.sidebar.recolhida {
+  width: 40px; min-width: 40px; overflow: hidden;
+  padding: 8px 4px; display: flex; justify-content: center;
+}
+.sidebar-header { padding: 4px 8px 16px; display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .sidebar-title { font-size: 24px; color: var(--dourado-claro); }
 .sidebar-section { margin-bottom: 16px; }
 .sidebar-section-header {

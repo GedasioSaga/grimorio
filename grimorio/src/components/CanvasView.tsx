@@ -20,6 +20,7 @@ import { useApp } from '../state/store'
 import type { VaultRepo } from '../lib/vaultRepo'
 import { slugify } from '../lib/slug'
 import { caminhoAbsolutoImagem } from '../lib/caminhos'
+import { uint8ParaBase64 } from '../lib/bin'
 import {
   CARD_ALTURA_PADRAO,
   CARD_LARGURA_PADRAO,
@@ -34,20 +35,9 @@ const AUTOSAVE_DEBOUNCE_MS = 1000
 const shapeUtilsCustom = [CharacterCardShapeUtil]
 const shapeUtilsDoStore = [...defaultShapeUtils, CharacterCardShapeUtil]
 
-const BASE64_CHUNK = 8192
-
 // Fallback quando o tamanho natural da imagem não pôde ser lido (arquivo ausente/corrompido).
 const IMG_FALLBACK_LARGURA = 320
 const IMG_FALLBACK_ALTURA = 240
-
-/** Converte bytes para base64 em blocos (evita estourar a pilha com spread gigante). */
-function uint8ParaBase64(bytes: Uint8Array): string {
-  let bin = ''
-  for (let i = 0; i < bytes.length; i += BASE64_CHUNK) {
-    bin += String.fromCharCode(...bytes.subarray(i, i + BASE64_CHUNK))
-  }
-  return btoa(bin)
-}
 
 /**
  * Asset store do tldraw: imagens coladas/arrastadas vão para `<cofre>/imagens-canvas/`.
