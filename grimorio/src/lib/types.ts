@@ -78,6 +78,28 @@ export interface PastaNode {
   personagens: ItemRef[]
 }
 
+/** Referência leve de cenário na árvore. `caminho` é o DIRETÓRIO do cenário. */
+export interface CenarioRef {
+  id: string
+  slug: string
+  nome: string
+  caminho: string // dir relativo ao cofre, ex.: "cenarios/reino/cidade-alta"
+  erro?: boolean
+}
+
+export interface CenarioNode extends CenarioRef {
+  filhos: CenarioNode[]
+}
+
+/** Pasta organizacional de cenários: contém pastas e cenários raiz. */
+export interface PastaCenarioNode {
+  slug: string
+  nome: string
+  caminho: string
+  subpastas: PastaCenarioNode[]
+  cenarios: CenarioNode[]
+}
+
 export interface VaultTree {
   campanhas: CampanhaNode[]
   canvasesSoltos: ItemRef[]
