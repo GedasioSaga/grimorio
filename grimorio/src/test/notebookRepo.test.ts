@@ -119,16 +119,17 @@ describe('NotebookRepo', () => {
     expect((await repo.montarArvore()).map((n) => n.titulo)).toEqual(['Irmão'])
   })
 
-  it('salvarCorpo e moverPagina concorrentes na mesma página não se sobrescrevem', async () => {
-    const a = await repo.criarPagina('A', null)
-    await repo.criarPagina('B', null)
-    // dispara os dois sem aguardar o primeiro
+  it('salvarCorpo e moverPagina concorrentes na mesma página não se sobrescrevem (com latência)', async () => {
+    await repo.criarPagina('B', null) // ocupa a ordem 0
+    const a = await repo.criarPagina('A', null) // ordem 1
+    fs.atrasoEscritaMs = 20 // escrita atrasada: sem serialização, o move relê 'a' velho e sobrescreve o corpo
     await Promise.all([
       repo.salvarCorpo(a.slug, '<p>corpo novo</p>'),
-      repo.moverPagina(a.id, null, 1),
+      repo.moverPagina(a.id, null, 0), // 'a' vai p/ frente: é o 1o arquivo reescrito no loop, lido cedo
     ])
+    fs.atrasoEscritaMs = 0
     const p = await repo.lerPagina(a.slug)
     expect(p.corpo).toBe('<p>corpo novo</p>') // texto sobreviveu
-    expect(p.ordem).toBe(1)                    // move sobreviveu
+    expect(p.ordem).toBe(0)                    // move sobreviveu
   })
 })

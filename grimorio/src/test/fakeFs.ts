@@ -1,19 +1,28 @@
 import type { FsBridge } from '../lib/fsBridge'
 
 /** FsBridge em memória. Chaves = caminhos com '/' normalizado. */
-export function criarFakeFs(): FsBridge & { arquivos: Map<string, string> } {
+export function criarFakeFs(): FsBridge & { arquivos: Map<string, string>; atrasoEscritaMs: number } {
   const arquivos = new Map<string, string>()
   const dirs = new Set<string>()
+  const estado = { atrasoEscritaMs: 0 } // latência de escrita opt-in (0 = sem timer real)
   const norm = (p: string) => p.replace(/\\/g, '/')
 
   return {
     arquivos,
+    get atrasoEscritaMs() {
+      return estado.atrasoEscritaMs
+    },
+    set atrasoEscritaMs(ms: number) {
+      estado.atrasoEscritaMs = ms
+    },
     async readText(path) {
       const c = arquivos.get(norm(path))
       if (c === undefined) throw new Error(`não existe: ${path}`)
       return c
     },
     async writeTextAtomic(path, content) {
+      // latência real (opt-in) para expor corridas de escrita em testes de serialização
+      if (estado.atrasoEscritaMs > 0) await new Promise((r) => setTimeout(r, estado.atrasoEscritaMs))
       arquivos.set(norm(path), content)
     },
     async writeBinaryBase64(path, base64) {
