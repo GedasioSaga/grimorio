@@ -3,6 +3,7 @@ import { useApp } from '../state/store'
 import type { TipoAberto } from '../state/store'
 import type { CampanhaNode, ItemRef } from '../lib/types'
 import { escritaDirDaCampanha } from '../lib/caminhos'
+import { PersonagensSoltos } from './PersonagensSoltos'
 
 async function comAvisoDeErro(acao: () => Promise<void>) {
   try {
@@ -72,6 +73,8 @@ export function Sidebar({ recolhida, onToggle }: { recolhida: boolean; onToggle:
           <ItemLinha key={i.caminho} item={i} tipo="canvas" aoMudar={recarregar} />
         ))}
       </div>
+
+      <PersonagensSoltos raiz={tree.personagensSoltos} aoMudar={async () => { await recarregar(); await carregarPersonagens() }} />
     </aside>
   )
 }

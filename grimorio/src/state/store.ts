@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import type { Personagem, VaultTree } from '../lib/types'
+import type { ItemRef, PastaNode, Personagem, VaultTree } from '../lib/types'
 import { tauriFs } from '../lib/fsBridge'
 import { VaultRepo } from '../lib/vaultRepo'
 
@@ -89,18 +89,25 @@ export const useApp = create<AppState>((set, get) => ({
   async carregarPersonagens() {
     const { repo, tree } = get()
     if (!repo || !tree) return
+    // reúne refs de todas as campanhas + da área de personagens soltos (pastas aninhadas)
+    const refs: ItemRef[] = []
+    for (const camp of tree.campanhas) refs.push(...camp.personagens)
+    const daPasta = (pasta: PastaNode) => {
+      refs.push(...pasta.personagens)
+      pasta.subpastas.forEach(daPasta)
+    }
+    daPasta(tree.personagensSoltos)
+
     const personagens: Record<string, Personagem> = {}
     const caminhoPorId: Record<string, string> = {}
-    for (const camp of tree.campanhas) {
-      for (const ref of camp.personagens) {
-        if (ref.erro) continue
-        try {
-          const p = await repo.lerPersonagem(ref.caminho)
-          personagens[p.id] = p
-          caminhoPorId[p.id] = ref.caminho
-        } catch {
-          // ignora corrompido; sidebar já marca erro
-        }
+    for (const ref of refs) {
+      if (ref.erro) continue
+      try {
+        const p = await repo.lerPersonagem(ref.caminho)
+        personagens[p.id] = p
+        caminhoPorId[p.id] = ref.caminho
+      } catch {
+        // ignora corrompido; sidebar já marca erro
       }
     }
     set({ personagens, caminhoPorId })
