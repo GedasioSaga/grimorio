@@ -58,6 +58,8 @@ export function criarFakeFs(): FsBridge & { arquivos: Map<string, string>; atras
     async rename(from, to) {
       const f = norm(from)
       const t = norm(to)
+      // rename(x, x) no fs real é no-op de sucesso; sem a guarda o delete apagaria o set
+      if (t === f) return
       const existe =
         arquivos.has(f) || dirs.has(f) || [...arquivos.keys(), ...dirs].some((k) => k.startsWith(f + '/'))
       if (!existe) throw new Error(`não existe: ${from}`)

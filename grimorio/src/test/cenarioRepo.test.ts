@@ -29,4 +29,17 @@ describe('fakeFs.rename', () => {
   it('origem inexistente dá erro', async () => {
     await expect(fs.rename('C:/Cofre/nada', 'C:/Cofre/x')).rejects.toThrow()
   })
+
+  it('rename para o mesmo caminho é no-op (não perde o arquivo)', async () => {
+    await fs.writeTextAtomic('C:/Cofre/a/x.json', '1')
+    await fs.rename('C:/Cofre/a/x.json', 'C:/Cofre/a/x.json')
+    expect(await fs.readText('C:/Cofre/a/x.json')).toBe('1')
+  })
+
+  it('não arrasta sibling com prefixo compartilhado', async () => {
+    await fs.writeTextAtomic('C:/Cofre/a/cidade/cenario.json', 'c')
+    await fs.writeTextAtomic('C:/Cofre/a/cidadela/cenario.json', 'ela')
+    await fs.rename('C:/Cofre/a/cidade', 'C:/Cofre/b/cidade')
+    expect(await fs.readText('C:/Cofre/a/cidadela/cenario.json')).toBe('ela')
+  })
 })
