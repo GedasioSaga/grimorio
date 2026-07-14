@@ -15,16 +15,18 @@ function idImagem(): string {
 /** Carregador: busca o corpo da página e só então monta o editor (keyed pelo slug). */
 export function NotasEditor({ repo, slug }: { repo: NotebookRepo; slug: string }) {
   const [corpo, setCorpo] = useState<string | null>(null)
+  const [erroCarga, setErroCarga] = useState<string | null>(null)
 
   useEffect(() => {
     let ativo = true
-    setCorpo(null)
+    setCorpo(null); setErroCarga(null)
     repo.lerPagina(slug)
       .then((p) => { if (ativo) setCorpo(p.corpo ?? '') })
-      .catch(() => { if (ativo) setCorpo('') })
+      .catch((e) => { if (ativo) setErroCarga(String(e)) })
     return () => { ativo = false }
   }, [repo, slug])
 
+  if (erroCarga) return <div className="notas-erro">Não foi possível abrir esta página.<br /><code>{erroCarga}</code></div>
   if (corpo === null) return <div className="notas-carregando">Carregando…</div>
   return <EditorInterno key={slug} repo={repo} slug={slug} corpoInicial={corpo} />
 }
@@ -34,11 +36,14 @@ function EditorInterno({ repo, slug, corpoInicial }: { repo: NotebookRepo; slug:
   const [salvarErro, setSalvarErro] = useState<string | null>(null)
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
+  const htmlRef = useRef<string>(corpoInicial)
+
   const editor = useEditor({
     extensions: [StarterKit, ImagemCofre],
     content: corpoInicial,
     onUpdate({ editor }) {
-      agendarSalvar(editor.getHTML())
+      htmlRef.current = editor.getHTML()
+      agendarSalvar()
     },
   })
 
@@ -55,22 +60,18 @@ function EditorInterno({ repo, slug, corpoInicial }: { repo: NotebookRepo; slug:
 
   useEffect(() => () => { if (timer.current) { clearTimeout(timer.current); void salvar() } }, [])
 
-  function agendarSalvar(corpo: string) {
+  function agendarSalvar() {
     if (timer.current) clearTimeout(timer.current)
-    timer.current = setTimeout(() => { timer.current = null; void salvar(corpo) }, AUTOSAVE_MS)
+    timer.current = setTimeout(() => { timer.current = null; void salvar() }, AUTOSAVE_MS)
   }
 
-  async function salvar(corpo?: string): Promise<boolean> {
-    const html = corpo ?? editor?.getHTML()
-    if (html === undefined) return true
+  async function salvar(): Promise<void> {
     try {
-      await repo.salvarCorpo(slug, html)
+      await repo.salvarCorpo(slug, htmlRef.current)
       setSalvarErro(null)
-      return true
     } catch (e) {
       console.error('Falha ao salvar página:', e)
       setSalvarErro(String(e))
-      return false
     }
   }
 
