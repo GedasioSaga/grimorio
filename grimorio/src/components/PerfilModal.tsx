@@ -1,10 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
-import { EditorContent, useEditor, useEditorState } from '@tiptap/react'
-import StarterKit from '@tiptap/starter-kit'
 import { open } from '@tauri-apps/plugin-dialog'
 import { convertFileSrc } from '@tauri-apps/api/core'
 import { useApp } from '../state/store'
 import type { Personagem } from '../lib/types'
+import { EditorTexto } from './EditorTexto'
 
 const AUTOSAVE_DEBOUNCE_MS = 800
 
@@ -17,27 +16,6 @@ export function PerfilModal({ personagemId }: { personagemId: string }) {
   const recarregarArvore = useApp((s) => s.recarregarArvore)
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [salvarErro, setSalvarErro] = useState<string | null>(null)
-
-  const editor = useEditor({
-    extensions: [StarterKit],
-    content: p?.descricao ?? '',
-    onUpdate({ editor }) {
-      agendarSalvar({ descricao: editor.getHTML() })
-    },
-  })
-
-  // TipTap v3 não re-renderiza a cada transação; useEditorState observa o estado ativo da toolbar
-  const ativo = useEditorState({
-    editor,
-    selector: ({ editor }) => ({
-      bold: editor.isActive('bold'),
-      italic: editor.isActive('italic'),
-      h2: editor.isActive('heading', { level: 2 }),
-      h3: editor.isActive('heading', { level: 3 }),
-      bulletList: editor.isActive('bulletList'),
-      orderedList: editor.isActive('orderedList'),
-    }),
-  })
 
   // ?v= força refetch quando o retrato é trocado pelo mesmo nome de arquivo (mesma extensão)
   const retratoSrc = p?.retrato && vaultPath
@@ -142,15 +120,7 @@ export function PerfilModal({ personagemId }: { personagemId: string }) {
           </div>
           <button className="btn-icon perfil-fechar" onClick={() => void fechar()}>✕</button>
         </div>
-        <div className="perfil-toolbar">
-          <button className={ativo.bold ? 'ativo' : ''} onClick={() => editor.chain().focus().toggleBold().run()}><b>B</b></button>
-          <button className={ativo.italic ? 'ativo' : ''} onClick={() => editor.chain().focus().toggleItalic().run()}><i>I</i></button>
-          <button className={ativo.h2 ? 'ativo' : ''} onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()}>H2</button>
-          <button className={ativo.h3 ? 'ativo' : ''} onClick={() => editor.chain().focus().toggleHeading({ level: 3 }).run()}>H3</button>
-          <button className={ativo.bulletList ? 'ativo' : ''} onClick={() => editor.chain().focus().toggleBulletList().run()}>• Lista</button>
-          <button className={ativo.orderedList ? 'ativo' : ''} onClick={() => editor.chain().focus().toggleOrderedList().run()}>1. Lista</button>
-        </div>
-        <EditorContent editor={editor} className="perfil-corpo" />
+        <EditorTexto value={p.descricao} onChange={(html) => agendarSalvar({ descricao: html })} />
         {salvarErro && (
           <div className="perfil-salvar-erro">Falha ao salvar: {salvarErro}</div>
         )}
