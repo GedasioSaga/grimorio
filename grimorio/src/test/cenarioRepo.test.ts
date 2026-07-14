@@ -1,10 +1,13 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import { criarFakeFs } from './fakeFs'
+import { VaultRepo } from '../lib/vaultRepo'
 
 let fs: ReturnType<typeof criarFakeFs>
+let repo: VaultRepo
 
 beforeEach(() => {
   fs = criarFakeFs()
+  repo = new VaultRepo('C:/Cofre', fs)
 })
 
 describe('fakeFs.rename', () => {
@@ -41,5 +44,57 @@ describe('fakeFs.rename', () => {
     await fs.writeTextAtomic('C:/Cofre/a/cidadela/cenario.json', 'ela')
     await fs.rename('C:/Cofre/a/cidade', 'C:/Cofre/b/cidade')
     expect(await fs.readText('C:/Cofre/a/cidadela/cenario.json')).toBe('ela')
+  })
+})
+
+describe('VaultRepo — cenários CRUD', () => {
+  it('cria cenário com dir + cenario.json no formato completo', async () => {
+    const ref = await repo.criarCenarioEm('cenarios', 'Cidade Alta')
+    expect(ref.slug).toBe('cidade-alta')
+    expect(ref.caminho).toBe('cenarios/cidade-alta')
+    const cru = JSON.parse(await fs.readText('C:/Cofre/cenarios/cidade-alta/cenario.json'))
+    expect(cru.nome).toBe('Cidade Alta')
+    expect(cru.id).toBe(ref.id)
+    expect(cru.personagens).toEqual([])
+    expect(cru.imagens).toEqual([])
+    expect(cru.eventos).toBe('')
+  })
+
+  it('nomes duplicados no mesmo nível ganham sufixo', async () => {
+    const a = await repo.criarCenarioEm('cenarios', 'Taverna')
+    const b = await repo.criarCenarioEm('cenarios', 'Taverna')
+    expect(a.slug).toBe('taverna')
+    expect(b.slug).toBe('taverna-2')
+  })
+
+  it('cria sub-cenário dentro de cenário', async () => {
+    const cidade = await repo.criarCenarioEm('cenarios', 'Cidade')
+    const bairro = await repo.criarCenarioEm(cidade.caminho, 'Bairro do Porto')
+    expect(bairro.caminho).toBe('cenarios/cidade/bairro-do-porto')
+  })
+
+  it('lê de volta normalizado e salva injetando modificadoEm', async () => {
+    const ref = await repo.criarCenarioEm('cenarios', 'Cidade')
+    const c = await repo.lerCenario(ref.caminho)
+    expect(c.nome).toBe('Cidade')
+    await repo.salvarCenario(ref.caminho, { ...c, resumo: 'capital', modificadoEm: '2000-01-01T00:00:00.000Z' })
+    const relido = await repo.lerCenario(ref.caminho)
+    expect(relido.resumo).toBe('capital')
+    expect(relido.modificadoEm).not.toBe('2000-01-01T00:00:00.000Z')
+  })
+
+  it('renomeia só o campo nome (dir/slug intactos)', async () => {
+    const ref = await repo.criarCenarioEm('cenarios', 'Cidade')
+    await repo.renomearCenario(ref.caminho, 'Cidade Baixa')
+    const c = await repo.lerCenario(ref.caminho)
+    expect(c.nome).toBe('Cidade Baixa')
+    expect(await fs.exists('C:/Cofre/cenarios/cidade')).toBe(true)
+  })
+
+  it('exclui cenário levando sub-cenários junto', async () => {
+    const cidade = await repo.criarCenarioEm('cenarios', 'Cidade')
+    await repo.criarCenarioEm(cidade.caminho, 'Bairro')
+    await repo.excluirCenario(cidade.caminho)
+    expect(await fs.exists('C:/Cofre/cenarios/cidade')).toBe(false)
   })
 })

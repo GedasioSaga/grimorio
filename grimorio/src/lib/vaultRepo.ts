@@ -1,5 +1,5 @@
 import type { FsBridge } from './fsBridge'
-import type { Campanha, CampanhaNode, CanvasDoc, Cenario, ItemRef, PastaNode, Personagem, VaultTree } from './types'
+import type { Campanha, CampanhaNode, CanvasDoc, Cenario, CenarioRef, ItemRef, PastaNode, Personagem, VaultTree } from './types'
 import { slugify, slugUnico } from './slug'
 
 function agora(): string {
@@ -248,6 +248,54 @@ export class VaultRepo {
 
   async excluirCampanha(slug: string): Promise<void> {
     await this.fs.removePath(this.abs(`campanhas/${slug}`))
+  }
+
+  // ---------- cenários ----------
+
+  /** Lista os nomes dos subdiretórios de um dir (tolerante a dir inexistente). */
+  private async nomesDeDirs(dir: string): Promise<string[]> {
+    try {
+      return (await this.fs.listDir(this.abs(dir))).filter((e) => e.isDir).map((e) => e.name)
+    } catch {
+      return []
+    }
+  }
+
+  /** Cria um cenário (diretório + cenario.json) dentro de dirPai (pasta ou outro cenário). */
+  async criarCenarioEm(dirPai: string, nome: string): Promise<CenarioRef> {
+    const slug = slugUnico(slugify(nome), await this.nomesDeDirs(dirPai))
+    const dir = `${dirPai}/${slug}`
+    const c: Cenario = {
+      id: novoId(), nome, retrato: null, resumo: '',
+      descricao: '', informacao: '', historia: '', eventos: '', itens: '', anotacoes: '',
+      imagens: [], personagens: [],
+      criadoEm: agora(), modificadoEm: agora(),
+    }
+    await this.fs.mkdirAll(this.abs(dir))
+    await this.fs.writeTextAtomic(this.abs(`${dir}/cenario.json`), JSON.stringify(c, null, 2))
+    return { id: c.id, slug, nome, caminho: dir }
+  }
+
+  async lerCenario(dir: string): Promise<Cenario> {
+    return normalizarCenario(JSON.parse(await this.fs.readText(this.abs(`${dir}/cenario.json`))))
+  }
+
+  async salvarCenario(dir: string, c: Cenario): Promise<void> {
+    const caminho = `${dir}/cenario.json`
+    return this.naFila(caminho, async () => {
+      const salvo = { ...c, modificadoEm: agora() }
+      await this.fs.writeTextAtomic(this.abs(caminho), JSON.stringify(salvo, null, 2))
+    })
+  }
+
+  /** Renomeia o campo `nome` do cenário (dir/slug não mudam — referências continuam válidas). */
+  async renomearCenario(dir: string, novoNome: string): Promise<void> {
+    return this.renomearItem(`${dir}/cenario.json`, novoNome)
+  }
+
+  /** Exclui o cenário e todos os sub-cenários (remoção recursiva do diretório). */
+  async excluirCenario(dir: string): Promise<void> {
+    await this.fs.removePath(this.abs(dir))
   }
 
   // ---------- árvore ----------
