@@ -205,4 +205,11 @@ describe('VaultRepo — moverCenario', () => {
     const relido = await repo.lerCenario('cenarios/reino/cidade')
     expect(relido.personagens).toEqual(['p1'])
   })
+
+  it('permite mover para destino sibling com prefixo compartilhado', async () => {
+    const cidade = await repo.criarCenarioEm('cenarios', 'Cidade')
+    const cidadeVelha = await repo.criarCenarioEm('cenarios', 'Cidade Velha')
+    await repo.moverCenario(cidade.caminho, cidadeVelha.caminho)
+    expect(await fs.exists('C:/Cofre/cenarios/cidade-velha/cidade/cenario.json')).toBe(true)
+  })
 })
