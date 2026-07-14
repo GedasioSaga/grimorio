@@ -4,6 +4,7 @@ import { VaultPicker } from './components/VaultPicker'
 import { Sidebar } from './components/Sidebar'
 import { Workspace } from './components/Workspace'
 import { PerfilModal } from './components/PerfilModal'
+import { CenarioModal } from './components/CenarioModal'
 import { dirNotasDoMapa } from './lib/caminhos'
 import './theme.css'
 
@@ -11,6 +12,7 @@ export default function App() {
   const vaultPath = useApp((s) => s.vaultPath)
   const aberto = useApp((s) => s.aberto)
   const perfilAbertoId = useApp((s) => s.perfilAbertoId)
+  const cenarioAbertoId = useApp((s) => s.cenarioAbertoId)
   const abrirCofre = useApp((s) => s.abrirCofre)
   const [sidebarRecolhida, setSidebarRecolhida] = useState(() => localStorage.getItem('grimorio.sidebar') === '1')
 
@@ -67,6 +69,7 @@ export default function App() {
         )}
       </main>
       {perfilAbertoId && <PerfilModal key={perfilAbertoId} personagemId={perfilAbertoId} />}
+      {cenarioAbertoId && <CenarioModal key={cenarioAbertoId} cenarioId={cenarioAbertoId} />}
     </div>
   )
 }
