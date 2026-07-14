@@ -78,16 +78,16 @@ export function Sidebar({ recolhida, onToggle }: { recolhida: boolean; onToggle:
 
 function CampanhaItem({ camp, aoMudar }: { camp: CampanhaNode; aoMudar: () => Promise<void> }) {
   const repo = useApp((s) => s.repo)
-  const abrirItem = useApp((s) => s.abrirItem)
   const [expandida, setExpandida] = useState(true)
 
-  async function criar(tipo: 'sessao' | 'personagem' | 'canvas') {
+  async function criar(tipo: 'sessao' | 'personagem' | 'canvas' | 'escrita') {
     if (!repo) return
-    const rotulo = { sessao: 'sessão', personagem: 'personagem', canvas: 'canvas' }[tipo]
+    const rotulo = { sessao: 'sessão', personagem: 'personagem', canvas: 'canvas', escrita: 'escrita' }[tipo]
     const nome = prompt(`Nome da ${rotulo}:`)
     if (!nome) return
     await comAvisoDeErro(async () => {
       if (tipo === 'personagem') await repo.criarPersonagem(camp.slug, nome)
+      else if (tipo === 'escrita') await repo.criarCanvasDoc(escritaDirDaCampanha(camp.slug), nome)
       else await repo.criarCanvasDoc(`campanhas/${camp.slug}/${tipo === 'sessao' ? 'sessoes' : 'canvases'}`, nome)
       await aoMudar()
     })
@@ -111,17 +111,13 @@ function CampanhaItem({ camp, aoMudar }: { camp: CampanhaNode; aoMudar: () => Pr
           <button className="btn-icon" title="Nova sessão" onClick={() => criar('sessao')}>S+</button>
           <button className="btn-icon" title="Novo personagem" onClick={() => criar('personagem')}>P+</button>
           <button className="btn-icon" title="Novo canvas" onClick={() => criar('canvas')}>C+</button>
+          <button className="btn-icon" title="Novo caderno de escrita" onClick={() => criar('escrita')}>E+</button>
           <button className="btn-icon" title="Excluir campanha" onClick={excluir}>🗑</button>
         </span>
       </div>
       {expandida && (
         <div className="campanha-conteudo">
-          <div
-            className="item-linha"
-            onClick={() => abrirItem('escrita', escritaDirDaCampanha(camp.slug), `Escrita — ${camp.nome}`)}
-          >
-            <span className="item-nome">✍ Escrita</span>
-          </div>
+          <Grupo titulo="Escrita" itens={camp.escritas} tipo="canvas" tipoAbertura="escrita" aoMudar={aoMudar} />
           <Grupo titulo="Sessões" itens={camp.sessoes} tipo="canvas" tipoAbertura="sessao" aoMudar={aoMudar} />
           <Grupo titulo="Personagens" itens={camp.personagens} tipo="personagem" aoMudar={aoMudar} />
           <Grupo titulo="Canvases" itens={camp.canvases} tipo="canvas" aoMudar={aoMudar} />
@@ -180,7 +176,9 @@ function ItemLinha({ item, tipo, tipoAbertura, aoMudar }: {
     if (!repo) return
     if (!confirm(`Excluir "${item.nome}"?`)) return
     await comAvisoDeErro(async () => {
-      await repo.excluirItem(item.caminho)
+      // itens de mapa/caderno (canvas) podem ter uma pasta .notas irmã — remove junto
+      if (tipo === 'canvas') await repo.excluirItemComNotas(item.caminho)
+      else await repo.excluirItem(item.caminho)
       await aoMudar()
     })
   }
@@ -195,7 +193,7 @@ function ItemLinha({ item, tipo, tipoAbertura, aoMudar }: {
       }}
       title={item.erro ? 'Arquivo com erro — não foi possível ler' : item.nome}
     >
-      <span className="item-nome">{tipo === 'personagem' ? '👤 ' : '▦ '}{item.nome}{item.erro ? ' ⚠' : ''}</span>
+      <span className="item-nome">{tipo === 'personagem' ? '👤 ' : tipoAbertura === 'escrita' ? '✍ ' : '▦ '}{item.nome}{item.erro ? ' ⚠' : ''}</span>
       <span className="item-acoes" onClick={(e) => e.stopPropagation()}>
         <button className="btn-icon" title="Renomear" onClick={renomear}>✎</button>
         <button className="btn-icon" title="Excluir" onClick={excluir}>🗑</button>

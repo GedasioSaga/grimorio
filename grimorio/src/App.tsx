@@ -60,8 +60,8 @@ export default function App() {
           <Workspace
             key={aberto.caminho}
             chaveSplit={aberto.caminho}
-            cadernoDirRel={aberto.caminho}
-            cadernoDirAbs={`${vaultPath}/${aberto.caminho}`}
+            cadernoDirRel={dirNotasDoMapa(aberto.caminho)}
+            cadernoDirAbs={`${vaultPath}/${dirNotasDoMapa(aberto.caminho)}`}
             titulo={aberto.nome}
           />
         )}

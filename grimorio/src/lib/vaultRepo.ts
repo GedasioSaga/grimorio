@@ -155,6 +155,17 @@ export class VaultRepo {
     })
   }
 
+  /** Exclui um item (.json) e, se existir, sua pasta de notas irmã (<slug>.notas). */
+  async excluirItemComNotas(caminho: string): Promise<void> {
+    return this.naFila(caminho, async () => {
+      await this.fs.removePath(this.abs(caminho))
+      const notas = caminho.replace(/\.json$/, '.notas')
+      if (await this.fs.exists(this.abs(notas))) {
+        await this.fs.removePath(this.abs(notas))
+      }
+    })
+  }
+
   async excluirCampanha(slug: string): Promise<void> {
     await this.fs.removePath(this.abs(`campanhas/${slug}`))
   }
@@ -179,6 +190,7 @@ export class VaultRepo {
         sessoes: await this.listarItens(`${base}/sessoes`),
         personagens: await this.listarItens(`${base}/personagens`),
         canvases: await this.listarItens(`${base}/canvases`),
+        escritas: await this.listarItens(`${base}/escrita`),
       })
     }
     return { campanhas, canvasesSoltos: await this.listarItens('canvases-soltos') }

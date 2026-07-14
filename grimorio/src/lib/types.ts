@@ -39,6 +39,7 @@ export interface CampanhaNode {
   sessoes: ItemRef[]
   personagens: ItemRef[]
   canvases: ItemRef[]
+  escritas: ItemRef[]
 }
 
 export interface VaultTree {
