@@ -61,11 +61,11 @@ function criarAssetStore(vaultPath: string, repo: VaultRepo): TLAssetStore {
       const rel = `imagens-canvas/${uniqueId()}.${ext}`
       const bytes = new Uint8Array(await file.arrayBuffer())
       await repo.escreverBinario(rel, uint8ParaBase64(bytes))
-      return { src: convertFileSrc(`${vaultPath}/${rel}`), meta: { rel } }
+      return { src: convertFileSrc(caminhoAbsolutoImagem(vaultPath, rel)), meta: { rel } }
     },
     resolve(asset) {
       const rel = (asset.meta as { rel?: string } | undefined)?.rel
-      return rel ? convertFileSrc(`${vaultPath}/${rel}`) : asset.props.src
+      return rel ? convertFileSrc(caminhoAbsolutoImagem(vaultPath, rel)) : asset.props.src
     },
   }
 }
@@ -271,7 +271,8 @@ export function CanvasView({ caminho, nome }: { caminho: string; nome: string })
           if (editor && vaultPath) {
             e.preventDefault()
             e.stopPropagation()
-            void soltarImagemNoMapa(editor, vaultPath, relImg, e.clientX, e.clientY)
+            soltarImagemNoMapa(editor, vaultPath, relImg, e.clientX, e.clientY)
+              .catch((err) => console.error('Falha ao soltar imagem no mapa:', err))
           }
           return
         }
