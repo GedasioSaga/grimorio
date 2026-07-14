@@ -177,7 +177,9 @@ button:hover { border-color: var(--dourado); color: var(--dourado-claro); }
 /* durante o arraste da divisória, sem transição (senão os painéis rubber-band atrás do cursor) */
 .workspace.arrastando .ws-escrita, .workspace.arrastando .ws-mapa { transition: none; }
 .ws-escrita-corpo { flex: 1; display: flex; min-height: 0; }
-.ws-mapa-corpo { flex: 1; position: relative; min-height: 0; }
+/* display:flex para o .canvas-wrap (flex:1) preencher a altura — senão o tldraw colapsa em 0 */
+.ws-mapa-corpo { flex: 1; position: relative; min-height: 0; display: flex; }
+.ws-mapa-corpo .canvas-wrap { flex: 1; min-width: 0; }
 .ws-cabecalho {
   display: flex; align-items: center; justify-content: space-between; gap: 8px;
   padding: 4px 8px; background: var(--fundo-painel); border-bottom: 1px solid var(--borda);
