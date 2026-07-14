@@ -1,3 +1,8 @@
+export interface ImagemPersonagem {
+  rel: string        // caminho relativo ao cofre (portável entre PCs)
+  legenda?: string
+}
+
 export interface Personagem {
   id: string
   nome: string
