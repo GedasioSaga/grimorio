@@ -1,5 +1,5 @@
 import type { FsBridge } from './fsBridge'
-import type { Campanha, CampanhaNode, CanvasDoc, ItemRef, PastaNode, Personagem, VaultTree } from './types'
+import type { Campanha, CampanhaNode, CanvasDoc, Cenario, ItemRef, PastaNode, Personagem, VaultTree } from './types'
 import { slugify, slugUnico } from './slug'
 
 function agora(): string {
@@ -28,6 +28,26 @@ export function normalizarPersonagem(
     extras: raw.extras ?? '',
     anotacoes: raw.anotacoes ?? '',
     imagens: raw.imagens ?? [],
+    criadoEm: raw.criadoEm ?? agora(),
+    modificadoEm: raw.modificadoEm ?? agora(),
+  }
+}
+
+/** Normaliza um cenário lido do disco (migração lazy: campos faltando ganham defaults). */
+export function normalizarCenario(raw: Partial<Cenario>): Cenario {
+  return {
+    id: raw.id ?? novoId(),
+    nome: raw.nome ?? '',
+    retrato: raw.retrato ?? null,
+    resumo: raw.resumo ?? '',
+    descricao: raw.descricao ?? '',
+    informacao: raw.informacao ?? '',
+    historia: raw.historia ?? '',
+    eventos: raw.eventos ?? '',
+    itens: raw.itens ?? '',
+    anotacoes: raw.anotacoes ?? '',
+    imagens: raw.imagens ?? [],
+    personagens: raw.personagens ?? [],
     criadoEm: raw.criadoEm ?? agora(),
     modificadoEm: raw.modificadoEm ?? agora(),
   }

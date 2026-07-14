@@ -18,6 +18,23 @@ export interface Personagem {
   modificadoEm: string
 }
 
+export interface Cenario {
+  id: string
+  nome: string
+  retrato: string | null // rel ao cofre, ex.: "imagens-cenarios/retrato-x.png"
+  resumo: string
+  descricao: string  // HTML TipTap
+  informacao: string // HTML (caixa "Informações" do card no canvas)
+  historia: string   // HTML
+  eventos: string    // HTML — v1 texto; vira entidade própria no futuro
+  itens: string      // HTML — idem
+  anotacoes: string  // HTML
+  imagens: ImagemPersonagem[]
+  personagens: string[] // ids de personagens vinculados (N:N)
+  criadoEm: string // ISO-8601
+  modificadoEm: string
+}
+
 export interface CanvasDoc {
   id: string
   nome: string
