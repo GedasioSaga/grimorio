@@ -12,7 +12,7 @@ import {
 import { convertFileSrc } from '@tauri-apps/api/core'
 import { useApp } from '../state/store'
 import { temConteudo } from '../lib/htmlTexto'
-import { PAINEL_DESCRICAO_LARGURA, larguraDoCartao } from '../lib/cartaoCanvas'
+import { PAINEL_DESCRICAO_LARGURA, colunasPaineisVisiveis, larguraDoCartao } from '../lib/cartaoCanvas'
 import { CARD_ALTURA_PADRAO, CARD_LARGURA_PADRAO } from './CharacterCardShape'
 import { EditorInline } from './EditorInline'
 import { ControlesFonte } from './ControlesFonte'
@@ -135,7 +135,7 @@ function contarAoLado(props: CenarioCardShapeType['props']): number {
 
 // largura do card conforme expandido + colunas ao lado (1 coluna base + N ao lado)
 function larguraCenario(props: CenarioCardShapeType['props'], expandido: boolean): number {
-  return expandido ? larguraDoCartao(CARD_LARGURA_PADRAO, 1 + contarAoLado(props)) : CARD_LARGURA_PADRAO
+  return larguraDoCartao(CARD_LARGURA_PADRAO, colunasPaineisVisiveis(expandido, contarAoLado(props)))
 }
 
 type ChaveSecao = 'informacao' | 'eventos' | 'itens'
@@ -146,8 +146,13 @@ const SECOES: { chave: ChaveSecao; rotulo: string; semTexto: string }[] = [
   { chave: 'itens', rotulo: 'Itens', semTexto: 'Sem itens' },
 ]
 
-// nomes das flags planas por seção (props do tldraw são planas, sem mapa aninhado)
-const FLAGS: Record<ChaveSecao, { exp: keyof CenarioCardShapeType['props']; lado: keyof CenarioCardShapeType['props'] }> = {
+// flags booleanas planas do shape (props do tldraw são planas, sem mapa aninhado)
+type FlagBooleana =
+  | 'infoExpandido' | 'infoAoLado'
+  | 'eventosExpandido' | 'eventosAoLado'
+  | 'itensExpandido' | 'itensAoLado'
+
+const FLAGS: Record<ChaveSecao, { exp: FlagBooleana; lado: FlagBooleana }> = {
   informacao: { exp: 'infoExpandido', lado: 'infoAoLado' },
   eventos: { exp: 'eventosExpandido', lado: 'eventosAoLado' },
   itens: { exp: 'itensExpandido', lado: 'itensAoLado' },
@@ -190,13 +195,29 @@ function CartaoCenario({ shape }: { shape: CenarioCardShapeType }) {
     )
   }
 
-  // uma seção (Informações / Eventos / Itens): header com toggles + conteúdo/editor.
+  // conteúdo de uma caixa (Descrição ou seção): editor inline, HTML salvo, ou vazio.
   // Função de render (NÃO componente): devolve a árvore JSX direto, então digitar
   // no editor inline não remonta/perde foco a cada render do card.
+  const renderConteudo = (
+    html: string,
+    estaEditando: boolean,
+    onChange: (h: string) => void,
+    semTexto: string,
+  ) =>
+    estaEditando ? (
+      <div className="char-card-editor" onPointerDown={(e) => e.stopPropagation()}>
+        <EditorInline value={html} onChange={onChange} onBlur={() => setEditando(null)} />
+      </div>
+    ) : temConteudo(html) ? (
+      <div className="char-card-descricao" dangerouslySetInnerHTML={{ __html: html }} />
+    ) : (
+      <div className="char-card-sem-descricao">{semTexto}</div>
+    )
+
+  // uma seção (Informações / Eventos / Itens): header com toggles + conteúdo/editor.
   const renderSecao = (chave: ChaveSecao, rotulo: string, semTexto: string) => {
-    const expSec = shape.props[FLAGS[chave].exp] as boolean
-    const aoLado = shape.props[FLAGS[chave].lado] as boolean
-    const html = c![chave]
+    const expSec = shape.props[FLAGS[chave].exp]
+    const aoLado = shape.props[FLAGS[chave].lado]
     return (
       <div className="char-card-secao" key={chave}>
         <div className="char-card-secao-header">
@@ -249,25 +270,18 @@ function CartaoCenario({ shape }: { shape: CenarioCardShapeType }) {
           </span>
         </div>
         {expSec &&
-          (editando === chave ? (
-            <div className="char-card-editor" onPointerDown={(e) => e.stopPropagation()}>
-              <EditorInline
-                value={html}
-                onChange={(h) => salvarParcial(cenarioId, { [chave]: h })}
-                onBlur={() => setEditando(null)}
-              />
-            </div>
-          ) : temConteudo(html) ? (
-            <div className="char-card-descricao" dangerouslySetInnerHTML={{ __html: html }} />
-          ) : (
-            <div className="char-card-sem-descricao">{semTexto}</div>
-          ))}
+          renderConteudo(
+            c[chave],
+            editando === chave,
+            (h) => salvarParcial(cenarioId, { [chave]: h }),
+            semTexto,
+          )}
       </div>
     )
   }
 
-  const empilhadas = SECOES.filter((s) => !(shape.props[FLAGS[s.chave].lado] as boolean))
-  const aoLado = SECOES.filter((s) => shape.props[FLAGS[s.chave].lado] as boolean)
+  const empilhadas = SECOES.filter((s) => !shape.props[FLAGS[s.chave].lado])
+  const aoLado = SECOES.filter((s) => shape.props[FLAGS[s.chave].lado])
 
   return (
     <HTMLContainer className="char-card" style={{ pointerEvents: 'all', ['--card-fe' as any]: fonteEscala }}>
@@ -312,18 +326,11 @@ function CartaoCenario({ shape }: { shape: CenarioCardShapeType }) {
                     ✎
                   </button>
                 </div>
-                {editando === 'descricao' ? (
-                  <div className="char-card-editor" onPointerDown={(e) => e.stopPropagation()}>
-                    <EditorInline
-                      value={c.descricao}
-                      onChange={(h) => salvarParcial(cenarioId, { descricao: h })}
-                      onBlur={() => setEditando(null)}
-                    />
-                  </div>
-                ) : temConteudo(c.descricao) ? (
-                  <div className="char-card-descricao" dangerouslySetInnerHTML={{ __html: c.descricao }} />
-                ) : (
-                  <div className="char-card-sem-descricao">Sem descrição</div>
+                {renderConteudo(
+                  c.descricao,
+                  editando === 'descricao',
+                  (h) => salvarParcial(cenarioId, { descricao: h }),
+                  'Sem descrição',
                 )}
               </div>
               {empilhadas.map((s) => renderSecao(s.chave, s.rotulo, s.semTexto))}

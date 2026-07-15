@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { PAINEL_DESCRICAO_LARGURA, ajustarLargura, larguraDoCartao } from '../lib/cartaoCanvas'
+import {
+  PAINEL_DESCRICAO_LARGURA,
+  ajustarLargura,
+  colunasPaineisVisiveis,
+  larguraDoCartao,
+} from '../lib/cartaoCanvas'
 
 describe('ajustarLargura', () => {
   it('abrir um painel soma a largura do painel', () => {
@@ -35,5 +40,17 @@ describe('larguraDoCartao', () => {
   })
   it('três colunas somam três painéis', () => {
     expect(larguraDoCartao(240, 3)).toBe(240 + 3 * 240)
+  })
+})
+
+describe('colunasPaineisVisiveis', () => {
+  it('recolhido não tem colunas', () => {
+    expect(colunasPaineisVisiveis(false, 2)).toBe(0)
+  })
+  it('expandido sem seções ao lado tem só a coluna da Descrição', () => {
+    expect(colunasPaineisVisiveis(true, 0)).toBe(1)
+  })
+  it('expandido com duas seções ao lado tem três colunas', () => {
+    expect(colunasPaineisVisiveis(true, 2)).toBe(3)
   })
 })

@@ -20,3 +20,8 @@ export function ajustarLargura(atual: number, deltaPaineis: number): number {
 export function larguraDoCartao(base: number, colunasPaineis: number): number {
   return base + colunasPaineis * PAINEL_DESCRICAO_LARGURA
 }
+
+/** Colunas de painel visíveis: 0 se recolhido; senão 1 (coluna da Descrição) + nº de seções ao lado. */
+export function colunasPaineisVisiveis(expandido: boolean, secoesAoLado: number): number {
+  return expandido ? 1 + secoesAoLado : 0
+}
