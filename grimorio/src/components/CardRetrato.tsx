@@ -1,9 +1,9 @@
-import { useEffect, useState, useSyncExternalStore, type ReactNode } from 'react'
-import { armarImagem, imagemArmadaSrc, assinarImagemArmada } from '../lib/imagemArmada'
+import { useEffect, useState, type ReactNode } from 'react'
 
 /**
- * Retrato do card (imagem ou fallback). Clicar na imagem a "arma" para Ctrl+C.
- * Compartilhado por cenário e personagem.
+ * Retrato do card (imagem ou fallback). Compartilhado por cenário e personagem.
+ * A cópia da imagem (Ctrl+C) é feita pelo CanvasView a partir do card selecionado,
+ * não daqui — o tldraw captura o ponteiro e o clique na <img> não é confiável.
  */
 export function CardRetrato({
   src,
@@ -19,24 +19,11 @@ export function CardRetrato({
     setErroImg(false)
   }, [src])
 
-  // reflete se ESTA imagem é a armada (para o anel de seleção)
-  const armadoSrc = useSyncExternalStore(assinarImagemArmada, imagemArmadaSrc)
-  const armado = !!src && armadoSrc === src
-
   const mostrarImg = src && !erroImg
   return (
-    <div className={`char-card-retrato${armado ? ' char-card-retrato--armado' : ''}`}>
+    <div className="char-card-retrato">
       {mostrarImg ? (
-        <img
-          src={src}
-          alt={alt}
-          draggable={false}
-          onError={() => setErroImg(true)}
-          onClick={(e) => {
-            e.stopPropagation()
-            armarImagem(src)
-          }}
-        />
+        <img src={src} alt={alt} draggable={false} onError={() => setErroImg(true)} />
       ) : (
         fallback
       )}

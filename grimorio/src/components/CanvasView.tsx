@@ -31,7 +31,7 @@ import {
 } from './CharacterCardShape'
 import { CenarioCardShapeUtil, type CenarioCardShapeType } from './CenarioCardShape'
 import { MIME_CENARIO } from './CenariosSoltos'
-import { armarImagem, imagemArmadaSrc } from '../lib/imagemArmada'
+import { relRetratoDoCard, type ShapeMinimo } from '../lib/copiaImagemCard'
 import { copiarImagemParaClipboard } from '../lib/copiarImagem'
 import { paresParaLigar } from '../lib/ligacaoCenario'
 
@@ -380,23 +380,31 @@ export function CanvasView({ caminho, nome }: { caminho: string; nome: string })
           // (duplo clique no card só expande/recolhe a descrição). Fase capture:
           // dispara antes dos atalhos do tldraw (que usam espaço para o pan).
           const aoTeclar = (e: KeyboardEvent) => {
-            // Ctrl/Cmd+C com uma imagem de card armada: copia a imagem (não o shape)
+            // Ctrl/Cmd+C com um card selecionado que tem retrato: copia a IMAGEM (não o
+            // shape). Baseia-se na seleção nativa do tldraw — clicar no card já seleciona;
+            // o clique na <img> não é confiável dentro do canvas (o tldraw captura o ponteiro).
             if ((e.ctrlKey || e.metaKey) && (e.key === 'c' || e.key === 'C')) {
-              const src = imagemArmadaSrc()
-              if (src) {
-                e.preventDefault()
-                e.stopPropagation()
-                copiarImagemParaClipboard(src)
-                  .then(() => {
-                    setCopiaOk(true)
-                    setTimeout(() => setCopiaOk(false), 1500)
-                  })
-                  .catch((err) => {
-                    console.error('Falha ao copiar imagem:', err)
-                    setCopiaErro(String(err))
-                    setTimeout(() => setCopiaErro(null), 4000)
-                  })
-              }
+              if (editor.getEditingShapeId()) return // editando texto: deixa copiar o texto
+              const { personagens, cenarios, vaultPath: vp } = useApp.getState()
+              // TLShape → ShapeMinimo: só lemos type/props; o cast evita acoplar o helper ao tldraw
+              const rel = relRetratoDoCard(
+                editor.getOnlySelectedShape() as unknown as ShapeMinimo | null,
+                personagens,
+                cenarios,
+              )
+              if (!rel || !vp) return // sem imagem: deixa o Ctrl+C nativo do tldraw agir
+              e.preventDefault()
+              e.stopPropagation()
+              copiarImagemParaClipboard(convertFileSrc(`${vp}/${rel}`))
+                .then(() => {
+                  setCopiaOk(true)
+                  setTimeout(() => setCopiaOk(false), 1500)
+                })
+                .catch((err) => {
+                  console.error('Falha ao copiar imagem:', err)
+                  setCopiaErro(String(err))
+                  setTimeout(() => setCopiaErro(null), 4000)
+                })
               return
             }
             if (e.key !== ' ' || e.repeat) return
@@ -417,15 +425,8 @@ export function CanvasView({ caminho, nome }: { caminho: string; nome: string })
           }
           const container = editor.getContainer()
           container.addEventListener('keydown', aoTeclar, { capture: true })
-          // clicar fora da imagem armada desarma (some o anel de seleção)
-          const aoApontar = (e: PointerEvent) => {
-            const alvo = e.target as HTMLElement | null
-            if (!alvo?.closest('.char-card-retrato img')) armarImagem(null)
-          }
-          container.addEventListener('pointerdown', aoApontar, { capture: true })
           return () => {
             container.removeEventListener('keydown', aoTeclar, { capture: true })
-            container.removeEventListener('pointerdown', aoApontar, { capture: true })
           }
         }}
       />
