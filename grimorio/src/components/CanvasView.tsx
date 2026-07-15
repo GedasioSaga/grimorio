@@ -140,6 +140,8 @@ export function CanvasView({ caminho, nome }: { caminho: string; nome: string })
   const [store, setStore] = useState<TLStore | null>(null)
   const [erro, setErro] = useState<string | null>(null)
   const [salvandoErro, setSalvandoErro] = useState<string | null>(null)
+  const [copiaOk, setCopiaOk] = useState(false)
+  const [copiaErro, setCopiaErro] = useState<string | null>(null)
   const editorRef = useRef<Editor | null>(null)
 
   // carrega o snapshot do arquivo e monta o store
@@ -325,9 +327,16 @@ export function CanvasView({ caminho, nome }: { caminho: string; nome: string })
               if (src) {
                 e.preventDefault()
                 e.stopPropagation()
-                copiarImagemParaClipboard(src).catch((err) =>
-                  console.error('Falha ao copiar imagem:', err),
-                )
+                copiarImagemParaClipboard(src)
+                  .then(() => {
+                    setCopiaOk(true)
+                    setTimeout(() => setCopiaOk(false), 1500)
+                  })
+                  .catch((err) => {
+                    console.error('Falha ao copiar imagem:', err)
+                    setCopiaErro(String(err))
+                    setTimeout(() => setCopiaErro(null), 4000)
+                  })
               }
               return
             }
@@ -364,6 +373,8 @@ export function CanvasView({ caminho, nome }: { caminho: string; nome: string })
       {salvandoErro && (
         <div className="canvas-salvar-erro">Falha ao salvar: {salvandoErro}</div>
       )}
+      {copiaOk && <div className="canvas-copia-ok">Imagem copiada</div>}
+      {copiaErro && <div className="canvas-salvar-erro">Falha ao copiar: {copiaErro}</div>}
     </div>
   )
 }

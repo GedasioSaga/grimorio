@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from 'react'
+import { useEffect, useState, useSyncExternalStore, type ReactNode } from 'react'
 import { armarImagem, imagemArmadaSrc, assinarImagemArmada } from '../lib/imagemArmada'
 
 /**
@@ -20,12 +20,8 @@ export function CardRetrato({
   }, [src])
 
   // reflete se ESTA imagem é a armada (para o anel de seleção)
-  const [armado, setArmado] = useState(false)
-  useEffect(() => {
-    const atualizar = () => setArmado(!!src && imagemArmadaSrc() === src)
-    atualizar()
-    return assinarImagemArmada(atualizar)
-  }, [src])
+  const armadoSrc = useSyncExternalStore(assinarImagemArmada, imagemArmadaSrc)
+  const armado = !!src && armadoSrc === src
 
   const mostrarImg = src && !erroImg
   return (

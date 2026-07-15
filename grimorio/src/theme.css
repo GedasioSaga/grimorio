@@ -104,6 +104,11 @@ button:hover { border-color: var(--dourado); color: var(--dourado-claro); }
   background: var(--fundo-painel); border: 1px solid var(--erro); color: var(--erro);
   border-radius: 6px; padding: 6px 12px; font-size: 12px;
 }
+.canvas-copia-ok {
+  position: absolute; bottom: 12px; left: 50%; transform: translateX(-50%); z-index: 300;
+  background: var(--fundo-painel); border: 1px solid var(--dourado); color: var(--dourado-claro);
+  border-radius: 6px; padding: 6px 12px; font-size: 12px;
+}
 
 /* ---- cartão de personagem ---- */
 .char-card {
