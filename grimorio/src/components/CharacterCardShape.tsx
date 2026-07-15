@@ -15,6 +15,7 @@ import { temConteudo } from '../lib/htmlTexto'
 import { PAINEL_DESCRICAO_LARGURA, ajustarLargura } from '../lib/cartaoCanvas'
 import { EditorInline } from './EditorInline'
 import { ControlesFonte } from './ControlesFonte'
+import { CardRetrato } from './CardRetrato'
 
 export const CARD_LARGURA_PADRAO = 240
 export const CARD_ALTURA_PADRAO = 320
@@ -148,12 +149,6 @@ function CartaoPersonagem({ shape }: { shape: CharacterCardShapeType }) {
 
   const retratoSrc = p?.retrato && vaultPath ? convertFileSrc(`${vaultPath}/${p.retrato}`) : null
 
-  // imagem quebrada → volta pro fallback de inicial; reseta se o retrato mudar
-  const [erroImg, setErroImg] = useState(false)
-  useEffect(() => {
-    setErroImg(false)
-  }, [retratoSrc])
-
   // rolar dentro dos painéis não pode virar zoom/pan do canvas: listener nativo
   // no próprio elemento dispara antes do listener do tldraw e corta a propagação
   const painelRef = useRef<HTMLDivElement | null>(null)
@@ -247,18 +242,11 @@ function CartaoPersonagem({ shape }: { shape: CharacterCardShapeType }) {
   return (
     <HTMLContainer className="char-card" style={{ pointerEvents: 'all', ['--card-fe' as any]: fonteEscala }}>
       <div className="char-card-principal">
-        <div className="char-card-retrato">
-          {retratoSrc && !erroImg ? (
-            <img
-              src={retratoSrc}
-              alt={p.nome}
-              draggable={false}
-              onError={() => setErroImg(true)}
-            />
-          ) : (
-            <span className="char-card-inicial">{p.nome.charAt(0).toUpperCase()}</span>
-          )}
-        </div>
+        <CardRetrato
+          src={retratoSrc}
+          alt={p.nome}
+          fallback={<span className="char-card-inicial">{p.nome.charAt(0).toUpperCase()}</span>}
+        />
         <div className="char-card-texto">
           <div className="char-card-nome">{p.nome}</div>
           {p.resumo ? <div className="char-card-resumo">{p.resumo}</div> : null}

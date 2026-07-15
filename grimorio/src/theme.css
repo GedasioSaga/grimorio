@@ -124,6 +124,7 @@ button:hover { border-color: var(--dourado); color: var(--dourado-claro); }
 }
 /* imagem inteira, nunca corta (contain); centralizada na moldura */
 .char-card-retrato img { max-width: 100%; max-height: 100%; object-fit: contain; }
+.char-card-retrato--armado { outline: 2px solid var(--dourado-claro); outline-offset: -2px; }
 .char-card-inicial { font-family: var(--serif); font-size: calc(40px * var(--card-fe, 1)); color: var(--dourado-claro); }
 .char-card-texto { flex-shrink: 0; min-width: 0; }
 .char-card-nome { font-family: var(--serif); font-size: calc(16px * var(--card-fe, 1)); color: var(--dourado-claro); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

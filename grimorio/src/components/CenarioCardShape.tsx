@@ -16,6 +16,7 @@ import { PAINEL_DESCRICAO_LARGURA, colunasPaineisVisiveis, larguraDoCartao } fro
 import { CARD_ALTURA_PADRAO, CARD_LARGURA_PADRAO } from './CharacterCardShape'
 import { EditorInline } from './EditorInline'
 import { ControlesFonte } from './ControlesFonte'
+import { CardRetrato } from './CardRetrato'
 
 declare module '@tldraw/tlschema' {
   interface TLGlobalShapePropsMap {
@@ -168,10 +169,6 @@ function CartaoCenario({ shape }: { shape: CenarioCardShapeType }) {
   const [editando, setEditando] = useState<'descricao' | ChaveSecao | null>(null)
 
   const retratoSrc = c?.retrato && vaultPath ? convertFileSrc(`${vaultPath}/${c.retrato}`) : null
-  const [erroImg, setErroImg] = useState(false)
-  useEffect(() => {
-    setErroImg(false)
-  }, [retratoSrc])
 
   // guard de scroll: rolar dentro de um painel não vira zoom/pan do canvas.
   // Um listener no card cobre todos os painéis (o nº deles é dinâmico agora).
@@ -289,13 +286,11 @@ function CartaoCenario({ shape }: { shape: CenarioCardShapeType }) {
           display:contents pega o listener de wheel sem alterar o layout flex. */}
       <div ref={cardRef} style={{ display: 'contents' }}>
         <div className="char-card-principal">
-          <div className="char-card-retrato">
-            {retratoSrc && !erroImg ? (
-              <img src={retratoSrc} alt={c.nome} draggable={false} onError={() => setErroImg(true)} />
-            ) : (
-              <span className="char-card-inicial">🗺</span>
-            )}
-          </div>
+          <CardRetrato
+            src={retratoSrc}
+            alt={c.nome}
+            fallback={<span className="char-card-inicial">🗺</span>}
+          />
           <div className="char-card-texto">
             <div className="char-card-nome">{c.nome}</div>
             {c.resumo ? <div className="char-card-resumo">{c.resumo}</div> : null}
