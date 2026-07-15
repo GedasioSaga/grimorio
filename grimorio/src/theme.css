@@ -58,6 +58,11 @@ button:hover { border-color: var(--dourado); color: var(--dourado-claro); }
 }
 .sidebar-header { padding: 4px 8px 16px; display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .sidebar-title { font-size: 24px; color: var(--dourado-claro); }
+.sidebar-filtro { padding: 0 12px 8px; }
+.sidebar-filtro select {
+  width: 100%; background: var(--fundo); border: 1px solid var(--borda); border-radius: 6px;
+  color: var(--dourado-claro); font-size: 12px; padding: 5px 8px;
+}
 .sidebar-section { margin-bottom: 16px; }
 .sidebar-section-header {
   display: flex; justify-content: space-between; align-items: center;

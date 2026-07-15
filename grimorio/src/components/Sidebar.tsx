@@ -3,6 +3,8 @@ import { useApp } from '../state/store'
 import type { TipoAberto } from '../state/store'
 import type { CampanhaNode, ItemRef } from '../lib/types'
 import { escritaDirDaCampanha } from '../lib/caminhos'
+import { idsDaCampanha } from '../lib/vinculos'
+import { filtrarArvoreCenarios, filtrarPastaPersonagens } from '../lib/filtroCampanha'
 import { PersonagensSoltos } from './PersonagensSoltos'
 import { CenariosSoltos } from './CenariosSoltos'
 
@@ -20,6 +22,10 @@ export function Sidebar({ recolhida, onToggle }: { recolhida: boolean; onToggle:
   const recarregar = useApp((s) => s.recarregarArvore)
   const carregarPersonagens = useApp((s) => s.carregarPersonagens)
   const carregarCenarios = useApp((s) => s.carregarCenarios)
+  const vinculos = useApp((s) => s.vinculos)
+  const campanhaFiltro = useApp((s) => s.campanhaFiltro)
+  const setCampanhaFiltro = useApp((s) => s.setCampanhaFiltro)
+  const caminhoPorId = useApp((s) => s.caminhoPorId)
 
   if (recolhida) {
     return (
@@ -49,11 +55,33 @@ export function Sidebar({ recolhida, onToggle }: { recolhida: boolean; onToggle:
 
   if (!tree) return <aside className="sidebar">Carregando…</aside>
 
+  const idsFiltro = campanhaFiltro ? idsDaCampanha(vinculos, campanhaFiltro) : null
+  const raizPersonagens = idsFiltro
+    ? filtrarPastaPersonagens(
+        tree.personagensSoltos,
+        new Set([...idsFiltro].map((id) => caminhoPorId[id]).filter((c): c is string => !!c)),
+      )
+    : tree.personagensSoltos
+  const raizCenarios = idsFiltro ? filtrarArvoreCenarios(tree.cenarios, idsFiltro) : tree.cenarios
+
   return (
     <aside className="sidebar">
       <div className="sidebar-header">
         <span className="sidebar-title">Grimório</span>
         <button className="btn-icon" title="Recolher barra" onClick={onToggle}>‹</button>
+      </div>
+
+      <div className="sidebar-filtro">
+        <select
+          title="Filtrar personagens e cenários por campanha"
+          value={campanhaFiltro ?? ''}
+          onChange={(e) => setCampanhaFiltro(e.target.value || null)}
+        >
+          <option value="">Campanha: Todas</option>
+          {tree.campanhas.filter((c) => c.id).map((c) => (
+            <option key={c.id} value={c.id}>{c.nome}</option>
+          ))}
+        </select>
       </div>
 
       <div className="sidebar-section">
@@ -76,9 +104,9 @@ export function Sidebar({ recolhida, onToggle }: { recolhida: boolean; onToggle:
         ))}
       </div>
 
-      <PersonagensSoltos raiz={tree.personagensSoltos} aoMudar={async () => { await recarregar(); await carregarPersonagens() }} />
+      <PersonagensSoltos raiz={raizPersonagens} aoMudar={async () => { await recarregar(); await carregarPersonagens() }} />
 
-      <CenariosSoltos raiz={tree.cenarios} aoMudar={async () => { await recarregar(); await carregarCenarios() }} />
+      <CenariosSoltos raiz={raizCenarios} aoMudar={async () => { await recarregar(); await carregarCenarios() }} />
     </aside>
   )
 }
