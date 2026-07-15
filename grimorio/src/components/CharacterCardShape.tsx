@@ -14,6 +14,7 @@ import { useApp } from '../state/store'
 import { temConteudo } from '../lib/htmlTexto'
 import { PAINEL_DESCRICAO_LARGURA, ajustarLargura } from '../lib/cartaoCanvas'
 import { EditorInline } from './EditorInline'
+import { ControlesFonte } from './ControlesFonte'
 
 export const CARD_LARGURA_PADRAO = 240
 export const CARD_ALTURA_PADRAO = 320
@@ -29,6 +30,7 @@ declare module '@tldraw/tlschema' {
       expandido: boolean
       infoExpandido: boolean
       infoAoLado: boolean
+      fonteEscala: number
     }
   }
 }
@@ -39,6 +41,7 @@ const versoes = createShapePropsMigrationIds('character-card', {
   AdicionaExpandido: 1,
   AdicionaInfoExpandido: 2,
   AdicionaInfoAoLado: 3,
+  AdicionaFonteEscala: 4,
 })
 
 export class CharacterCardShapeUtil extends BaseBoxShapeUtil<CharacterCardShapeType> {
@@ -50,6 +53,7 @@ export class CharacterCardShapeUtil extends BaseBoxShapeUtil<CharacterCardShapeT
     expandido: T.boolean,
     infoExpandido: T.boolean,
     infoAoLado: T.boolean,
+    fonteEscala: T.positiveNumber,
   }
 
   // canvases salvos antes do painel de descrição não têm `expandido`/`infoExpandido`
@@ -82,6 +86,15 @@ export class CharacterCardShapeUtil extends BaseBoxShapeUtil<CharacterCardShapeT
           delete props.infoAoLado
         },
       },
+      {
+        id: versoes.AdicionaFonteEscala,
+        up(props) {
+          props.fonteEscala = 1
+        },
+        down(props) {
+          delete props.fonteEscala
+        },
+      },
     ],
   })
 
@@ -93,6 +106,7 @@ export class CharacterCardShapeUtil extends BaseBoxShapeUtil<CharacterCardShapeT
       expandido: false,
       infoExpandido: false,
       infoAoLado: false,
+      fonteEscala: 1,
     }
   }
 
@@ -123,7 +137,7 @@ export class CharacterCardShapeUtil extends BaseBoxShapeUtil<CharacterCardShapeT
 }
 
 function CartaoPersonagem({ shape }: { shape: CharacterCardShapeType }) {
-  const { personagemId, expandido, infoExpandido, infoAoLado } = shape.props
+  const { personagemId, expandido, infoExpandido, infoAoLado, fonteEscala } = shape.props
   const p = useApp((s) => s.personagens[personagemId])
   const vaultPath = useApp((s) => s.vaultPath)
   const salvarParcial = useApp((s) => s.salvarPersonagemParcial)
@@ -231,7 +245,7 @@ function CartaoPersonagem({ shape }: { shape: CharacterCardShapeType }) {
   )
 
   return (
-    <HTMLContainer className="char-card" style={{ pointerEvents: 'all' }}>
+    <HTMLContainer className="char-card" style={{ pointerEvents: 'all', ['--card-fe' as any]: fonteEscala }}>
       <div className="char-card-principal">
         <div className="char-card-retrato">
           {retratoSrc && !erroImg ? (
@@ -248,6 +262,16 @@ function CartaoPersonagem({ shape }: { shape: CharacterCardShapeType }) {
         <div className="char-card-texto">
           <div className="char-card-nome">{p.nome}</div>
           {p.resumo ? <div className="char-card-resumo">{p.resumo}</div> : null}
+          <ControlesFonte
+            escala={fonteEscala}
+            onEscala={(v) =>
+              tldrawEditor.updateShape<CharacterCardShapeType>({
+                id: shape.id,
+                type: 'character-card',
+                props: { fonteEscala: v },
+              })
+            }
+          />
         </div>
       </div>
       {expandido && (
