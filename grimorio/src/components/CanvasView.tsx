@@ -11,6 +11,7 @@ import {
   type Editor,
   type TLAssetStore,
   type TLEditorSnapshot,
+  type TLShapeId,
   type TLStore,
 } from 'tldraw'
 import 'tldraw/tldraw.css'
@@ -18,6 +19,7 @@ import { convertFileSrc } from '@tauri-apps/api/core'
 import { save } from '@tauri-apps/plugin-dialog'
 import { useApp } from '../state/store'
 import type { VaultRepo } from '../lib/vaultRepo'
+import type { PastaCenarioNode } from '../lib/types'
 import { slugify } from '../lib/slug'
 import { caminhoAbsolutoImagem } from '../lib/caminhos'
 import { uint8ParaBase64 } from '../lib/bin'
@@ -31,6 +33,7 @@ import { CenarioCardShapeUtil, type CenarioCardShapeType } from './CenarioCardSh
 import { MIME_CENARIO } from './CenariosSoltos'
 import { armarImagem, imagemArmadaSrc } from '../lib/imagemArmada'
 import { copiarImagemParaClipboard } from '../lib/copiarImagem'
+import { paresParaLigar } from '../lib/ligacaoCenario'
 
 const AUTOSAVE_DEBOUNCE_MS = 1000
 
@@ -132,6 +135,54 @@ async function soltarImagemNoMapa(
     y: ponto.y - dims.h / 2,
     props: { assetId, w: dims.w, h: dims.h },
   })
+}
+
+/** True se já existe uma seta ligando os shapes `a` e `b` (qualquer direção). */
+function existeSetaEntre(editor: Editor, a: TLShapeId, b: TLShapeId): boolean {
+  for (const bind of editor.getBindingsToShape(a, 'arrow')) {
+    const bindsDoArrow = editor.getBindingsFromShape(bind.fromId, 'arrow')
+    if (bindsDoArrow.some((x) => x.toId === b)) return true
+  }
+  return false
+}
+
+/** Cria uma seta pai→filho com bindings (segue os cards ao mover). */
+function criarSetaHierarquia(editor: Editor, paiShape: TLShapeId, filhoShape: TLShapeId) {
+  const arrowId = createShapeId()
+  editor.createShape({ id: arrowId, type: 'arrow', x: 0, y: 0 })
+  editor.createBindings([
+    {
+      type: 'arrow',
+      fromId: arrowId,
+      toId: paiShape,
+      props: { terminal: 'start', normalizedAnchor: { x: 0.5, y: 0.5 }, isPrecise: false, isExact: false, snap: 'none' },
+    },
+    {
+      type: 'arrow',
+      fromId: arrowId,
+      toId: filhoShape,
+      props: { terminal: 'end', normalizedAnchor: { x: 0.5, y: 0.5 }, isPrecise: false, isExact: false, snap: 'none' },
+    },
+  ])
+}
+
+/** Liga o cenário recém-dropado aos cards de pai/filhos já presentes no canvas. */
+function ligarCenarioNoCanvas(editor: Editor, raiz: PastaCenarioNode, cenarioId: string) {
+  const cardsPorCenario = new Map<string, TLShapeId[]>()
+  for (const s of editor.getCurrentPageShapes()) {
+    if (s.type !== 'cenario-card') continue
+    const cid = (s as CenarioCardShapeType).props.cenarioId
+    const lista = cardsPorCenario.get(cid) ?? []
+    lista.push(s.id)
+    cardsPorCenario.set(cid, lista)
+  }
+  for (const { paiId, filhoId } of paresParaLigar(raiz, cenarioId)) {
+    for (const ps of cardsPorCenario.get(paiId) ?? []) {
+      for (const fs of cardsPorCenario.get(filhoId) ?? []) {
+        if (!existeSetaEntre(editor, ps, fs)) criarSetaHierarquia(editor, ps, fs)
+      }
+    }
+  }
 }
 
 export function CanvasView({ caminho, nome }: { caminho: string; nome: string }) {
@@ -288,6 +339,8 @@ export function CanvasView({ caminho, nome }: { caminho: string; nome: string })
               y: ponto.y - CARD_ALTURA_PADRAO / 2,
               props: { cenarioId },
             })
+            const raiz = useApp.getState().tree?.cenarios
+            if (raiz) ligarCenarioNoCanvas(editorAtual, raiz, cenarioId)
           }
           return
         }
