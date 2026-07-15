@@ -3,6 +3,8 @@ import {
   BaseBoxShapeUtil,
   HTMLContainer,
   T,
+  createShapePropsMigrationIds,
+  createShapePropsMigrationSequence,
   useEditor,
   type RecordProps,
   type TLShape,
@@ -10,9 +12,10 @@ import {
 import { convertFileSrc } from '@tauri-apps/api/core'
 import { useApp } from '../state/store'
 import { temConteudo } from '../lib/htmlTexto'
-import { PAINEL_DESCRICAO_LARGURA, ajustarLargura } from '../lib/cartaoCanvas'
+import { PAINEL_DESCRICAO_LARGURA, larguraDoCartao } from '../lib/cartaoCanvas'
 import { CARD_ALTURA_PADRAO, CARD_LARGURA_PADRAO } from './CharacterCardShape'
 import { EditorInline } from './EditorInline'
+import { ControlesFonte } from './ControlesFonte'
 
 declare module '@tldraw/tlschema' {
   interface TLGlobalShapePropsMap {
@@ -23,11 +26,21 @@ declare module '@tldraw/tlschema' {
       expandido: boolean
       infoExpandido: boolean
       infoAoLado: boolean
+      eventosExpandido: boolean
+      eventosAoLado: boolean
+      itensExpandido: boolean
+      itensAoLado: boolean
+      fonteEscala: number
     }
   }
 }
 
 export type CenarioCardShapeType = TLShape<'cenario-card'>
+
+const versoes = createShapePropsMigrationIds('cenario-card', {
+  AdicionaSecoesEventosItens: 1,
+  AdicionaFonteEscala: 2,
+})
 
 export class CenarioCardShapeUtil extends BaseBoxShapeUtil<CenarioCardShapeType> {
   static override type = 'cenario-card' as const
@@ -38,7 +51,42 @@ export class CenarioCardShapeUtil extends BaseBoxShapeUtil<CenarioCardShapeType>
     expandido: T.boolean,
     infoExpandido: T.boolean,
     infoAoLado: T.boolean,
+    eventosExpandido: T.boolean,
+    eventosAoLado: T.boolean,
+    itensExpandido: T.boolean,
+    itensAoLado: T.boolean,
+    fonteEscala: T.positiveNumber,
   }
+
+  // canvases salvos antes das seções Eventos/Itens e da escala de fonte não têm essas flags
+  static override migrations = createShapePropsMigrationSequence({
+    sequence: [
+      {
+        id: versoes.AdicionaSecoesEventosItens,
+        up(props) {
+          props.eventosExpandido = false
+          props.eventosAoLado = false
+          props.itensExpandido = false
+          props.itensAoLado = false
+        },
+        down(props) {
+          delete props.eventosExpandido
+          delete props.eventosAoLado
+          delete props.itensExpandido
+          delete props.itensAoLado
+        },
+      },
+      {
+        id: versoes.AdicionaFonteEscala,
+        up(props) {
+          props.fonteEscala = 1
+        },
+        down(props) {
+          delete props.fonteEscala
+        },
+      },
+    ],
+  })
 
   override getDefaultProps(): CenarioCardShapeType['props'] {
     return {
@@ -48,6 +96,11 @@ export class CenarioCardShapeUtil extends BaseBoxShapeUtil<CenarioCardShapeType>
       expandido: false,
       infoExpandido: false,
       infoAoLado: false,
+      eventosExpandido: false,
+      eventosAoLado: false,
+      itensExpandido: false,
+      itensAoLado: false,
+      fonteEscala: 1,
     }
   }
 
@@ -59,11 +112,10 @@ export class CenarioCardShapeUtil extends BaseBoxShapeUtil<CenarioCardShapeType>
   // com o card selecionado (handler no CanvasView) — mesmo gesto do personagem
   override onDoubleClick = (shape: CenarioCardShapeType) => {
     const expandir = !shape.props.expandido
-    const paineis = shape.props.infoAoLado ? 2 : 1
     return {
       id: shape.id,
       type: shape.type,
-      props: { expandido: expandir, w: ajustarLargura(shape.props.w, expandir ? paineis : -paineis) },
+      props: { expandido: expandir, w: larguraCenario(shape.props, expandir) },
     }
   }
 
@@ -76,34 +128,59 @@ export class CenarioCardShapeUtil extends BaseBoxShapeUtil<CenarioCardShapeType>
   }
 }
 
+// nº de seções (fora Descrição) em coluna própria
+function contarAoLado(props: CenarioCardShapeType['props']): number {
+  return [props.infoAoLado, props.eventosAoLado, props.itensAoLado].filter(Boolean).length
+}
+
+// largura do card conforme expandido + colunas ao lado (1 coluna base + N ao lado)
+function larguraCenario(props: CenarioCardShapeType['props'], expandido: boolean): number {
+  return expandido ? larguraDoCartao(CARD_LARGURA_PADRAO, 1 + contarAoLado(props)) : CARD_LARGURA_PADRAO
+}
+
+type ChaveSecao = 'informacao' | 'eventos' | 'itens'
+
+const SECOES: { chave: ChaveSecao; rotulo: string; semTexto: string }[] = [
+  { chave: 'informacao', rotulo: 'Informações', semTexto: 'Sem informações' },
+  { chave: 'eventos', rotulo: 'Eventos', semTexto: 'Sem eventos' },
+  { chave: 'itens', rotulo: 'Itens', semTexto: 'Sem itens' },
+]
+
+// nomes das flags planas por seção (props do tldraw são planas, sem mapa aninhado)
+const FLAGS: Record<ChaveSecao, { exp: keyof CenarioCardShapeType['props']; lado: keyof CenarioCardShapeType['props'] }> = {
+  informacao: { exp: 'infoExpandido', lado: 'infoAoLado' },
+  eventos: { exp: 'eventosExpandido', lado: 'eventosAoLado' },
+  itens: { exp: 'itensExpandido', lado: 'itensAoLado' },
+}
+
 function CartaoCenario({ shape }: { shape: CenarioCardShapeType }) {
-  const { cenarioId, expandido, infoExpandido, infoAoLado } = shape.props
+  const { cenarioId, expandido, fonteEscala } = shape.props
   const c = useApp((s) => s.cenarios[cenarioId])
   const vaultPath = useApp((s) => s.vaultPath)
   const salvarParcial = useApp((s) => s.salvarCenarioParcial)
-  const tldrawEditor = useEditor()
+  const editor = useEditor()
 
-  const [editando, setEditando] = useState<'descricao' | 'informacao' | null>(null)
+  const [editando, setEditando] = useState<'descricao' | ChaveSecao | null>(null)
 
   const retratoSrc = c?.retrato && vaultPath ? convertFileSrc(`${vaultPath}/${c.retrato}`) : null
-
   const [erroImg, setErroImg] = useState(false)
   useEffect(() => {
     setErroImg(false)
   }, [retratoSrc])
 
-  // rolar dentro dos painéis não pode virar zoom/pan do canvas (mesmo racional do personagem)
-  const painelRef = useRef<HTMLDivElement | null>(null)
-  const painelInfoRef = useRef<HTMLDivElement | null>(null)
+  // guard de scroll: rolar dentro de um painel não vira zoom/pan do canvas.
+  // Um listener no card cobre todos os painéis (o nº deles é dinâmico agora).
+  const cardRef = useRef<HTMLDivElement | null>(null)
   useEffect(() => {
-    const els = [painelRef.current, painelInfoRef.current].filter(
-      (el): el is HTMLDivElement => el !== null,
-    )
-    if (els.length === 0) return
-    const aoRolar = (e: WheelEvent) => e.stopPropagation()
-    els.forEach((el) => el.addEventListener('wheel', aoRolar, { passive: true }))
-    return () => els.forEach((el) => el.removeEventListener('wheel', aoRolar))
-  }, [expandido, infoAoLado])
+    const el = cardRef.current
+    if (!el) return
+    const aoRolar = (e: WheelEvent) => {
+      const alvo = e.target as HTMLElement | null
+      if (alvo?.closest('.char-card-painel')) e.stopPropagation()
+    }
+    el.addEventListener('wheel', aoRolar, { passive: true })
+    return () => el.removeEventListener('wheel', aoRolar)
+  }, [])
 
   if (!c) {
     return (
@@ -113,126 +190,152 @@ function CartaoCenario({ shape }: { shape: CenarioCardShapeType }) {
     )
   }
 
-  const secaoInformacoes = (
-    <div className="char-card-secao">
-      <div className="char-card-secao-header">
-        <button
-          className="char-card-info-toggle"
-          onPointerDown={(e) => e.stopPropagation()}
-          onClick={() =>
-            tldrawEditor.updateShape<CenarioCardShapeType>({
-              id: shape.id,
-              type: 'cenario-card',
-              props: { infoExpandido: !infoExpandido },
-            })
-          }
-        >
-          {infoExpandido ? '▾' : '▸'} Informações
-        </button>
-        <span className="char-card-secao-acoes">
+  // uma seção (Informações / Eventos / Itens): header com toggles + conteúdo/editor.
+  // Função de render (NÃO componente): devolve a árvore JSX direto, então digitar
+  // no editor inline não remonta/perde foco a cada render do card.
+  const renderSecao = (chave: ChaveSecao, rotulo: string, semTexto: string) => {
+    const expSec = shape.props[FLAGS[chave].exp] as boolean
+    const aoLado = shape.props[FLAGS[chave].lado] as boolean
+    const html = c![chave]
+    return (
+      <div className="char-card-secao" key={chave}>
+        <div className="char-card-secao-header">
           <button
-            className="char-card-btn-editar"
-            title={infoAoLado ? 'Mover para baixo da Descrição' : 'Mover para a direita da Descrição'}
+            className="char-card-info-toggle"
             onPointerDown={(e) => e.stopPropagation()}
             onClick={() =>
-              tldrawEditor.updateShape<CenarioCardShapeType>({
+              editor.updateShape<CenarioCardShapeType>({
                 id: shape.id,
                 type: 'cenario-card',
-                props: { infoAoLado: !infoAoLado, w: ajustarLargura(shape.props.w, infoAoLado ? -1 : 1) },
+                props: { [FLAGS[chave].exp]: !expSec },
               })
             }
           >
-            {infoAoLado ? '↓' : '→'}
+            {expSec ? '▾' : '▸'} {rotulo}
           </button>
-          <button
-            className="char-card-btn-editar"
-            title="Editar informações aqui mesmo"
-            onPointerDown={(e) => e.stopPropagation()}
-            onClick={() => {
-              if (!infoExpandido) {
-                tldrawEditor.updateShape<CenarioCardShapeType>({
+          <span className="char-card-secao-acoes">
+            <button
+              className="char-card-btn-editar"
+              title={aoLado ? 'Mover para baixo' : 'Mover para a direita'}
+              onPointerDown={(e) => e.stopPropagation()}
+              onClick={() => {
+                const props = { ...shape.props, [FLAGS[chave].lado]: !aoLado }
+                editor.updateShape<CenarioCardShapeType>({
                   id: shape.id,
                   type: 'cenario-card',
-                  props: { infoExpandido: true },
+                  props: { [FLAGS[chave].lado]: !aoLado, w: larguraCenario(props, expandido) },
                 })
-              }
-              setEditando('informacao')
-            }}
-          >
-            ✎
-          </button>
-        </span>
+              }}
+            >
+              {aoLado ? '↓' : '→'}
+            </button>
+            <button
+              className="char-card-btn-editar"
+              title="Editar aqui mesmo"
+              onPointerDown={(e) => e.stopPropagation()}
+              onClick={() => {
+                if (!expSec) {
+                  editor.updateShape<CenarioCardShapeType>({
+                    id: shape.id,
+                    type: 'cenario-card',
+                    props: { [FLAGS[chave].exp]: true },
+                  })
+                }
+                setEditando(chave)
+              }}
+            >
+              ✎
+            </button>
+          </span>
+        </div>
+        {expSec &&
+          (editando === chave ? (
+            <div className="char-card-editor" onPointerDown={(e) => e.stopPropagation()}>
+              <EditorInline
+                value={html}
+                onChange={(h) => salvarParcial(cenarioId, { [chave]: h })}
+                onBlur={() => setEditando(null)}
+              />
+            </div>
+          ) : temConteudo(html) ? (
+            <div className="char-card-descricao" dangerouslySetInnerHTML={{ __html: html }} />
+          ) : (
+            <div className="char-card-sem-descricao">{semTexto}</div>
+          ))}
       </div>
-      {infoExpandido &&
-        (editando === 'informacao' ? (
-          <div className="char-card-editor" onPointerDown={(e) => e.stopPropagation()}>
-            <EditorInline
-              value={c.informacao}
-              onChange={(html) => salvarParcial(cenarioId, { informacao: html })}
-              onBlur={() => setEditando(null)}
-            />
-          </div>
-        ) : temConteudo(c.informacao) ? (
-          <div className="char-card-descricao" dangerouslySetInnerHTML={{ __html: c.informacao }} />
-        ) : (
-          <div className="char-card-sem-descricao">Sem informações</div>
-        ))}
-    </div>
-  )
+    )
+  }
+
+  const empilhadas = SECOES.filter((s) => !(shape.props[FLAGS[s.chave].lado] as boolean))
+  const aoLado = SECOES.filter((s) => shape.props[FLAGS[s.chave].lado] as boolean)
 
   return (
-    <HTMLContainer className="char-card" style={{ pointerEvents: 'all' }}>
-      <div className="char-card-principal">
-        <div className="char-card-retrato">
-          {retratoSrc && !erroImg ? (
-            <img src={retratoSrc} alt={c.nome} draggable={false} onError={() => setErroImg(true)} />
-          ) : (
-            <span className="char-card-inicial">🗺</span>
-          )}
-        </div>
-        <div className="char-card-texto">
-          <div className="char-card-nome">{c.nome}</div>
-          {c.resumo ? <div className="char-card-resumo">{c.resumo}</div> : null}
-        </div>
-      </div>
-      {expandido && (
-        <>
-          <div ref={painelRef} className="char-card-painel" style={{ width: PAINEL_DESCRICAO_LARGURA }}>
-            <div className="char-card-secao">
-              <div className="char-card-secao-header">
-                <span className="char-card-secao-titulo">Descrição</span>
-                <button
-                  className="char-card-btn-editar"
-                  title="Editar descrição aqui mesmo"
-                  onPointerDown={(e) => e.stopPropagation()}
-                  onClick={() => setEditando(editando === 'descricao' ? null : 'descricao')}
-                >
-                  ✎
-                </button>
-              </div>
-              {editando === 'descricao' ? (
-                <div className="char-card-editor" onPointerDown={(e) => e.stopPropagation()}>
-                  <EditorInline
-                    value={c.descricao}
-                    onChange={(html) => salvarParcial(cenarioId, { descricao: html })}
-                    onBlur={() => setEditando(null)}
-                  />
-                </div>
-              ) : temConteudo(c.descricao) ? (
-                <div className="char-card-descricao" dangerouslySetInnerHTML={{ __html: c.descricao }} />
-              ) : (
-                <div className="char-card-sem-descricao">Sem descrição</div>
-              )}
-            </div>
-            {!infoAoLado && secaoInformacoes}
+    <HTMLContainer className="char-card" style={{ pointerEvents: 'all', ['--card-fe' as any]: fonteEscala }}>
+      {/* HTMLContainer não encaminha ref (não usa forwardRef); wrapper com
+          display:contents pega o listener de wheel sem alterar o layout flex. */}
+      <div ref={cardRef} style={{ display: 'contents' }}>
+        <div className="char-card-principal">
+          <div className="char-card-retrato">
+            {retratoSrc && !erroImg ? (
+              <img src={retratoSrc} alt={c.nome} draggable={false} onError={() => setErroImg(true)} />
+            ) : (
+              <span className="char-card-inicial">🗺</span>
+            )}
           </div>
-          {infoAoLado && (
-            <div ref={painelInfoRef} className="char-card-painel" style={{ width: PAINEL_DESCRICAO_LARGURA }}>
-              {secaoInformacoes}
+          <div className="char-card-texto">
+            <div className="char-card-nome">{c.nome}</div>
+            {c.resumo ? <div className="char-card-resumo">{c.resumo}</div> : null}
+            <ControlesFonte
+              escala={fonteEscala}
+              onEscala={(v) =>
+                editor.updateShape<CenarioCardShapeType>({
+                  id: shape.id,
+                  type: 'cenario-card',
+                  props: { fonteEscala: v },
+                })
+              }
+            />
+          </div>
+        </div>
+        {expandido && (
+          <>
+            <div className="char-card-painel" style={{ width: PAINEL_DESCRICAO_LARGURA }}>
+              <div className="char-card-secao">
+                <div className="char-card-secao-header">
+                  <span className="char-card-secao-titulo">Descrição</span>
+                  <button
+                    className="char-card-btn-editar"
+                    title="Editar descrição aqui mesmo"
+                    onPointerDown={(e) => e.stopPropagation()}
+                    onClick={() => setEditando(editando === 'descricao' ? null : 'descricao')}
+                  >
+                    ✎
+                  </button>
+                </div>
+                {editando === 'descricao' ? (
+                  <div className="char-card-editor" onPointerDown={(e) => e.stopPropagation()}>
+                    <EditorInline
+                      value={c.descricao}
+                      onChange={(h) => salvarParcial(cenarioId, { descricao: h })}
+                      onBlur={() => setEditando(null)}
+                    />
+                  </div>
+                ) : temConteudo(c.descricao) ? (
+                  <div className="char-card-descricao" dangerouslySetInnerHTML={{ __html: c.descricao }} />
+                ) : (
+                  <div className="char-card-sem-descricao">Sem descrição</div>
+                )}
+              </div>
+              {empilhadas.map((s) => renderSecao(s.chave, s.rotulo, s.semTexto))}
             </div>
-          )}
-        </>
-      )}
+            {aoLado.map((s) => (
+              <div key={s.chave} className="char-card-painel" style={{ width: PAINEL_DESCRICAO_LARGURA }}>
+                {renderSecao(s.chave, s.rotulo, s.semTexto)}
+              </div>
+            ))}
+          </>
+        )}
+      </div>
     </HTMLContainer>
   )
 }
