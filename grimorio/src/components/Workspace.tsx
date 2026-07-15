@@ -32,11 +32,13 @@ function salvarSplit(chave: string, e: EstadoSplit) {
 /**
  * cadernoDirAbs/Rel: pasta do caderno. mapa: props do CanvasView (undefined = escrita livre, sem mapa).
  * chaveSplit: identificador estável para lembrar o layout (ex.: caminho do mapa).
- * notasLado: 'esquerda' (sessão — notas abrem visíveis) ou 'direita' (canvas — notas começam
- *   recolhidas como uma aba na borda direita; o usuário puxa quando quer escrever).
+ * notasLado: 'esquerda' ou 'direita' — de que lado do mapa as notas ficam.
+ * notasComecaRecolhida: no primeiro acesso, notas começam recolhidas em aba na borda
+ *   (o usuário puxa quando quer escrever). Independe do lado.
  */
 export function Workspace({
-  cadernoDirAbs, cadernoDirRel, chaveSplit, mapa, titulo, notasLado = 'esquerda',
+  cadernoDirAbs, cadernoDirRel, chaveSplit, mapa, titulo,
+  notasLado = 'esquerda', notasComecaRecolhida = false,
 }: {
   cadernoDirAbs: string
   cadernoDirRel: string
@@ -44,10 +46,10 @@ export function Workspace({
   mapa?: { caminho: string; nome: string }
   titulo?: string
   notasLado?: 'esquerda' | 'direita'
+  notasComecaRecolhida?: boolean
 }) {
   const notasNaDireita = notasLado === 'direita'
-  // canvas (notas à direita) começa com as notas recolhidas em aba; sessão começa com os dois abertos
-  const recolhidoPadrao: Recolhido = notasNaDireita ? 'notas' : 'nenhum'
+  const recolhidoPadrao: Recolhido = notasComecaRecolhida ? 'notas' : 'nenhum'
 
   const slugAtivo = useApp((s) => s.paginaAtivaPorCaderno[cadernoDirRel] ?? null)
   // UMA instância de NotebookRepo compartilhada entre rail e editor: serializa
