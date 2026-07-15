@@ -7,6 +7,7 @@ import {
   defaultShapeUtils,
   getSnapshot,
   loadSnapshot,
+  toRichText,
   uniqueId,
   type Editor,
   type TLAssetStore,
@@ -19,7 +20,7 @@ import { convertFileSrc } from '@tauri-apps/api/core'
 import { save } from '@tauri-apps/plugin-dialog'
 import { useApp } from '../state/store'
 import type { VaultRepo } from '../lib/vaultRepo'
-import type { PastaCenarioNode } from '../lib/types'
+import type { PastaCenarioNode, Vinculo } from '../lib/types'
 import { slugify } from '../lib/slug'
 import { caminhoAbsolutoImagem } from '../lib/caminhos'
 import { uint8ParaBase64 } from '../lib/bin'
@@ -34,6 +35,7 @@ import { MIME_CENARIO } from './CenariosSoltos'
 import { relRetratoDoCard, type ShapeMinimo } from '../lib/copiaImagemCard'
 import { copiarImagemParaClipboard } from '../lib/copiarImagem'
 import { paresParaLigar } from '../lib/ligacaoCenario'
+import { vinculosDaEntidade } from '../lib/vinculos'
 
 const AUTOSAVE_DEBOUNCE_MS = 1000
 
@@ -149,23 +151,19 @@ function existeSetaEntre(editor: Editor, a: TLShapeId, b: TLShapeId): boolean {
   return false
 }
 
-/** Cria uma seta pai→filho com bindings (segue os cards ao mover). */
-function criarSetaHierarquia(editor: Editor, paiShape: TLShapeId, filhoShape: TLShapeId) {
+/** Cria uma seta de→para com bindings (segue os cards); rótulo opcional no meio. */
+function criarSeta(editor: Editor, deShape: TLShapeId, paraShape: TLShapeId, rotulo?: string) {
   const arrowId = createShapeId()
-  editor.createShape({ id: arrowId, type: 'arrow', x: 0, y: 0 })
+  editor.createShape({
+    id: arrowId,
+    type: 'arrow',
+    x: 0,
+    y: 0,
+    ...(rotulo ? { props: { richText: toRichText(rotulo) } } : {}),
+  })
   editor.createBindings([
-    {
-      type: 'arrow',
-      fromId: arrowId,
-      toId: paiShape,
-      props: { terminal: 'start', ...ANCORA_SETA },
-    },
-    {
-      type: 'arrow',
-      fromId: arrowId,
-      toId: filhoShape,
-      props: { terminal: 'end', ...ANCORA_SETA },
-    },
+    { type: 'arrow', fromId: arrowId, toId: deShape, props: { terminal: 'start', ...ANCORA_SETA } },
+    { type: 'arrow', fromId: arrowId, toId: paraShape, props: { terminal: 'end', ...ANCORA_SETA } },
   ])
 }
 
@@ -182,7 +180,45 @@ function ligarCenarioNoCanvas(editor: Editor, raiz: PastaCenarioNode, cenarioId:
   for (const { paiId, filhoId } of paresParaLigar(raiz, cenarioId)) {
     for (const ps of cardsPorCenario.get(paiId) ?? []) {
       for (const fs of cardsPorCenario.get(filhoId) ?? []) {
-        if (!existeSetaEntre(editor, ps, fs)) criarSetaHierarquia(editor, ps, fs)
+        if (!existeSetaEntre(editor, ps, fs)) criarSeta(editor, ps, fs)
+      }
+    }
+  }
+}
+
+/** Shapes de card por id de entidade (personagem e cenário). */
+function cardsPorEntidade(editor: Editor): Map<string, TLShapeId[]> {
+  const mapa = new Map<string, TLShapeId[]>()
+  for (const s of editor.getCurrentPageShapes()) {
+    let eid: string | null = null
+    if (s.type === 'cenario-card') eid = (s as CenarioCardShapeType).props.cenarioId
+    else if (s.type === 'character-card') eid = (s as CharacterCardShapeType).props.personagemId
+    if (!eid) continue
+    const lista = mapa.get(eid) ?? []
+    lista.push(s.id)
+    mapa.set(eid, lista)
+  }
+  return mapa
+}
+
+/**
+ * Liga a entidade recém-dropada aos cards presentes com relação direta.
+ * Uma seta por par (de → para do primeiro vínculo); múltiplos tipos viram "a · b".
+ */
+function ligarRelacoesNoCanvas(editor: Editor, vinculos: Vinculo[], entidadeId: string) {
+  const cards = cardsPorEntidade(editor)
+  if (!cards.has(entidadeId)) return
+  const porPar = new Map<string, { deId: string; paraId: string; tipos: string[] }>()
+  for (const v of vinculosDaEntidade(vinculos, entidadeId)) {
+    const outraId = v.deId === entidadeId ? v.paraId : v.deId
+    const g = porPar.get(outraId)
+    if (g) g.tipos.push(v.tipo)
+    else porPar.set(outraId, { deId: v.deId, paraId: v.paraId, tipos: [v.tipo] })
+  }
+  for (const { deId, paraId, tipos } of porPar.values()) {
+    for (const ds of cards.get(deId) ?? []) {
+      for (const ps of cards.get(paraId) ?? []) {
+        if (!existeSetaEntre(editor, ds, ps)) criarSeta(editor, ds, ps, tipos.join(' · '))
       }
     }
   }
@@ -346,6 +382,7 @@ export function CanvasView({ caminho, nome }: { caminho: string; nome: string })
               })
               const raiz = useApp.getState().tree?.cenarios
               if (raiz) ligarCenarioNoCanvas(editorAtual, raiz, cenarioId)
+              ligarRelacoesNoCanvas(editorAtual, useApp.getState().vinculos, cenarioId)
             })
           }
           return
@@ -356,12 +393,16 @@ export function CanvasView({ caminho, nome }: { caminho: string; nome: string })
         e.preventDefault()
         e.stopPropagation()
         const ponto = editor.screenToPage({ x: e.clientX, y: e.clientY })
-        editor.createShape({
-          id: createShapeId(),
-          type: 'character-card',
-          x: ponto.x - CARD_LARGURA_PADRAO / 2,
-          y: ponto.y - CARD_ALTURA_PADRAO / 2,
-          props: { personagemId: id },
+        // Batch: card + setas de relação viram UM passo de undo (Ctrl+Z desfaz o drop inteiro).
+        editor.run(() => {
+          editor.createShape({
+            id: createShapeId(),
+            type: 'character-card',
+            x: ponto.x - CARD_LARGURA_PADRAO / 2,
+            y: ponto.y - CARD_ALTURA_PADRAO / 2,
+            props: { personagemId: id },
+          })
+          ligarRelacoesNoCanvas(editor, useApp.getState().vinculos, id)
         })
       }}
     >
