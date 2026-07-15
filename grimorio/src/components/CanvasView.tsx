@@ -29,6 +29,8 @@ import {
 } from './CharacterCardShape'
 import { CenarioCardShapeUtil, type CenarioCardShapeType } from './CenarioCardShape'
 import { MIME_CENARIO } from './CenariosSoltos'
+import { armarImagem, imagemArmadaSrc } from '../lib/imagemArmada'
+import { copiarImagemParaClipboard } from '../lib/copiarImagem'
 
 const AUTOSAVE_DEBOUNCE_MS = 1000
 
@@ -317,6 +319,18 @@ export function CanvasView({ caminho, nome }: { caminho: string; nome: string })
           // (duplo clique no card só expande/recolhe a descrição). Fase capture:
           // dispara antes dos atalhos do tldraw (que usam espaço para o pan).
           const aoTeclar = (e: KeyboardEvent) => {
+            // Ctrl/Cmd+C com uma imagem de card armada: copia a imagem (não o shape)
+            if ((e.ctrlKey || e.metaKey) && (e.key === 'c' || e.key === 'C')) {
+              const src = imagemArmadaSrc()
+              if (src) {
+                e.preventDefault()
+                e.stopPropagation()
+                copiarImagemParaClipboard(src).catch((err) =>
+                  console.error('Falha ao copiar imagem:', err),
+                )
+              }
+              return
+            }
             if (e.key !== ' ' || e.repeat) return
             if (editor.getEditingShapeId()) return
             const alvo = e.target as HTMLElement | null
@@ -335,7 +349,16 @@ export function CanvasView({ caminho, nome }: { caminho: string; nome: string })
           }
           const container = editor.getContainer()
           container.addEventListener('keydown', aoTeclar, { capture: true })
-          return () => container.removeEventListener('keydown', aoTeclar, { capture: true })
+          // clicar fora da imagem armada desarma (some o anel de seleção)
+          const aoApontar = (e: PointerEvent) => {
+            const alvo = e.target as HTMLElement | null
+            if (!alvo?.closest('.char-card-retrato img')) armarImagem(null)
+          }
+          container.addEventListener('pointerdown', aoApontar, { capture: true })
+          return () => {
+            container.removeEventListener('keydown', aoTeclar, { capture: true })
+            container.removeEventListener('pointerdown', aoApontar, { capture: true })
+          }
         }}
       />
       {salvandoErro && (
