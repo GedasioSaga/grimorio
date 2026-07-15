@@ -27,14 +27,16 @@ import {
   CharacterCardShapeUtil,
   type CharacterCardShapeType,
 } from './CharacterCardShape'
+import { CenarioCardShapeUtil, type CenarioCardShapeType } from './CenarioCardShape'
+import { MIME_CENARIO } from './CenariosSoltos'
 
 const AUTOSAVE_DEBOUNCE_MS = 1000
 
 // Constantes em nível de módulo: arrays recriados a cada render remontam o editor.
 // `shapeUtilsCustom` vai na prop `shapeUtils` do <Tldraw> (que soma aos defaults);
 // o store precisa do schema completo (defaults + customizados).
-const shapeUtilsCustom = [CharacterCardShapeUtil]
-const shapeUtilsDoStore = [...defaultShapeUtils, CharacterCardShapeUtil]
+const shapeUtilsCustom = [CharacterCardShapeUtil, CenarioCardShapeUtil]
+const shapeUtilsDoStore = [...defaultShapeUtils, CharacterCardShapeUtil, CenarioCardShapeUtil]
 
 // Fallback quando o tamanho natural da imagem não pôde ser lido (arquivo ausente/corrompido).
 const IMG_FALLBACK_LARGURA = 320
@@ -251,6 +253,7 @@ export function CanvasView({ caminho, nome }: { caminho: string; nome: string })
       onDragOverCapture={(e) => {
         if (
           e.dataTransfer.types.includes('application/x-grimorio-personagem') ||
+          e.dataTransfer.types.includes(MIME_CENARIO) ||
           e.dataTransfer.types.includes('application/x-grimorio-imagem')
         ) {
           e.preventDefault()
@@ -267,6 +270,23 @@ export function CanvasView({ caminho, nome }: { caminho: string; nome: string })
             e.stopPropagation()
             soltarImagemNoMapa(editor, vaultPath, relImg, e.clientX, e.clientY)
               .catch((err) => console.error('Falha ao soltar imagem no mapa:', err))
+          }
+          return
+        }
+        const cenarioId = e.dataTransfer.getData(MIME_CENARIO)
+        if (cenarioId) {
+          const editorAtual = editorRef.current
+          if (editorAtual) {
+            e.preventDefault()
+            e.stopPropagation()
+            const ponto = editorAtual.screenToPage({ x: e.clientX, y: e.clientY })
+            editorAtual.createShape({
+              id: createShapeId(),
+              type: 'cenario-card',
+              x: ponto.x - CARD_LARGURA_PADRAO / 2,
+              y: ponto.y - CARD_ALTURA_PADRAO / 2,
+              props: { cenarioId },
+            })
           }
           return
         }
@@ -305,10 +325,16 @@ export function CanvasView({ caminho, nome }: { caminho: string; nome: string })
             const alvo = e.target as HTMLElement | null
             if (alvo?.closest('input, textarea, [contenteditable="true"]')) return
             const shape = editor.getOnlySelectedShape()
-            if (!shape || shape.type !== 'character-card') return
-            e.preventDefault()
-            e.stopPropagation()
-            useApp.getState().abrirPerfil((shape as CharacterCardShapeType).props.personagemId)
+            if (!shape) return
+            if (shape.type === 'character-card') {
+              e.preventDefault()
+              e.stopPropagation()
+              useApp.getState().abrirPerfil((shape as CharacterCardShapeType).props.personagemId)
+            } else if (shape.type === 'cenario-card') {
+              e.preventDefault()
+              e.stopPropagation()
+              useApp.getState().abrirCenario((shape as CenarioCardShapeType).props.cenarioId)
+            }
           }
           const container = editor.getContainer()
           container.addEventListener('keydown', aoTeclar, { capture: true })
