@@ -335,15 +335,18 @@ export function CanvasView({ caminho, nome }: { caminho: string; nome: string })
             e.preventDefault()
             e.stopPropagation()
             const ponto = editorAtual.screenToPage({ x: e.clientX, y: e.clientY })
-            editorAtual.createShape({
-              id: createShapeId(),
-              type: 'cenario-card',
-              x: ponto.x - CARD_LARGURA_PADRAO / 2,
-              y: ponto.y - CARD_ALTURA_PADRAO / 2,
-              props: { cenarioId },
+            // Batch: card + setas de hierarquia viram UM passo de undo (Ctrl+Z desfaz o drop inteiro).
+            editorAtual.run(() => {
+              editorAtual.createShape({
+                id: createShapeId(),
+                type: 'cenario-card',
+                x: ponto.x - CARD_LARGURA_PADRAO / 2,
+                y: ponto.y - CARD_ALTURA_PADRAO / 2,
+                props: { cenarioId },
+              })
+              const raiz = useApp.getState().tree?.cenarios
+              if (raiz) ligarCenarioNoCanvas(editorAtual, raiz, cenarioId)
             })
-            const raiz = useApp.getState().tree?.cenarios
-            if (raiz) ligarCenarioNoCanvas(editorAtual, raiz, cenarioId)
           }
           return
         }
@@ -426,11 +429,13 @@ export function CanvasView({ caminho, nome }: { caminho: string; nome: string })
           }
         }}
       />
-      {salvandoErro && (
-        <div className="canvas-salvar-erro">Falha ao salvar: {salvandoErro}</div>
-      )}
-      {copiaOk && <div className="canvas-copia-ok">Imagem copiada</div>}
-      {copiaErro && <div className="canvas-salvar-erro">Falha ao copiar: {copiaErro}</div>}
+      <div className="canvas-banners">
+        {salvandoErro && (
+          <div className="canvas-salvar-erro">Falha ao salvar: {salvandoErro}</div>
+        )}
+        {copiaOk && <div className="canvas-copia-ok">Imagem copiada</div>}
+        {copiaErro && <div className="canvas-salvar-erro">Falha ao copiar: {copiaErro}</div>}
+      </div>
     </div>
   )
 }
