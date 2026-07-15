@@ -40,22 +40,22 @@ export function contarDescendentes(n: CenarioNode): number {
 
 /** Id do pai de um cenário na árvore, ou null se for raiz / não existir. */
 export function paiDoCenario(raiz: PastaCenarioNode, id: string): string | null {
-  let resultado: string | null = null
-  const visitar = (nos: CenarioNode[]): boolean => {
+  const emFilhos = (nos: CenarioNode[]): string | null => {
     for (const n of nos) {
-      if (n.filhos.some((f) => f.id === id)) {
-        resultado = n.id
-        return true
-      }
-      if (visitar(n.filhos)) return true
+      if (n.filhos.some((f) => f.id === id)) return n.id
+      const achado = emFilhos(n.filhos)
+      if (achado) return achado
     }
-    return false
+    return null
   }
-  const nasPastas = (p: PastaCenarioNode): boolean => {
-    if (visitar(p.cenarios)) return true
-    for (const sub of p.subpastas) if (nasPastas(sub)) return true
-    return false
+  const nasPastas = (p: PastaCenarioNode): string | null => {
+    const achado = emFilhos(p.cenarios)
+    if (achado) return achado
+    for (const sub of p.subpastas) {
+      const achadoSub = nasPastas(sub)
+      if (achadoSub) return achadoSub
+    }
+    return null
   }
-  nasPastas(raiz)
-  return resultado
+  return nasPastas(raiz)
 }

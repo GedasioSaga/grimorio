@@ -137,6 +137,9 @@ async function soltarImagemNoMapa(
   })
 }
 
+// Âncora comum aos dois terminais da seta de hierarquia (centro do card, sem snap).
+const ANCORA_SETA = { normalizedAnchor: { x: 0.5, y: 0.5 }, isPrecise: false, isExact: false, snap: 'none' } as const
+
 /** True se já existe uma seta ligando os shapes `a` e `b` (qualquer direção). */
 function existeSetaEntre(editor: Editor, a: TLShapeId, b: TLShapeId): boolean {
   for (const bind of editor.getBindingsToShape(a, 'arrow')) {
@@ -155,13 +158,13 @@ function criarSetaHierarquia(editor: Editor, paiShape: TLShapeId, filhoShape: TL
       type: 'arrow',
       fromId: arrowId,
       toId: paiShape,
-      props: { terminal: 'start', normalizedAnchor: { x: 0.5, y: 0.5 }, isPrecise: false, isExact: false, snap: 'none' },
+      props: { terminal: 'start', ...ANCORA_SETA },
     },
     {
       type: 'arrow',
       fromId: arrowId,
       toId: filhoShape,
-      props: { terminal: 'end', normalizedAnchor: { x: 0.5, y: 0.5 }, isPrecise: false, isExact: false, snap: 'none' },
+      props: { terminal: 'end', ...ANCORA_SETA },
     },
   ])
 }

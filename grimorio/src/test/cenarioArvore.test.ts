@@ -51,4 +51,7 @@ describe('paiDoCenario', () => {
   it('retorna null para id inexistente', () => {
     expect(paiDoCenario(arvorePais, 'zzz')).toBeNull()
   })
+  it('acha o pai de um cenário dentro de subpasta', () => {
+    expect(paiDoCenario(raiz, 'bairro')).toBe('cidade')
+  })
 })
