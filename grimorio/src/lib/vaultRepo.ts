@@ -1,6 +1,7 @@
 import type { FsBridge } from './fsBridge'
-import type { Campanha, CampanhaNode, CanvasDoc, Cenario, CenarioNode, CenarioRef, ItemRef, PastaCenarioNode, PastaNode, Personagem, VaultTree } from './types'
+import type { Campanha, CampanhaNode, CanvasDoc, Cenario, CenarioNode, CenarioRef, ItemRef, PastaCenarioNode, PastaNode, Personagem, VaultTree, Vinculo } from './types'
 import { slugify, slugUnico } from './slug'
+import { normalizarVinculos } from './vinculos'
 
 function agora(): string {
   return new Date().toISOString()
@@ -379,6 +380,23 @@ export class VaultRepo {
     return { id, slug, nome, caminho: dir, erro, filhos }
   }
 
+  // ---------- vínculos ----------
+
+  /** Lê vinculos.json da raiz do cofre; ausente/corrompido → lista vazia. */
+  async lerVinculos(): Promise<Vinculo[]> {
+    try {
+      return normalizarVinculos(JSON.parse(await this.fs.readText(this.abs('vinculos.json'))))
+    } catch {
+      return []
+    }
+  }
+
+  async salvarVinculos(lista: Vinculo[]): Promise<void> {
+    return this.naFila('vinculos.json', async () => {
+      await this.fs.writeTextAtomic(this.abs('vinculos.json'), JSON.stringify({ vinculos: lista }, null, 2))
+    })
+  }
+
   // ---------- árvore ----------
 
   async montarArvore(): Promise<VaultTree> {
@@ -386,13 +404,17 @@ export class VaultRepo {
     for (const d of await this.listarDirs('campanhas')) {
       const base = `campanhas/${d.name}`
       let nome = d.name
+      let id = ''
       let erro = false
       try {
-        nome = (JSON.parse(await this.fs.readText(this.abs(`${base}/campanha.json`))) as Campanha).nome
+        const meta = JSON.parse(await this.fs.readText(this.abs(`${base}/campanha.json`))) as Campanha
+        nome = meta.nome
+        id = meta.id ?? ''
       } catch {
         erro = true
       }
       campanhas.push({
+        id,
         slug: d.name,
         nome,
         erro: erro || undefined,
