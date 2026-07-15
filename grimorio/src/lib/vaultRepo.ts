@@ -2,6 +2,7 @@ import type { FsBridge } from './fsBridge'
 import type { Campanha, CampanhaNode, CanvasDoc, Cenario, CenarioNode, CenarioRef, ItemRef, PastaCenarioNode, PastaNode, Personagem, VaultTree, Vinculo } from './types'
 import { slugify, slugUnico } from './slug'
 import { normalizarVinculos } from './vinculos'
+import { normalizarChat, type MensagemChat } from './chatIA'
 
 function agora(): string {
   return new Date().toISOString()
@@ -394,6 +395,25 @@ export class VaultRepo {
   async salvarVinculos(lista: Vinculo[]): Promise<void> {
     return this.naFila('vinculos.json', async () => {
       await this.fs.writeTextAtomic(this.abs('vinculos.json'), JSON.stringify({ vinculos: lista }, null, 2))
+    })
+  }
+
+  // ---------- chat IA ----------
+
+  /** Lê o chat de IA de uma sessão (dirNotas/chat-ia.json); ausente/corrompido → []. */
+  async lerChatIA(dirNotas: string): Promise<MensagemChat[]> {
+    try {
+      return normalizarChat(JSON.parse(await this.fs.readText(this.abs(`${dirNotas}/chat-ia.json`))))
+    } catch {
+      return []
+    }
+  }
+
+  async salvarChatIA(dirNotas: string, mensagens: MensagemChat[]): Promise<void> {
+    const caminho = `${dirNotas}/chat-ia.json`
+    return this.naFila(caminho, async () => {
+      await this.fs.mkdirAll(this.abs(dirNotas))
+      await this.fs.writeTextAtomic(this.abs(caminho), JSON.stringify({ mensagens }, null, 2))
     })
   }
 

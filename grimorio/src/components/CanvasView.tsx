@@ -36,6 +36,7 @@ import { relRetratoDoCard, type ShapeMinimo } from '../lib/copiaImagemCard'
 import { copiarImagemParaClipboard } from '../lib/copiarImagem'
 import { paresParaLigar } from '../lib/ligacaoCenario'
 import { agruparPorPar } from '../lib/vinculos'
+import { registrarEditor, desregistrarEditor } from '../lib/canvasAtivo'
 
 const AUTOSAVE_DEBOUNCE_MS = 1000
 
@@ -413,6 +414,7 @@ export function CanvasView({ caminho, nome }: { caminho: string; nome: string })
         store={store}
         shapeUtils={shapeUtilsCustom}
         onMount={(editor) => {
+          registrarEditor(editor)
           editorRef.current = editor
           editor.user.updateUserPreferences({ colorScheme: 'dark' })
           // espaço com um card de personagem selecionado abre o cartão completo
@@ -465,6 +467,7 @@ export function CanvasView({ caminho, nome }: { caminho: string; nome: string })
           const container = editor.getContainer()
           container.addEventListener('keydown', aoTeclar, { capture: true })
           return () => {
+            desregistrarEditor(editor)
             container.removeEventListener('keydown', aoTeclar, { capture: true })
           }
         }}
