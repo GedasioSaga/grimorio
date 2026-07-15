@@ -37,3 +37,25 @@ export function coletarCenarioRefs(raiz: PastaCenarioNode): CenarioNode[] {
 export function contarDescendentes(n: CenarioNode): number {
   return n.filhos.reduce((acc, f) => acc + 1 + contarDescendentes(f), 0)
 }
+
+/** Id do pai de um cenário na árvore, ou null se for raiz / não existir. */
+export function paiDoCenario(raiz: PastaCenarioNode, id: string): string | null {
+  let resultado: string | null = null
+  const visitar = (nos: CenarioNode[]): boolean => {
+    for (const n of nos) {
+      if (n.filhos.some((f) => f.id === id)) {
+        resultado = n.id
+        return true
+      }
+      if (visitar(n.filhos)) return true
+    }
+    return false
+  }
+  const nasPastas = (p: PastaCenarioNode): boolean => {
+    if (visitar(p.cenarios)) return true
+    for (const sub of p.subpastas) if (nasPastas(sub)) return true
+    return false
+  }
+  nasPastas(raiz)
+  return resultado
+}
