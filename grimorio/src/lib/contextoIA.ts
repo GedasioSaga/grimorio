@@ -1,0 +1,67 @@
+import type { CampanhaNode, CenarioNode, PastaCenarioNode, VaultTree, Vinculo } from './types'
+
+export interface EntidadeCtx {
+  nome: string
+  resumo: string
+}
+
+export interface CenarioCtx extends EntidadeCtx {
+  nivel: number
+}
+
+/** Campanha dona de uma sessão (slug em campanhas/<slug>/sessoes/...), ou null. */
+export function acharCampanhaDaSessao(tree: VaultTree, caminhoSessao: string): CampanhaNode | null {
+  const m = caminhoSessao.match(/^campanhas\/([^/]+)\//)
+  if (!m) return null
+  return tree.campanhas.find((c) => c.slug === m[1]) ?? null
+}
+
+/** Frases legíveis dos vínculos ("Alice conhece Bob (nota)"); participação e órfãos fora. */
+export function frasesDeVinculos(vinculos: Vinculo[], nomeDe: (id: string) => string | null): string[] {
+  const out: string[] = []
+  for (const v of vinculos) {
+    if (v.paraTipo === 'campanha') continue
+    const de = nomeDe(v.deId)
+    const para = nomeDe(v.paraId)
+    if (!de || !para) continue
+    out.push(v.notas ? `${de} ${v.tipo} ${para} (${v.notas})` : `${de} ${v.tipo} ${para}`)
+  }
+  return out
+}
+
+/** Achata a árvore (já filtrada) em linhas com nível de indentação. */
+export function achatarCenarios(raiz: PastaCenarioNode, resumoDe: (id: string) => string): CenarioCtx[] {
+  const out: CenarioCtx[] = []
+  const dosNos = (nos: CenarioNode[], nivel: number) => {
+    for (const n of nos) {
+      out.push({ nome: n.nome, resumo: resumoDe(n.id), nivel })
+      dosNos(n.filhos, nivel + 1)
+    }
+  }
+  dosNos(raiz.cenarios, 0)
+  for (const p of raiz.subpastas) out.push(...achatarCenarios(p, resumoDe))
+  return out
+}
+
+/** Contexto compacto enviado à IA; seções vazias são omitidas. */
+export function montarContextoCampanha(d: {
+  nomeCampanha: string
+  personagens: EntidadeCtx[]
+  cenarios: CenarioCtx[]
+  vinculos: string[]
+  notas: string
+}): string {
+  const secoes: string[] = []
+  if (d.nomeCampanha) secoes.push(`## Campanha\n${d.nomeCampanha}`)
+  if (d.personagens.length > 0) {
+    secoes.push(`## Personagens\n${d.personagens
+      .map((p) => (p.resumo ? `- ${p.nome} — ${p.resumo}` : `- ${p.nome}`)).join('\n')}`)
+  }
+  if (d.cenarios.length > 0) {
+    secoes.push(`## Cenários\n${d.cenarios
+      .map((c) => `${'  '.repeat(c.nivel)}- ${c.nome}${c.resumo ? ` — ${c.resumo}` : ''}`).join('\n')}`)
+  }
+  if (d.vinculos.length > 0) secoes.push(`## Vínculos\n${d.vinculos.map((v) => `- ${v}`).join('\n')}`)
+  if (d.notas) secoes.push(`## Notas da sessão\n${d.notas}`)
+  return secoes.join('\n\n')
+}

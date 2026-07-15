@@ -4,3 +4,18 @@ export function temConteudo(html: string | null | undefined): boolean {
   const texto = html.replace(/<[^>]*>/g, '').replace(/&nbsp;/g, ' ').trim()
   return texto.length > 0
 }
+
+/** HTML do TipTap → texto plano (parágrafos e <br> viram quebras de linha). */
+export function htmlParaTexto(html: string | null | undefined): string {
+  if (!html) return ''
+  return html
+    .replace(/<\/(p|div|li|h[1-6])>/gi, '\n')
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<[^>]*>/g, '')
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim()
+}
