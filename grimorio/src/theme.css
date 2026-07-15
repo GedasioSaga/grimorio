@@ -169,6 +169,7 @@ button:hover { border-color: var(--dourado); color: var(--dourado-claro); }
   padding: 2px 6px; cursor: pointer;
 }
 .card-fonte-ctrl button:hover { color: var(--dourado-claro); border-color: var(--dourado); }
+.card-fonte-ctrl button:disabled { opacity: 0.4; cursor: default; }
 
 /* ---- modal de perfil ---- */
 .modal-overlay {
