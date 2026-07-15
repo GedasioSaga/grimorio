@@ -7,7 +7,6 @@ import {
   vinculosDaEntidade,
   campanhasDe,
   idsDaCampanha,
-  vinculosEntre,
   participacaoDe,
   normalizarVinculos,
 } from '../lib/vinculos'
@@ -75,13 +74,6 @@ describe('participação em campanha', () => {
   })
 })
 
-describe('vinculosEntre', () => {
-  const lista = [v({}), v({ id: 'v2', deId: 'b', paraId: 'a', tipo: 'teme' }), v({ id: 'v3', paraId: 'c' })]
-  it('acha relações do par nas duas direções', () => {
-    expect(vinculosEntre(lista, 'a', 'b').map((x) => x.id)).toEqual(['v1', 'v2'])
-  })
-})
-
 describe('agruparPorPar', () => {
   it('par único com 1 vínculo', () => {
     expect(agruparPorPar([v({})], 'a')).toEqual([{ deId: 'a', paraId: 'b', tipos: ['conhece'] }])
@@ -93,6 +85,10 @@ describe('agruparPorPar', () => {
   it('direções opostas viram 1 grupo com a direção do primeiro vínculo', () => {
     const lista = [v({}), v({ id: 'v2', deId: 'b', paraId: 'a', tipo: 'teme' })]
     expect(agruparPorPar(lista, 'a')).toEqual([{ deId: 'a', paraId: 'b', tipos: ['conhece', 'teme'] }])
+  })
+  it('mesmo tipo cadastrado pelos dois lados entra uma vez só no rótulo', () => {
+    const lista = [v({}), v({ id: 'v2', deId: 'b', paraId: 'a', tipo: 'conhece' })]
+    expect(agruparPorPar(lista, 'a')).toEqual([{ deId: 'a', paraId: 'b', tipos: ['conhece'] }])
   })
 })
 

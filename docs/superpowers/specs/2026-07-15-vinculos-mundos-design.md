@@ -74,7 +74,7 @@ removerVinculo(lista, id): Vinculo[]
 vinculosDaEntidade(lista, id): Vinculo[]       // deId === id || paraId === id (exclui participação)
 campanhasDe(lista, entidadeId): string[]       // ids de campanha (tipo participa)
 idsDaCampanha(lista, campanhaId): Set<string>  // entidades que participam
-vinculosEntre(lista, aId, bId): Vinculo[]      // relações diretas entre o par (p/ setas)
+agruparPorPar(lista, entidadeId): ParDeRelacoes[] // relações agrupadas por par, tipos deduplicados (p/ setas)
 alternarParticipacao(lista, entidade: {tipo, id}, campanhaId): Vinculo[]
 ```
 
@@ -126,8 +126,9 @@ Componente compartilhado `AbaVinculos({ entidadeTipo, entidadeId })`:
 
 - Ao dropar card de **personagem** ou **cenário**: além das setas de hierarquia
   (já existentes para cenário), cria setas para cards presentes com relação
-  direta (`vinculosEntre`). Rótulo da seta = `tipo` (múltiplas relações no mesmo
-  par: uma seta só, tipos unidos por " · ").
+  direta (`agruparPorPar`). Rótulo da seta = `tipo` (múltiplas relações no mesmo
+  par: uma seta só, tipos unidos por " · ", deduplicados). Setas rotuladas têm
+  prioridade sobre as de hierarquia quando disputam o mesmo par.
 - Direção: `de → para`. Guard de duplicata: `existeSetaEntre` (já existe — vale
   também entre hierarquia e relação: um par tem no máx. 1 seta automática).
 - Generalizar `criarSetaHierarquia` → `criarSeta(editor, deShape, paraShape, rotulo?)`.

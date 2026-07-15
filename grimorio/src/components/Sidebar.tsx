@@ -55,7 +55,11 @@ export function Sidebar({ recolhida, onToggle }: { recolhida: boolean; onToggle:
 
   if (!tree) return <aside className="sidebar">Carregando…</aside>
 
-  const idsFiltro = campanhaFiltro ? idsDaCampanha(vinculos, campanhaFiltro) : null
+  // filtro validado contra a árvore ATUAL: campanha apagada nesta sessão não deixa
+  // filtro fantasma (autocura em qualquer refresh da árvore, não só no boot)
+  const campanhaValida =
+    campanhaFiltro && tree.campanhas.some((c) => c.id === campanhaFiltro) ? campanhaFiltro : null
+  const idsFiltro = campanhaValida ? idsDaCampanha(vinculos, campanhaValida) : null
   const raizPersonagens = idsFiltro
     ? filtrarPastaPersonagens(
         tree.personagensSoltos,
@@ -74,7 +78,7 @@ export function Sidebar({ recolhida, onToggle }: { recolhida: boolean; onToggle:
       <div className="sidebar-filtro">
         <select
           title="Filtrar personagens e cenários por campanha"
-          value={campanhaFiltro ?? ''}
+          value={campanhaValida ?? ''}
           onChange={(e) => setCampanhaFiltro(e.target.value || null)}
         >
           <option value="">Campanha: Todas</option>

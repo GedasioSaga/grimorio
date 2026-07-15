@@ -35,15 +35,19 @@ export interface ParDeRelacoes {
  * Agrupa as relações da entidade por "outra ponta". A direção (deId→paraId) é a do
  * PRIMEIRO vínculo do par; tipos adicionais entram só no rótulo — se houver vínculos
  * em direções opostas no mesmo par, o rótulo combinado não indica qual tipo é de qual
- * direção (limitação aceita; caso raro).
+ * direção (limitação aceita; caso raro). Tipos repetidos (mesma relação cadastrada
+ * pelos dois lados) entram uma vez só no rótulo.
  */
 export function agruparPorPar(lista: Vinculo[], entidadeId: string): ParDeRelacoes[] {
   const porPar = new Map<string, ParDeRelacoes>()
   for (const v of vinculosDaEntidade(lista, entidadeId)) {
     const outraId = v.deId === entidadeId ? v.paraId : v.deId
     const g = porPar.get(outraId)
-    if (g) g.tipos.push(v.tipo)
-    else porPar.set(outraId, { deId: v.deId, paraId: v.paraId, tipos: [v.tipo] })
+    if (g) {
+      if (!g.tipos.includes(v.tipo)) g.tipos.push(v.tipo)
+    } else {
+      porPar.set(outraId, { deId: v.deId, paraId: v.paraId, tipos: [v.tipo] })
+    }
   }
   return [...porPar.values()]
 }
@@ -62,14 +66,6 @@ export function idsDaCampanha(lista: Vinculo[], campanhaId: string): Set<string>
     if (x.paraTipo === 'campanha' && x.tipo === TIPO_PARTICIPA && x.paraId === campanhaId) ids.add(x.deId)
   }
   return ids
-}
-
-/** Relações diretas entre o par (a, b), nas duas direções. */
-export function vinculosEntre(lista: Vinculo[], aId: string, bId: string): Vinculo[] {
-  return lista.filter(
-    (x) => x.paraTipo !== 'campanha' &&
-      ((x.deId === aId && x.paraId === bId) || (x.deId === bId && x.paraId === aId)),
-  )
 }
 
 /** Vínculo de participação exato entidade↔campanha, se existir. */
