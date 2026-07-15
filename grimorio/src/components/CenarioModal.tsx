@@ -7,11 +7,12 @@ import { encontrarCenarioNode } from '../lib/cenarioArvore'
 import { desvincularPersonagem, personagensVivos, vincularPersonagem } from '../lib/cenarioVinculo'
 import { EditorTexto } from './EditorTexto'
 import { GaleriaPersonagem } from './GaleriaPersonagem'
+import { AbaVinculos } from './AbaVinculos'
 
 const AUTOSAVE_DEBOUNCE_MS = 800
 
-type Aba = 'descricao' | 'conteudo' | 'informacao' | 'historia' | 'eventos' | 'itens' | 'imagens' | 'anotacoes'
-type AbaTexto = Exclude<Aba, 'imagens' | 'conteudo'>
+type Aba = 'descricao' | 'conteudo' | 'informacao' | 'historia' | 'eventos' | 'itens' | 'imagens' | 'anotacoes' | 'vinculos'
+type AbaTexto = Exclude<Aba, 'imagens' | 'conteudo' | 'vinculos'>
 
 const ABAS: { id: Aba; rotulo: string }[] = [
   { id: 'descricao', rotulo: 'Descrição' },
@@ -22,6 +23,7 @@ const ABAS: { id: Aba; rotulo: string }[] = [
   { id: 'itens', rotulo: 'Itens' },
   { id: 'imagens', rotulo: 'Imagens' },
   { id: 'anotacoes', rotulo: 'Anotações' },
+  { id: 'vinculos', rotulo: 'Vínculos' },
 ]
 
 export function CenarioModal({ cenarioId }: { cenarioId: string }) {
@@ -149,6 +151,8 @@ export function CenarioModal({ cenarioId }: { cenarioId: string }) {
           />
         ) : aba === 'conteudo' ? (
           <AbaConteudo cenarioId={cenarioId} agendarSalvar={agendarSalvar} />
+        ) : aba === 'vinculos' ? (
+          <AbaVinculos entidadeTipo="cenario" entidadeId={cenarioId} />
         ) : (
           <EditorTexto
             key={aba}

@@ -5,11 +5,12 @@ import { useApp } from '../state/store'
 import type { Personagem } from '../lib/types'
 import { EditorTexto } from './EditorTexto'
 import { GaleriaPersonagem } from './GaleriaPersonagem'
+import { AbaVinculos } from './AbaVinculos'
 
 const AUTOSAVE_DEBOUNCE_MS = 800
 
-type Aba = 'descricao' | 'informacao' | 'historia' | 'imagens' | 'extras' | 'anotacoes'
-type AbaTexto = Exclude<Aba, 'imagens'>
+type Aba = 'descricao' | 'informacao' | 'historia' | 'imagens' | 'extras' | 'anotacoes' | 'vinculos'
+type AbaTexto = Exclude<Aba, 'imagens' | 'vinculos'>
 
 const ABAS: { id: Aba; rotulo: string }[] = [
   { id: 'descricao', rotulo: 'Descrição' },
@@ -18,6 +19,7 @@ const ABAS: { id: Aba; rotulo: string }[] = [
   { id: 'imagens', rotulo: 'Imagens' },
   { id: 'extras', rotulo: 'Extras' },
   { id: 'anotacoes', rotulo: 'Anotações' },
+  { id: 'vinculos', rotulo: 'Vínculos' },
 ]
 
 export function PerfilModal({ personagemId }: { personagemId: string }) {
@@ -147,6 +149,8 @@ export function PerfilModal({ personagemId }: { personagemId: string }) {
             imagens={p.imagens}
             onImagensChange={(imagens) => agendarSalvar({ imagens })}
           />
+        ) : aba === 'vinculos' ? (
+          <AbaVinculos entidadeTipo="personagem" entidadeId={personagemId} />
         ) : (
           <EditorTexto
             key={aba}

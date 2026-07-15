@@ -242,6 +242,39 @@ button:hover { border-color: var(--dourado); color: var(--dourado-claro); }
   border: 1px solid var(--borda); border-radius: 4px; outline: none;
 }
 
+/* ---- aba Vínculos ---- */
+.vinculos-aba { flex: 1; overflow-y: auto; padding: 16px 20px; display: flex; flex-direction: column; gap: 8px; }
+.vinculos-secao-titulo { font-family: var(--serif); font-size: 14px; color: var(--dourado-claro); margin-top: 8px; }
+.vinculos-vazio { font-size: 13px; color: var(--texto-fraco); font-style: italic; }
+.vinculo-linha {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  background: var(--fundo); border: 1px solid var(--borda); border-radius: 6px; padding: 6px 10px;
+}
+.vinculo-texto { font-size: 13px; color: var(--texto); }
+.vinculo-texto em { color: var(--dourado-claro); font-style: normal; }
+.vinculo-nota { color: var(--texto-fraco); }
+.vinculo-form { display: flex; flex-direction: column; gap: 6px; margin-top: 4px; }
+.vinculo-form input, .vinculo-form select {
+  background: var(--fundo); border: 1px solid var(--borda); border-radius: 6px;
+  color: var(--texto); padding: 6px 10px; font-size: 13px;
+}
+.vinculo-form-linha { display: flex; gap: 6px; }
+.vinculo-form-linha input { flex: 1; min-width: 0; }
+.vinculo-form-linha button {
+  background: var(--fundo-elevado); border: 1px solid var(--dourado); color: var(--dourado-claro);
+  border-radius: 6px; padding: 6px 12px; font-size: 13px; cursor: pointer;
+}
+.vinculo-form-linha button:disabled { opacity: 0.4; cursor: default; }
+.vinculo-busca-lista { border: 1px solid var(--borda); border-radius: 6px; overflow: hidden; }
+.vinculo-busca-item { padding: 6px 10px; font-size: 13px; cursor: pointer; }
+.vinculo-busca-item:hover { background: var(--fundo-elevado); color: var(--dourado-claro); }
+.vinculo-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.campanha-chip {
+  background: var(--fundo); border: 1px solid var(--borda); color: var(--texto-fraco);
+  border-radius: 12px; padding: 4px 12px; font-size: 12px; cursor: pointer;
+}
+.campanha-chip.ativo { border-color: var(--dourado); color: var(--dourado-claro); background: var(--fundo-elevado); }
+
 /* scrollbar */
 ::-webkit-scrollbar { width: 10px; }
 ::-webkit-scrollbar-track { background: var(--fundo); }
