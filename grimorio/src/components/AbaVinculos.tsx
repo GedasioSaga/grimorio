@@ -32,6 +32,7 @@ export function AbaVinculos({ entidadeTipo, entidadeId }: {
   const [tipoSel, setTipoSel] = useState(TIPOS_SUGERIDOS[0])
   const [tipoLivre, setTipoLivre] = useState('')
   const [nota, setNota] = useState('')
+  const [aviso, setAviso] = useState<string | null>(null)
 
   const nomeDe = (id: string) => personagens[id]?.nome ?? cenarios[id]?.nome ?? null
 
@@ -58,11 +59,14 @@ export function AbaVinculos({ entidadeTipo, entidadeId }: {
   function adicionarRelacao() {
     const tipo = (tipoSel === OUTRO ? tipoLivre : tipoSel).trim()
     if (!alvo || !tipo) return
-    adicionar({
+    const ok = adicionar({
       deTipo: entidadeTipo, deId: entidadeId,
       paraTipo: alvo.tipo, paraId: alvo.id,
       tipo, notas: nota.trim(),
     })
+    if (!ok) { setAviso('Esse vínculo já existe.'); return }
+    setAviso(null)
+    // tipoSel fica como está de propósito: facilita adicionar várias relações do mesmo tipo
     setBusca(''); setAlvo(null); setTipoLivre(''); setNota('')
   }
 
@@ -86,18 +90,19 @@ export function AbaVinculos({ entidadeTipo, entidadeId }: {
         )
       })}
 
+      {aviso && <div className="vinculos-aviso">{aviso}</div>}
       <div className="vinculo-form">
         <input
           placeholder="Buscar personagem ou cenário…"
           value={alvo ? alvo.nome : busca}
-          onChange={(e) => { setAlvo(null); setBusca(e.target.value) }}
+          onChange={(e) => { setAviso(null); setAlvo(null); setBusca(e.target.value) }}
         />
         {!alvo && candidatos.length > 0 && (
           <div className="vinculo-busca-lista">
             {candidatos.map((c) => (
-              <div key={c.id} className="vinculo-busca-item" onClick={() => setAlvo(c)}>
+              <button type="button" key={c.id} className="vinculo-busca-item" onClick={() => { setAviso(null); setAlvo(c) }}>
                 {c.tipo === 'personagem' ? '👤' : '🗺'} {c.nome}
-              </div>
+              </button>
             ))}
           </div>
         )}
@@ -105,12 +110,12 @@ export function AbaVinculos({ entidadeTipo, entidadeId }: {
           <div className="vinculos-vazio">Nenhuma entidade encontrada.</div>
         )}
         <div className="vinculo-form-linha">
-          <select value={tipoSel} onChange={(e) => setTipoSel(e.target.value)}>
+          <select value={tipoSel} onChange={(e) => { setAviso(null); setTipoSel(e.target.value) }}>
             {TIPOS_SUGERIDOS.map((t) => <option key={t} value={t}>{t}</option>)}
             <option value={OUTRO}>outro…</option>
           </select>
           {tipoSel === OUTRO && (
-            <input placeholder="tipo livre" value={tipoLivre} onChange={(e) => setTipoLivre(e.target.value)} />
+            <input placeholder="tipo livre" value={tipoLivre} onChange={(e) => { setAviso(null); setTipoLivre(e.target.value) }} />
           )}
           <input placeholder="nota (opcional)" value={nota} onChange={(e) => setNota(e.target.value)} />
           <button disabled={!alvo || (tipoSel === OUTRO && !tipoLivre.trim())} onClick={adicionarRelacao}>
@@ -128,6 +133,7 @@ export function AbaVinculos({ entidadeTipo, entidadeId }: {
             <button
               key={c.id}
               className={`campanha-chip${ativo ? ' ativo' : ''}`}
+              aria-pressed={ativo}
               title={ativo ? `Remover de ${c.nome}` : `Participar de ${c.nome}`}
               onClick={() => alternarParticipacao(entidadeTipo, entidadeId, c.id)}
             >

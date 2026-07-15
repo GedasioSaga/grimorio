@@ -257,7 +257,8 @@ button:hover { border-color: var(--dourado); color: var(--dourado-claro); }
 }
 .vinculo-texto { font-size: 13px; color: var(--texto); }
 .vinculo-texto em { color: var(--dourado-claro); font-style: normal; }
-.vinculo-nota { color: var(--texto-fraco); }
+.vinculo-nota { color: var(--texto-fraco); font-size: 12px; }
+.vinculos-aviso { font-size: 12px; color: var(--erro); }
 .vinculo-form { display: flex; flex-direction: column; gap: 6px; margin-top: 4px; }
 .vinculo-form input, .vinculo-form select {
   background: var(--fundo); border: 1px solid var(--borda); border-radius: 6px;
@@ -271,7 +272,12 @@ button:hover { border-color: var(--dourado); color: var(--dourado-claro); }
 }
 .vinculo-form-linha button:disabled { opacity: 0.4; cursor: default; }
 .vinculo-busca-lista { border: 1px solid var(--borda); border-radius: 6px; overflow: hidden; }
-.vinculo-busca-item { padding: 6px 10px; font-size: 13px; cursor: pointer; }
+/* item é <button> (a11y por teclado): neutraliza o reset global de button do tema */
+.vinculo-busca-item {
+  display: block; width: 100%; text-align: left;
+  background: transparent; border: none; border-radius: 0; color: var(--texto);
+  padding: 6px 10px; font-size: 13px; cursor: pointer;
+}
 .vinculo-busca-item:hover { background: var(--fundo-elevado); color: var(--dourado-claro); }
 .vinculo-chips { display: flex; flex-wrap: wrap; gap: 6px; }
 .campanha-chip {

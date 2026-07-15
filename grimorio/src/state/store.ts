@@ -66,7 +66,8 @@ interface AppState {
   abrirCenario(id: string): void
   fecharCenario(): void
   carregarVinculos(): Promise<void>
-  adicionarVinculo(v: Omit<Vinculo, 'id' | 'criadoEm'>): void
+  /** true quando adicionou; false quando já existia (dedupe por deId/paraId/tipo). */
+  adicionarVinculo(v: Omit<Vinculo, 'id' | 'criadoEm'>): boolean
   removerVinculo(id: string): void
   alternarParticipacao(entidadeTipo: TipoEntidadeVinculo, entidadeId: string, campanhaId: string): void
   setCampanhaFiltro(id: string | null): void
@@ -265,9 +266,10 @@ export const useApp = create<AppState>((set, get) => ({
   adicionarVinculo(v) {
     const completo: Vinculo = { ...v, id: crypto.randomUUID(), criadoEm: new Date().toISOString() }
     const nova = adicionarVinculoPuro(get().vinculos, completo)
-    if (nova === get().vinculos) return // dedupe: nada mudou
+    if (nova === get().vinculos) return false // dedupe: nada mudou
     set({ vinculos: nova })
     agendarSalvarVinculos(get)
+    return true
   },
 
   removerVinculo(id) {
