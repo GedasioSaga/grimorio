@@ -55,14 +55,34 @@ export function participacaoDe(lista: Vinculo[], entidadeId: string, campanhaId:
   )
 }
 
-/** Normaliza o conteúdo lido de vinculos.json; entradas inválidas são descartadas. */
+/**
+ * Normaliza o conteúdo lido de vinculos.json: entradas sem id/deId/paraId/tipo
+ * válidos ou com deTipo/paraTipo fora do domínio são descartadas; campos
+ * secundários (notas, criadoEm) são reparados com default.
+ */
 export function normalizarVinculos(raw: unknown): Vinculo[] {
   const lista = (raw as { vinculos?: unknown })?.vinculos
   if (!Array.isArray(lista)) return []
-  return lista.filter((x): x is Vinculo => {
-    const v = x as Vinculo | null
-    return !!v && typeof v.deId === 'string' && !!v.deId &&
-      typeof v.paraId === 'string' && !!v.paraId &&
-      typeof v.tipo === 'string' && !!v.tipo && typeof v.id === 'string' && !!v.id
-  })
+  const out: Vinculo[] = []
+  for (const x of lista) {
+    const v = x as Partial<Vinculo> | null
+    if (!v) continue
+    if (typeof v.id !== 'string' || !v.id) continue
+    if (typeof v.deId !== 'string' || !v.deId) continue
+    if (typeof v.paraId !== 'string' || !v.paraId) continue
+    if (typeof v.tipo !== 'string' || !v.tipo) continue
+    if (v.deTipo !== 'personagem' && v.deTipo !== 'cenario') continue
+    if (v.paraTipo !== 'personagem' && v.paraTipo !== 'cenario' && v.paraTipo !== 'campanha') continue
+    out.push({
+      id: v.id,
+      deTipo: v.deTipo,
+      deId: v.deId,
+      paraTipo: v.paraTipo,
+      paraId: v.paraId,
+      tipo: v.tipo,
+      notas: typeof v.notas === 'string' ? v.notas : '',
+      criadoEm: typeof v.criadoEm === 'string' ? v.criadoEm : '',
+    })
+  }
+  return out
 }

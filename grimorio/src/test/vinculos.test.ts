@@ -93,4 +93,19 @@ describe('normalizarVinculos', () => {
     expect(normalizarVinculos(null)).toEqual([])
     expect(normalizarVinculos('oi')).toEqual([])
   })
+  it('descarta entrada com deTipo ou paraTipo inválido', () => {
+    const suja = {
+      vinculos: [v({}), { ...v({ id: 'v2' }), deTipo: 'monstro' }, { ...v({ id: 'v3' }), paraTipo: 'mundo' }],
+    }
+    expect(normalizarVinculos(suja).map((x) => x.id)).toEqual(['v1'])
+  })
+  it('repara notas/criadoEm ausentes com defaults', () => {
+    const cru: Record<string, unknown> = { ...v({}) }
+    delete cru.notas
+    delete cru.criadoEm
+    const r = normalizarVinculos({ vinculos: [cru] })
+    expect(r).toHaveLength(1)
+    expect(r[0].notas).toBe('')
+    expect(r[0].criadoEm).toBe('')
+  })
 })

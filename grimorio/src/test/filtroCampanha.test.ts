@@ -47,6 +47,11 @@ describe('filtrarArvoreCenarios', () => {
     expect(r.cenarios.map((c) => c.id)).toEqual(['a'])
     expect(r.subpastas).toHaveLength(0)
   })
+  it('cenário permitido traz a subárvore inteira (filhos herdam)', () => {
+    const r = filtrarArvoreCenarios(arvoreC, new Set(['a']))
+    expect(r.cenarios[0].filhos.map((c) => c.id)).toEqual(['b'])
+    expect(r.cenarios[0].filhos[0].filhos.map((c) => c.id)).toEqual(['c'])
+  })
   it('ancestral de permitido fica (contexto), irmãos caem', () => {
     const r = filtrarArvoreCenarios(arvoreC, new Set(['c']))
     expect(r.cenarios.map((c) => c.id)).toEqual(['a'])

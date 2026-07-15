@@ -13,19 +13,24 @@ export function filtrarPastaPersonagens(pasta: PastaNode, caminhosPermitidos: Se
   return { ...pasta, personagens, subpastas }
 }
 
-/** Mantém o cenário se o id é permitido OU se algum descendente é (ancestral fica p/ contexto). */
-function filtrarCenarios(nos: CenarioNode[], ids: Set<string>): CenarioNode[] {
+/**
+ * Permitido se herdou do pai OU se o id está no conjunto: cenário permitido
+ * traz a subárvore INTEIRA (filhos herdam a permissão). Ancestral de
+ * permitido também fica, como contexto.
+ */
+function filtrarCenarios(nos: CenarioNode[], ids: Set<string>, herdado: boolean): CenarioNode[] {
   const out: CenarioNode[] = []
   for (const n of nos) {
-    const filhos = filtrarCenarios(n.filhos, ids)
-    if (ids.has(n.id) || filhos.length > 0) out.push({ ...n, filhos })
+    const permitido = herdado || ids.has(n.id)
+    const filhos = filtrarCenarios(n.filhos, ids, permitido)
+    if (permitido || filhos.length > 0) out.push({ ...n, filhos })
   }
   return out
 }
 
-/** Filtra a árvore de cenários por ids permitidos; pastas vazias são podadas. */
+/** Filtra a árvore de cenários por ids permitidos (subárvore herda); pastas vazias são podadas. */
 export function filtrarArvoreCenarios(raiz: PastaCenarioNode, ids: Set<string>): PastaCenarioNode {
-  const cenarios = filtrarCenarios(raiz.cenarios, ids)
+  const cenarios = filtrarCenarios(raiz.cenarios, ids, false)
   const subpastas = raiz.subpastas
     .map((s) => filtrarArvoreCenarios(s, ids))
     .filter((s) => s.cenarios.length > 0 || s.subpastas.length > 0)

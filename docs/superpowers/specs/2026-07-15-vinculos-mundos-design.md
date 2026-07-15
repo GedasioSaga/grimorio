@@ -84,8 +84,8 @@ Filtros de árvore (puros, testados) em `src/lib/filtroCampanha.ts`:
 filtrarPastaPersonagens(pasta: PastaNode, ids: Set<string>): PastaNode
   // mantém personagens cujo id ∈ ids; poda subpastas vazias
 filtrarArvoreCenarios(raiz: PastaCenarioNode, ids: Set<string>): PastaCenarioNode
-  // mantém cenário se id ∈ ids OU tem descendente ∈ ids (ancestral fica p/ contexto);
-  // poda pastas vazias
+  // mantém cenário se id ∈ ids (subárvore inteira herda a permissão) OU se tem
+  // descendente ∈ ids (ancestral fica p/ contexto); poda pastas vazias
 ```
 
 ## Store (zustand)
