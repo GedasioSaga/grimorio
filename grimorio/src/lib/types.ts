@@ -35,6 +35,21 @@ export interface Cenario {
   modificadoEm: string
 }
 
+/** Ponta de vínculo entre entidades (campanha só aparece como destino). */
+export type TipoEntidadeVinculo = 'personagem' | 'cenario'
+
+/** Relação tipada entre entidades OU participação em campanha (tipo TIPO_PARTICIPA). */
+export interface Vinculo {
+  id: string
+  deTipo: TipoEntidadeVinculo
+  deId: string
+  paraTipo: TipoEntidadeVinculo | 'campanha'
+  paraId: string
+  tipo: string      // 'conhece', 'mora em', … ou texto livre
+  notas: string     // '' quando vazia
+  criadoEm: string  // ISO-8601
+}
+
 export interface CanvasDoc {
   id: string
   nome: string
@@ -60,6 +75,7 @@ export interface ItemRef {
 }
 
 export interface CampanhaNode {
+  id: string // do campanha.json ('' se ilegível/sem id)
   slug: string
   nome: string
   erro?: boolean
