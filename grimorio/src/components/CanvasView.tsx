@@ -247,9 +247,6 @@ export function CanvasView({ caminho, nome }: { caminho: string; nome: string })
       // Fase capture: o canvas interno do tldraw chama preventDefault +
       // stopPropagation no drop, então handlers de bubble aqui nunca disparam.
       // O guard pelo MIME type deixa drags alheios passarem intactos pro tldraw.
-      onDragEnterCapture={(e) => {
-        console.log('[DND-TEMP] canvas dragenter types=', Array.from(e.dataTransfer.types)) // [DEBUG-TEMP] remover
-      }}
       onDragOverCapture={(e) => {
         if (
           e.dataTransfer.types.includes('application/x-grimorio-personagem') ||
