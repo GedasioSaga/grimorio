@@ -11,3 +11,12 @@ const LARGURA_MINIMA_RECOLHIDO = 160
 export function ajustarLargura(atual: number, deltaPaineis: number): number {
   return Math.max(LARGURA_MINIMA_RECOLHIDO, atual + deltaPaineis * PAINEL_DESCRICAO_LARGURA)
 }
+
+/**
+ * Largura do card a partir do nº de colunas de painel visíveis.
+ * `base` = largura da coluna principal (imagem+nome). Cada coluna de painel
+ * adiciona PAINEL_DESCRICAO_LARGURA.
+ */
+export function larguraDoCartao(base: number, colunasPaineis: number): number {
+  return base + colunasPaineis * PAINEL_DESCRICAO_LARGURA
+}

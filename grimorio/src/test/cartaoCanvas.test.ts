@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { PAINEL_DESCRICAO_LARGURA, ajustarLargura } from '../lib/cartaoCanvas'
+import { PAINEL_DESCRICAO_LARGURA, ajustarLargura, larguraDoCartao } from '../lib/cartaoCanvas'
 
 describe('ajustarLargura', () => {
   it('abrir um painel soma a largura do painel', () => {
@@ -23,5 +23,17 @@ describe('ajustarLargura', () => {
   it('fechar nunca deixa o card menor que o mínimo', () => {
     expect(ajustarLargura(200, -1)).toBe(160)
     expect(ajustarLargura(300, -2)).toBe(160)
+  })
+})
+
+describe('larguraDoCartao', () => {
+  it('base sem colunas de painel', () => {
+    expect(larguraDoCartao(240, 0)).toBe(240)
+  })
+  it('uma coluna soma um painel', () => {
+    expect(larguraDoCartao(240, 1)).toBe(240 + 240)
+  })
+  it('três colunas somam três painéis', () => {
+    expect(larguraDoCartao(240, 3)).toBe(240 + 3 * 240)
   })
 })
