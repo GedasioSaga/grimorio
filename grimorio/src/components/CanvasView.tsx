@@ -35,7 +35,7 @@ import { MIME_CENARIO } from './CenariosSoltos'
 import { relRetratoDoCard, type ShapeMinimo } from '../lib/copiaImagemCard'
 import { copiarImagemParaClipboard } from '../lib/copiarImagem'
 import { paresParaLigar } from '../lib/ligacaoCenario'
-import { vinculosDaEntidade } from '../lib/vinculos'
+import { agruparPorPar } from '../lib/vinculos'
 
 const AUTOSAVE_DEBOUNCE_MS = 1000
 
@@ -167,26 +167,7 @@ function criarSeta(editor: Editor, deShape: TLShapeId, paraShape: TLShapeId, rot
   ])
 }
 
-/** Liga o cenário recém-dropado aos cards de pai/filhos já presentes no canvas. */
-function ligarCenarioNoCanvas(editor: Editor, raiz: PastaCenarioNode, cenarioId: string) {
-  const cardsPorCenario = new Map<string, TLShapeId[]>()
-  for (const s of editor.getCurrentPageShapes()) {
-    if (s.type !== 'cenario-card') continue
-    const cid = (s as CenarioCardShapeType).props.cenarioId
-    const lista = cardsPorCenario.get(cid) ?? []
-    lista.push(s.id)
-    cardsPorCenario.set(cid, lista)
-  }
-  for (const { paiId, filhoId } of paresParaLigar(raiz, cenarioId)) {
-    for (const ps of cardsPorCenario.get(paiId) ?? []) {
-      for (const fs of cardsPorCenario.get(filhoId) ?? []) {
-        if (!existeSetaEntre(editor, ps, fs)) criarSeta(editor, ps, fs)
-      }
-    }
-  }
-}
-
-/** Shapes de card por id de entidade (personagem e cenário). */
+/** Shapes de card por id de entidade. Supõe que UUIDs de personagem e cenário não colidem. */
 function cardsPorEntidade(editor: Editor): Map<string, TLShapeId[]> {
   const mapa = new Map<string, TLShapeId[]>()
   for (const s of editor.getCurrentPageShapes()) {
@@ -201,21 +182,35 @@ function cardsPorEntidade(editor: Editor): Map<string, TLShapeId[]> {
   return mapa
 }
 
+/** Liga o cenário recém-dropado aos cards de pai/filhos já presentes no canvas. */
+function ligarCenarioNoCanvas(
+  editor: Editor,
+  cards: Map<string, TLShapeId[]>,
+  raiz: PastaCenarioNode,
+  cenarioId: string,
+) {
+  for (const { paiId, filhoId } of paresParaLigar(raiz, cenarioId)) {
+    for (const ps of cards.get(paiId) ?? []) {
+      for (const fs of cards.get(filhoId) ?? []) {
+        if (!existeSetaEntre(editor, ps, fs)) criarSeta(editor, ps, fs)
+      }
+    }
+  }
+}
+
 /**
  * Liga a entidade recém-dropada aos cards presentes com relação direta.
  * Uma seta por par (de → para do primeiro vínculo); múltiplos tipos viram "a · b".
  */
-function ligarRelacoesNoCanvas(editor: Editor, vinculos: Vinculo[], entidadeId: string) {
-  const cards = cardsPorEntidade(editor)
+function ligarRelacoesNoCanvas(
+  editor: Editor,
+  cards: Map<string, TLShapeId[]>,
+  vinculos: Vinculo[],
+  entidadeId: string,
+) {
+  // Defesa p/ call sites futuros: sem card da própria entidade, não há o que ligar.
   if (!cards.has(entidadeId)) return
-  const porPar = new Map<string, { deId: string; paraId: string; tipos: string[] }>()
-  for (const v of vinculosDaEntidade(vinculos, entidadeId)) {
-    const outraId = v.deId === entidadeId ? v.paraId : v.deId
-    const g = porPar.get(outraId)
-    if (g) g.tipos.push(v.tipo)
-    else porPar.set(outraId, { deId: v.deId, paraId: v.paraId, tipos: [v.tipo] })
-  }
-  for (const { deId, paraId, tipos } of porPar.values()) {
+  for (const { deId, paraId, tipos } of agruparPorPar(vinculos, entidadeId)) {
     for (const ds of cards.get(deId) ?? []) {
       for (const ps of cards.get(paraId) ?? []) {
         if (!existeSetaEntre(editor, ds, ps)) criarSeta(editor, ds, ps, tipos.join(' · '))
@@ -371,7 +366,7 @@ export function CanvasView({ caminho, nome }: { caminho: string; nome: string })
             e.preventDefault()
             e.stopPropagation()
             const ponto = editorAtual.screenToPage({ x: e.clientX, y: e.clientY })
-            // Batch: card + setas de hierarquia viram UM passo de undo (Ctrl+Z desfaz o drop inteiro).
+            // Batch: card + setas viram UM passo de undo (Ctrl+Z desfaz o drop inteiro).
             editorAtual.run(() => {
               editorAtual.createShape({
                 id: createShapeId(),
@@ -380,9 +375,12 @@ export function CanvasView({ caminho, nome }: { caminho: string; nome: string })
                 y: ponto.y - CARD_ALTURA_PADRAO / 2,
                 props: { cenarioId },
               })
+              const cards = cardsPorEntidade(editorAtual)
+              // Relações rotuladas ANTES da hierarquia: existeSetaEntre é agnóstico a rótulo,
+              // então quem cria primeiro ocupa o par — o rótulo explícito tem prioridade.
+              ligarRelacoesNoCanvas(editorAtual, cards, useApp.getState().vinculos, cenarioId)
               const raiz = useApp.getState().tree?.cenarios
-              if (raiz) ligarCenarioNoCanvas(editorAtual, raiz, cenarioId)
-              ligarRelacoesNoCanvas(editorAtual, useApp.getState().vinculos, cenarioId)
+              if (raiz) ligarCenarioNoCanvas(editorAtual, cards, raiz, cenarioId)
             })
           }
           return
@@ -402,7 +400,7 @@ export function CanvasView({ caminho, nome }: { caminho: string; nome: string })
             y: ponto.y - CARD_ALTURA_PADRAO / 2,
             props: { personagemId: id },
           })
-          ligarRelacoesNoCanvas(editor, useApp.getState().vinculos, id)
+          ligarRelacoesNoCanvas(editor, cardsPorEntidade(editor), useApp.getState().vinculos, id)
         })
       }}
     >

@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest'
 import {
   TIPO_PARTICIPA,
   adicionarVinculo,
+  agruparPorPar,
   removerVinculo,
   vinculosDaEntidade,
   campanhasDe,
@@ -78,6 +79,20 @@ describe('vinculosEntre', () => {
   const lista = [v({}), v({ id: 'v2', deId: 'b', paraId: 'a', tipo: 'teme' }), v({ id: 'v3', paraId: 'c' })]
   it('acha relações do par nas duas direções', () => {
     expect(vinculosEntre(lista, 'a', 'b').map((x) => x.id)).toEqual(['v1', 'v2'])
+  })
+})
+
+describe('agruparPorPar', () => {
+  it('par único com 1 vínculo', () => {
+    expect(agruparPorPar([v({})], 'a')).toEqual([{ deId: 'a', paraId: 'b', tipos: ['conhece'] }])
+  })
+  it('par com 2 tipos na mesma direção mantém a ordem', () => {
+    const lista = [v({}), v({ id: 'v2', tipo: 'aliado de' })]
+    expect(agruparPorPar(lista, 'a')).toEqual([{ deId: 'a', paraId: 'b', tipos: ['conhece', 'aliado de'] }])
+  })
+  it('direções opostas viram 1 grupo com a direção do primeiro vínculo', () => {
+    const lista = [v({}), v({ id: 'v2', deId: 'b', paraId: 'a', tipo: 'teme' })]
+    expect(agruparPorPar(lista, 'a')).toEqual([{ deId: 'a', paraId: 'b', tipos: ['conhece', 'teme'] }])
   })
 })
 

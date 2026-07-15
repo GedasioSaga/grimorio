@@ -24,6 +24,30 @@ export function vinculosDaEntidade(lista: Vinculo[], id: string): Vinculo[] {
   return lista.filter((x) => x.paraTipo !== 'campanha' && (x.deId === id || x.paraId === id))
 }
 
+/** Grupo de relações entre a entidade e uma outra ponta (para as setas do canvas). */
+export interface ParDeRelacoes {
+  deId: string
+  paraId: string
+  tipos: string[]
+}
+
+/**
+ * Agrupa as relações da entidade por "outra ponta". A direção (deId→paraId) é a do
+ * PRIMEIRO vínculo do par; tipos adicionais entram só no rótulo — se houver vínculos
+ * em direções opostas no mesmo par, o rótulo combinado não indica qual tipo é de qual
+ * direção (limitação aceita; caso raro).
+ */
+export function agruparPorPar(lista: Vinculo[], entidadeId: string): ParDeRelacoes[] {
+  const porPar = new Map<string, ParDeRelacoes>()
+  for (const v of vinculosDaEntidade(lista, entidadeId)) {
+    const outraId = v.deId === entidadeId ? v.paraId : v.deId
+    const g = porPar.get(outraId)
+    if (g) g.tipos.push(v.tipo)
+    else porPar.set(outraId, { deId: v.deId, paraId: v.paraId, tipos: [v.tipo] })
+  }
+  return [...porPar.values()]
+}
+
 /** Ids das campanhas em que a entidade participa. */
 export function campanhasDe(lista: Vinculo[], entidadeId: string): string[] {
   return lista
