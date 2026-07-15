@@ -1,8 +1,9 @@
 import { create } from 'zustand'
-import type { Cenario, ItemRef, PastaNode, Personagem, VaultTree } from '../lib/types'
+import type { Cenario, ItemRef, PastaNode, Personagem, TipoEntidadeVinculo, VaultTree, Vinculo } from '../lib/types'
 import { tauriFs } from '../lib/fsBridge'
 import { VaultRepo } from '../lib/vaultRepo'
 import { coletarCenarioRefs } from '../lib/cenarioArvore'
+import { adicionarVinculo as adicionarVinculoPuro, removerVinculo as removerVinculoPuro, participacaoDe, TIPO_PARTICIPA } from '../lib/vinculos'
 
 export type TipoAberto = 'sessao' | 'canvas' | 'escrita'
 
@@ -14,6 +15,9 @@ const timersSalvarParcial = new Map<string, ReturnType<typeof setTimeout>>()
 
 // mesmo racional para cenários (cards no canvas desmontam fora da viewport)
 const timersSalvarCenario = new Map<string, ReturnType<typeof setTimeout>>()
+
+// um arquivo só (vinculos.json): um timer só
+let timerSalvarVinculos: ReturnType<typeof setTimeout> | null = null
 
 export interface ItemAberto {
   tipo: TipoAberto
@@ -39,6 +43,10 @@ interface AppState {
   /** id -> dir do cenário relativo ao cofre */
   caminhoCenarioPorId: Record<string, string>
   cenarioAbertoId: string | null
+  /** relações tipadas entre entidades + participação em campanhas (vinculos.json único) */
+  vinculos: Vinculo[]
+  /** id da campanha selecionada no filtro da sidebar; null = "Todas" */
+  campanhaFiltro: string | null
   carregando: boolean
   erroCofre: string | null
 
@@ -57,6 +65,24 @@ interface AppState {
   salvarCenarioParcial(id: string, mudancas: Partial<Cenario>): void
   abrirCenario(id: string): void
   fecharCenario(): void
+  carregarVinculos(): Promise<void>
+  adicionarVinculo(v: Omit<Vinculo, 'id' | 'criadoEm'>): void
+  removerVinculo(id: string): void
+  alternarParticipacao(entidadeTipo: TipoEntidadeVinculo, entidadeId: string, campanhaId: string): void
+  setCampanhaFiltro(id: string | null): void
+}
+
+const SALVAR_VINCULOS_DEBOUNCE_MS = 800
+
+function agendarSalvarVinculos(get: () => AppState) {
+  if (timerSalvarVinculos) clearTimeout(timerSalvarVinculos)
+  timerSalvarVinculos = setTimeout(() => {
+    timerSalvarVinculos = null
+    const { repo, vinculos } = get()
+    if (!repo) return
+    // fire-and-forget: VaultRepo serializa escritas por caminho
+    repo.salvarVinculos(vinculos).catch((e) => console.error('Falha ao salvar vínculos:', e))
+  }, SALVAR_VINCULOS_DEBOUNCE_MS)
 }
 
 export const useApp = create<AppState>((set, get) => ({
@@ -71,6 +97,8 @@ export const useApp = create<AppState>((set, get) => ({
   cenarios: {},
   caminhoCenarioPorId: {},
   cenarioAbertoId: null,
+  vinculos: [],
+  campanhaFiltro: null,
   carregando: false,
   erroCofre: null,
 
@@ -86,6 +114,7 @@ export const useApp = create<AppState>((set, get) => ({
       await get().recarregarArvore()
       await get().carregarPersonagens()
       await get().carregarCenarios()
+      await get().carregarVinculos()
     } catch (e) {
       set({ erroCofre: `Não foi possível abrir o cofre: ${e}` })
       throw e
@@ -221,5 +250,47 @@ export const useApp = create<AppState>((set, get) => ({
 
   fecharCenario() {
     set({ cenarioAbertoId: null })
+  },
+
+  async carregarVinculos() {
+    const { repo, tree } = get()
+    if (!repo) return
+    const vinculos = await repo.lerVinculos()
+    // restaura o filtro salvo; campanha apagada → volta a "Todas"
+    const salvo = localStorage.getItem('grimorio.campanhaFiltro')
+    const valido = !!salvo && !!tree?.campanhas.some((c) => c.id === salvo)
+    set({ vinculos, campanhaFiltro: valido ? salvo : null })
+  },
+
+  adicionarVinculo(v) {
+    const completo: Vinculo = { ...v, id: crypto.randomUUID(), criadoEm: new Date().toISOString() }
+    const nova = adicionarVinculoPuro(get().vinculos, completo)
+    if (nova === get().vinculos) return // dedupe: nada mudou
+    set({ vinculos: nova })
+    agendarSalvarVinculos(get)
+  },
+
+  removerVinculo(id) {
+    set({ vinculos: removerVinculoPuro(get().vinculos, id) })
+    agendarSalvarVinculos(get)
+  },
+
+  alternarParticipacao(entidadeTipo, entidadeId, campanhaId) {
+    const atual = participacaoDe(get().vinculos, entidadeId, campanhaId)
+    if (atual) {
+      get().removerVinculo(atual.id)
+    } else {
+      get().adicionarVinculo({
+        deTipo: entidadeTipo, deId: entidadeId,
+        paraTipo: 'campanha', paraId: campanhaId,
+        tipo: TIPO_PARTICIPA, notas: '',
+      })
+    }
+  },
+
+  setCampanhaFiltro(id) {
+    if (id) localStorage.setItem('grimorio.campanhaFiltro', id)
+    else localStorage.removeItem('grimorio.campanhaFiltro')
+    set({ campanhaFiltro: id })
   },
 }))
