@@ -1,11 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { convertFileSrc } from '@tauri-apps/api/core'
-import { useApp } from '../state/store'
 import { gerarConteudo, type ImagemIA } from '../lib/gemini'
-import { SYSTEM_MESTRE } from '../lib/chatIA'
-import { contextoDeEntidade } from '../lib/contextoIA'
-import { htmlParaTexto, textoParaHtml } from '../lib/htmlTexto'
-import { mimeDaImagem, uint8ParaBase64 } from '../lib/bin'
 import { promptMelhorar, promptVersao } from '../lib/promptsIA'
 
 export interface AcaoIA {
@@ -16,6 +10,15 @@ export interface AcaoIA {
   comImagem?: boolean
 }
 
+export type ModoInserir = 'substituir' | 'adicionar'
+
+/** Dados frescos que o pai fornece a cada execução (lido no momento do clique). */
+export interface SnapshotIA {
+  dadosBase: string // "# Personagem\nNome…" ou "# Página de escrita\nTítulo…"
+  textoAtual: string // texto da aba/página (com marcadores {{IMG:n}} na escrita); '' em abas sem texto
+  contexto: string // contexto da campanha; '' se nenhum
+}
+
 interface Preview {
   rotulo: string
   destino: string
@@ -23,29 +26,33 @@ interface Preview {
   texto: string
 }
 
-type ModoInserir = 'substituir' | 'adicionar'
-
 /**
- * Menu ✨ dos modais: ações tab-aware (versão curta/longa/melhorar na aba aberta),
- * pergunta livre, e ações específicas (via `acoes`). Preview antes de gravar; nada
- * é escrito sem clicar Substituir/Adicionar.
+ * Menu ✨ compartilhado por Personagem/Cenário (modais) e Escrita (página). Ações
+ * tab-aware (curta/longa/melhorar), ações específicas (via `acoes`) e pergunta livre;
+ * preview antes de gravar. Agnóstico da origem: o pai injeta `system`, `contexto` e
+ * `snapshot()`, e recebe o texto CRU em `onInserir` (a conversão para HTML é do pai —
+ * `textoParaHtml` nos modais, Markdown + imagens na escrita).
  */
 export function AcoesIA({
-  entidadeTipo,
-  entidadeId,
+  system,
   abaAtual,
   rotuloAbaAtual,
   abaEhTexto,
   acoes,
+  snapshot,
+  imagensParaIA,
+  conteudoDoDestino,
   onInserir,
 }: {
-  entidadeTipo: 'personagem' | 'cenario'
-  entidadeId: string
+  system: string
   abaAtual: string
   rotuloAbaAtual: string
   abaEhTexto: boolean
   acoes: AcaoIA[]
-  onInserir: (aba: string, html: string, modo: ModoInserir) => void
+  snapshot: () => SnapshotIA
+  imagensParaIA?: () => Promise<ImagemIA[]>
+  conteudoDoDestino: (destino: string) => string
+  onInserir: (destino: string, textoCru: string, modo: ModoInserir) => void
 }) {
   const [menuAberto, setMenuAberto] = useState(false)
   const [rodando, setRodando] = useState(false)
@@ -73,13 +80,6 @@ export function AcoesIA({
     return () => document.removeEventListener('mousedown', aoClicarFora)
   }, [menuAberto])
 
-  /** Contexto: campanha da entidade (vínculo participa ou pasta) + vínculos no escopo. */
-  function montarContexto(): string {
-    const { tree, personagens, cenarios, vinculos, caminhoPorId } = useApp.getState()
-    if (!tree) return ''
-    return contextoDeEntidade(entidadeId, { tree, personagens, cenarios, vinculos, caminhoPorId })
-  }
-
   async function executar(opts: {
     rotulo: string
     destino: string
@@ -91,31 +91,14 @@ export function AcoesIA({
     setErro(null)
     setRodando(true)
     try {
-      const { personagens, cenarios, vaultPath } = useApp.getState()
-      const ent = entidadeTipo === 'personagem' ? personagens[entidadeId] : cenarios[entidadeId]
-      if (!ent) {
-        if (montadoRef.current) setErro('Entidade não encontrada.')
-        return
-      }
-      // texto da aba aberta (para melhorar / servir de referência); só em abas de texto
-      const textoAba = abaEhTexto ? htmlParaTexto((ent as unknown as Record<string, string>)[abaAtual] ?? '') : ''
+      const { dadosBase, textoAtual, contexto } = snapshot()
       const dados =
-        `# Entidade\nNome: ${ent.nome}\nResumo: ${ent.resumo}` +
-        (textoAba ? `\nTexto atual da seção "${rotuloAbaAtual}":\n${textoAba}` : '')
-      const contexto = montarContexto()
-      const system = contexto ? `${SYSTEM_MESTRE}\n\n# Contexto da campanha\n${contexto}` : SYSTEM_MESTRE
-
-      const imagens: ImagemIA[] = []
-      if (opts.comImagem) {
-        if (!ent.retrato || !vaultPath) throw new Error('Esta entidade não tem imagem.')
-        const resp = await fetch(convertFileSrc(`${vaultPath}/${ent.retrato}`))
-        if (!resp.ok) throw new Error(`fetch falhou: ${resp.status}`)
-        const blob = await resp.blob()
-        imagens.push({ mimeType: mimeDaImagem(ent.retrato), base64: uint8ParaBase64(new Uint8Array(await blob.arrayBuffer())) })
-      }
+        dadosBase + (abaEhTexto && textoAtual ? `\nTexto atual da seção "${rotuloAbaAtual}":\n${textoAtual}` : '')
+      const systemFull = contexto ? `${system}\n\n# Contexto da campanha\n${contexto}` : system
+      const imagens = opts.comImagem && imagensParaIA ? await imagensParaIA() : []
 
       const texto = await gerarConteudo({
-        system,
+        system: systemFull,
         historico: [{ papel: 'user', texto: `${dados}\n\n${opts.prompt}` }],
         imagens,
       })
@@ -202,7 +185,7 @@ export function AcoesIA({
               <button onClick={() => setPreview(null)}>Descartar</button>
               <button
                 onClick={() => {
-                  onInserir(preview.destino, textoParaHtml(preview.texto), 'adicionar')
+                  onInserir(preview.destino, preview.texto, 'adicionar')
                   setPreview(null)
                 }}
               >
@@ -211,11 +194,9 @@ export function AcoesIA({
               <button
                 className="acoes-ia-inserir"
                 onClick={() => {
-                  const { personagens, cenarios } = useApp.getState()
-                  const ent = entidadeTipo === 'personagem' ? personagens[entidadeId] : cenarios[entidadeId]
-                  const atualDestino = ent ? htmlParaTexto((ent as unknown as Record<string, string>)[preview.destino] ?? '') : ''
-                  if (atualDestino && !confirm(`Substituir o texto atual de "${preview.rotuloDestino}"? O conteúdo atual será apagado.`)) return
-                  onInserir(preview.destino, textoParaHtml(preview.texto), 'substituir')
+                  const atual = conteudoDoDestino(preview.destino)
+                  if (atual && !confirm(`Substituir o texto atual de "${preview.rotuloDestino}"? O conteúdo atual será apagado.`)) return
+                  onInserir(preview.destino, preview.texto, 'substituir')
                   setPreview(null)
                 }}
               >

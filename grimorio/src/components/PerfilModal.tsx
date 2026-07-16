@@ -7,6 +7,9 @@ import { EditorTexto } from './EditorTexto'
 import { GaleriaPersonagem } from './GaleriaPersonagem'
 import { AbaVinculos } from './AbaVinculos'
 import { AcoesIA, type AcaoIA } from './AcoesIA'
+import { SYSTEM_MESTRE } from '../lib/chatIA'
+import { contextoDeEntidade } from '../lib/contextoIA'
+import { htmlParaTexto, textoParaHtml } from '../lib/htmlTexto'
 
 const AUTOSAVE_DEBOUNCE_MS = 800
 
@@ -145,13 +148,27 @@ export function PerfilModal({ personagemId }: { personagemId: string }) {
               onChange={(e) => agendarSalvar({ resumo: e.target.value })} />
           </div>
           <AcoesIA
-            entidadeTipo="personagem"
-            entidadeId={personagemId}
+            system={SYSTEM_MESTRE}
             abaAtual={aba}
             rotuloAbaAtual={ABAS.find((a) => a.id === aba)?.rotulo ?? aba}
             abaEhTexto={aba !== 'imagens' && aba !== 'vinculos'}
             acoes={ACOES_IA_PERSONAGEM}
-            onInserir={(abaDestino, html, modo) => {
+            snapshot={() => {
+              const s = useApp.getState()
+              const ent = s.personagens[personagemId]
+              const ehTexto = aba !== 'imagens' && aba !== 'vinculos'
+              return {
+                dadosBase: `# Personagem\nNome: ${ent?.nome ?? ''}\nResumo: ${ent?.resumo ?? ''}`,
+                textoAtual: ehTexto && ent ? htmlParaTexto((ent as unknown as Record<string, string>)[aba] ?? '') : '',
+                contexto: s.tree ? contextoDeEntidade(personagemId, { ...s, tree: s.tree }) : '',
+              }
+            }}
+            conteudoDoDestino={(dest) => {
+              const ent = useApp.getState().personagens[personagemId]
+              return ent ? htmlParaTexto((ent as unknown as Record<string, string>)[dest] ?? '') : ''
+            }}
+            onInserir={(abaDestino, textoCru, modo) => {
+              const html = textoParaHtml(textoCru)
               const atual = useApp.getState().personagens[personagemId]
               const base = atual ? (atual[abaDestino as AbaTexto] ?? '') : ''
               const novo = modo === 'substituir' ? html : base + html

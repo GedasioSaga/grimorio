@@ -9,6 +9,10 @@ import { EditorTexto } from './EditorTexto'
 import { GaleriaPersonagem } from './GaleriaPersonagem'
 import { AbaVinculos } from './AbaVinculos'
 import { AcoesIA, type AcaoIA } from './AcoesIA'
+import { SYSTEM_MESTRE } from '../lib/chatIA'
+import { contextoDeEntidade } from '../lib/contextoIA'
+import { htmlParaTexto, textoParaHtml } from '../lib/htmlTexto'
+import { mimeDaImagem, uint8ParaBase64 } from '../lib/bin'
 
 const AUTOSAVE_DEBOUNCE_MS = 800
 
@@ -152,13 +156,36 @@ export function CenarioModal({ cenarioId }: { cenarioId: string }) {
               onChange={(e) => agendarSalvar({ resumo: e.target.value })} />
           </div>
           <AcoesIA
-            entidadeTipo="cenario"
-            entidadeId={cenarioId}
+            system={SYSTEM_MESTRE}
             abaAtual={aba}
             rotuloAbaAtual={ABAS.find((a) => a.id === aba)?.rotulo ?? aba}
             abaEhTexto={aba !== 'imagens' && aba !== 'conteudo' && aba !== 'vinculos'}
             acoes={ACOES_IA_CENARIO}
-            onInserir={(abaDestino, html, modo) => {
+            snapshot={() => {
+              const s = useApp.getState()
+              const ent = s.cenarios[cenarioId]
+              const ehTexto = aba !== 'imagens' && aba !== 'conteudo' && aba !== 'vinculos'
+              return {
+                dadosBase: `# Cenário\nNome: ${ent?.nome ?? ''}\nResumo: ${ent?.resumo ?? ''}`,
+                textoAtual: ehTexto && ent ? htmlParaTexto((ent as unknown as Record<string, string>)[aba] ?? '') : '',
+                contexto: s.tree ? contextoDeEntidade(cenarioId, { ...s, tree: s.tree }) : '',
+              }
+            }}
+            imagensParaIA={async () => {
+              const s = useApp.getState()
+              const ent = s.cenarios[cenarioId]
+              if (!ent?.retrato || !s.vaultPath) throw new Error('Esta entidade não tem imagem.')
+              const resp = await fetch(convertFileSrc(`${s.vaultPath}/${ent.retrato}`))
+              if (!resp.ok) throw new Error(`fetch falhou: ${resp.status}`)
+              const blob = await resp.blob()
+              return [{ mimeType: mimeDaImagem(ent.retrato), base64: uint8ParaBase64(new Uint8Array(await blob.arrayBuffer())) }]
+            }}
+            conteudoDoDestino={(dest) => {
+              const ent = useApp.getState().cenarios[cenarioId]
+              return ent ? htmlParaTexto((ent as unknown as Record<string, string>)[dest] ?? '') : ''
+            }}
+            onInserir={(abaDestino, textoCru, modo) => {
+              const html = textoParaHtml(textoCru)
               const atual = useApp.getState().cenarios[cenarioId]
               const base = atual ? (atual[abaDestino as AbaTexto] ?? '') : ''
               const novo = modo === 'substituir' ? html : base + html
