@@ -154,11 +154,11 @@ export function PerfilModal({ personagemId }: { personagemId: string }) {
             entidadeTipo="personagem"
             entidadeId={personagemId}
             acoes={ACOES_IA_PERSONAGEM}
-            onInserir={(aba, html) => {
+            onInserir={(abaDestino, html) => {
               const atual = useApp.getState().personagens[personagemId]
-              const base = atual ? (atual[aba as 'descricao' | 'anotacoes'] ?? '') : ''
-              agendarSalvar({ [aba]: base + html } as Partial<Personagem>)
-              setAba(aba as Aba)
+              const base = atual ? (atual[abaDestino as 'descricao' | 'anotacoes'] ?? '') : ''
+              agendarSalvar({ [abaDestino]: base + html } as Partial<Personagem>)
+              setAba(abaDestino as Aba)
             }}
           />
           <button className="btn-icon perfil-fechar" onClick={() => void fechar()}>✕</button>

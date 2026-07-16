@@ -161,11 +161,11 @@ export function CenarioModal({ cenarioId }: { cenarioId: string }) {
             entidadeTipo="cenario"
             entidadeId={cenarioId}
             acoes={ACOES_IA_CENARIO}
-            onInserir={(aba, html) => {
+            onInserir={(abaDestino, html) => {
               const atual = useApp.getState().cenarios[cenarioId]
-              const base = atual ? (atual[aba as 'descricao' | 'eventos' | 'anotacoes'] ?? '') : ''
-              agendarSalvar({ [aba]: base + html } as Partial<Cenario>)
-              setAba(aba as Aba)
+              const base = atual ? (atual[abaDestino as 'descricao' | 'eventos' | 'anotacoes'] ?? '') : ''
+              agendarSalvar({ [abaDestino]: base + html } as Partial<Cenario>)
+              setAba(abaDestino as Aba)
             }}
           />
           <button className="btn-icon perfil-fechar" onClick={() => void fechar()}>✕</button>

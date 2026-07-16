@@ -8,3 +8,12 @@ export function uint8ParaBase64(bytes: Uint8Array): string {
   }
   return btoa(bin)
 }
+
+/** MIME de imagem a partir da extensão do caminho (fallback image/png). */
+export function mimeDaImagem(rel: string): string {
+  const ext = (rel.split('.').pop() ?? 'png').toLowerCase()
+  if (ext === 'jpg' || ext === 'jpeg') return 'image/jpeg'
+  if (ext === 'webp') return 'image/webp'
+  if (ext === 'gif') return 'image/gif'
+  return 'image/png'
+}

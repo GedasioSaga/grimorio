@@ -16,7 +16,7 @@ import { filtrarArvoreCenarios } from '../lib/filtroCampanha'
 import { idsDaCampanha } from '../lib/vinculos'
 import { htmlParaTexto } from '../lib/htmlTexto'
 import { editorAtivo } from '../lib/canvasAtivo'
-import { uint8ParaBase64 } from '../lib/bin'
+import { mimeDaImagem, uint8ParaBase64 } from '../lib/bin'
 
 const SALVAR_CHAT_DEBOUNCE_MS = 800
 
@@ -24,14 +24,6 @@ interface Anexo {
   nome: string
   blocoTexto: string
   imagem: ImagemIA | null
-}
-
-function mimeDaExtensaoImg(rel: string): string {
-  const ext = (rel.split('.').pop() ?? 'png').toLowerCase()
-  if (ext === 'jpg' || ext === 'jpeg') return 'image/jpeg'
-  if (ext === 'webp') return 'image/webp'
-  if (ext === 'gif') return 'image/gif'
-  return 'image/png'
 }
 
 /** Painel de chat com o assistente de mestre (Gemini) — só em sessões. */
@@ -180,7 +172,7 @@ export function ChatIA({
         const resp = await fetch(convertFileSrc(`${vaultPath}/${retratoRel}`))
         if (!resp.ok) throw new Error(`fetch falhou: ${resp.status}`)
         const blob = await resp.blob()
-        imagem = { mimeType: mimeDaExtensaoImg(retratoRel), base64: uint8ParaBase64(new Uint8Array(await blob.arrayBuffer())) }
+        imagem = { mimeType: mimeDaImagem(retratoRel), base64: uint8ParaBase64(new Uint8Array(await blob.arrayBuffer())) }
       } catch {
         // sem imagem: só o texto (o chip avisa)
       }

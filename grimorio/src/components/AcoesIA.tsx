@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { convertFileSrc } from '@tauri-apps/api/core'
 import { useApp } from '../state/store'
 import { gerarConteudo, type ImagemIA } from '../lib/gemini'
@@ -11,7 +11,7 @@ import {
 import { filtrarArvoreCenarios } from '../lib/filtroCampanha'
 import { campanhasDe, idsDaCampanha } from '../lib/vinculos'
 import { htmlParaTexto, textoParaHtml } from '../lib/htmlTexto'
-import { uint8ParaBase64 } from '../lib/bin'
+import { mimeDaImagem, uint8ParaBase64 } from '../lib/bin'
 
 export interface AcaoIA {
   rotulo: string
@@ -23,14 +23,6 @@ export interface AcaoIA {
   rotuloDestino?: string
   /** Anexa o retrato da entidade (análise de imagem). */
   comImagem?: boolean
-}
-
-function mimeDaExtensaoImg(rel: string): string {
-  const ext = (rel.split('.').pop() ?? 'png').toLowerCase()
-  if (ext === 'jpg' || ext === 'jpeg') return 'image/jpeg'
-  if (ext === 'webp') return 'image/webp'
-  if (ext === 'gif') return 'image/gif'
-  return 'image/png'
 }
 
 /**
@@ -52,6 +44,23 @@ export function AcoesIA({
   const [rodando, setRodando] = useState(false)
   const [preview, setPreview] = useState<{ acao: AcaoIA; texto: string } | null>(null)
   const [erro, setErro] = useState<string | null>(null)
+  const raizRef = useRef<HTMLDivElement | null>(null)
+  // false após o unmount: descarta a resposta de um rodar() em voo se o modal fechar durante o await
+  const montadoRef = useRef(true)
+
+  useEffect(() => () => {
+    montadoRef.current = false
+  }, [])
+
+  // menu aberto: clique fora fecha
+  useEffect(() => {
+    if (!menuAberto) return
+    function aoClicarFora(e: MouseEvent) {
+      if (!raizRef.current?.contains(e.target as Node)) setMenuAberto(false)
+    }
+    document.addEventListener('mousedown', aoClicarFora)
+    return () => document.removeEventListener('mousedown', aoClicarFora)
+  }, [menuAberto])
 
   /** Contexto: primeira campanha em que a entidade participa (ou só a entidade). */
   function montarContexto(): string {
@@ -84,7 +93,7 @@ export function AcoesIA({
     try {
       const { personagens, cenarios, vaultPath } = useApp.getState()
       const ent = entidadeTipo === 'personagem' ? personagens[entidadeId] : cenarios[entidadeId]
-      if (!ent) return
+      if (!ent) { if (montadoRef.current) setErro('Entidade não encontrada.'); return }
       const dados = `# Entidade\nNome: ${ent.nome}\nResumo: ${ent.resumo}\nDescrição atual: ${htmlParaTexto(ent.descricao)}`
       const contexto = montarContexto()
       const system = contexto ? `${SYSTEM_MESTRE}\n\n# Contexto da campanha\n${contexto}` : SYSTEM_MESTRE
@@ -95,7 +104,7 @@ export function AcoesIA({
         const resp = await fetch(convertFileSrc(`${vaultPath}/${ent.retrato}`))
         if (!resp.ok) throw new Error(`fetch falhou: ${resp.status}`)
         const blob = await resp.blob()
-        imagens.push({ mimeType: mimeDaExtensaoImg(ent.retrato), base64: uint8ParaBase64(new Uint8Array(await blob.arrayBuffer())) })
+        imagens.push({ mimeType: mimeDaImagem(ent.retrato), base64: uint8ParaBase64(new Uint8Array(await blob.arrayBuffer())) })
       }
 
       const texto = await gerarConteudo({
@@ -103,21 +112,23 @@ export function AcoesIA({
         historico: [{ papel: 'user', texto: `${dados}\n\n${acao.prompt}` }],
         imagens,
       })
+      // fechou o modal durante o await: não mexe no estado de um componente desmontado
+      if (!montadoRef.current) return
       setPreview({ acao, texto })
     } catch (e) {
-      setErro(e instanceof Error ? e.message : String(e))
+      if (montadoRef.current) setErro(e instanceof Error ? e.message : String(e))
     } finally {
-      setRodando(false)
+      if (montadoRef.current) setRodando(false)
     }
   }
 
   return (
-    <div className="acoes-ia">
+    <div className="acoes-ia" ref={raizRef}>
       <button
         className="btn-icon"
         title="Ações de IA"
         disabled={rodando}
-        onClick={() => setMenuAberto((v) => !v)}
+        onClick={() => { setErro(null); setMenuAberto((v) => !v) }}
       >
         {rodando ? '…' : '✨'}
       </button>
