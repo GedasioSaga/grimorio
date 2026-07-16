@@ -3,6 +3,7 @@ import { PaginasRail } from './PaginasRail'
 import { PaginasChips } from './PaginasChips'
 import { NotasEditor } from './NotasEditor'
 import { CanvasView } from './CanvasView'
+import { ChatIA } from './ChatIA'
 import { tauriFs } from '../lib/fsBridge'
 import { NotebookRepo } from '../lib/notebookRepo'
 import { flexDosLados, proximoRecolhido, type Recolhido } from '../lib/splitState'
@@ -12,17 +13,18 @@ interface EstadoSplit {
   proporcao: number // fração larg. das Notas (0..1) quando ambos abertos
   recolhido: Recolhido
   railRecolhida: boolean // árvore de páginas recolhida em miniatura no topo
+  chatAberto: boolean // painel do assistente IA (só em sessões — ver comChatIA)
 }
 
 function lerSplit(chave: string, recolhidoPadrao: Recolhido): EstadoSplit {
-  const padrao: EstadoSplit = { proporcao: 0.5, recolhido: recolhidoPadrao, railRecolhida: false }
+  const padrao: EstadoSplit = { proporcao: 0.5, recolhido: recolhidoPadrao, railRecolhida: false, chatAberto: false }
   try {
     const s = localStorage.getItem(`grimorio.split.${chave}`)
     if (!s) return padrao
     const o = JSON.parse(s) as Partial<EstadoSplit>
     const proporcao = typeof o.proporcao === 'number' && o.proporcao >= 0.15 && o.proporcao <= 0.85 ? o.proporcao : 0.5
     const recolhido: Recolhido = o.recolhido === 'notas' || o.recolhido === 'mapa' ? o.recolhido : 'nenhum'
-    return { proporcao, recolhido, railRecolhida: o.railRecolhida === true }
+    return { proporcao, recolhido, railRecolhida: o.railRecolhida === true, chatAberto: o.chatAberto === true }
   } catch { return padrao }
 }
 function salvarSplit(chave: string, e: EstadoSplit) {
@@ -38,7 +40,7 @@ function salvarSplit(chave: string, e: EstadoSplit) {
  */
 export function Workspace({
   cadernoDirAbs, cadernoDirRel, chaveSplit, mapa, titulo,
-  notasLado = 'esquerda', notasComecaRecolhida = false,
+  notasLado = 'esquerda', notasComecaRecolhida = false, comChatIA = false,
 }: {
   cadernoDirAbs: string
   cadernoDirRel: string
@@ -47,6 +49,8 @@ export function Workspace({
   titulo?: string
   notasLado?: 'esquerda' | 'direita'
   notasComecaRecolhida?: boolean
+  /** Habilita o botão ✨ IA e a coluna do assistente (só em sessões — precisa de campanha/contexto). */
+  comChatIA?: boolean
 }) {
   const notasNaDireita = notasLado === 'direita'
   const recolhidoPadrao: Recolhido = notasComecaRecolhida ? 'notas' : 'nenhum'
@@ -128,6 +132,15 @@ export function Workspace({
     <div className={`ws-mapa${mapaRecolhido ? ' ws-recolhido' : ''}`} style={{ flexGrow: mapaFlex, flexBasis: 0 }}>
       <div className="ws-cabecalho">
         {notasNaDireita && !mapaRecolhido && <span className="ws-titulo">{mapa?.nome}</span>}
+        {comChatIA && !mapaRecolhido && (
+          <button
+            className="btn-icon"
+            title={split.chatAberto ? 'Fechar assistente IA' : 'Abrir assistente IA'}
+            onClick={() => setSplit((s) => ({ ...s, chatAberto: !s.chatAberto }))}
+          >
+            ✨ IA
+          </button>
+        )}
         <button className="btn-icon" title={mapaRecolhido ? 'Expandir mapa' : 'Recolher mapa'}
           onClick={() => setSplit((s) => ({ ...s, recolhido: proximoRecolhido(s.recolhido, 'mapa') }))}>
           {mapaRecolhido ? (notasNaDireita ? '›' : '‹') : notasNaDireita ? '‹' : '›'}
@@ -146,6 +159,15 @@ export function Workspace({
       {notasNaDireita
         ? <>{painelMapa}{divisoria}{painelEscrita}</>
         : <>{painelEscrita}{divisoria}{painelMapa}</>}
+      {comChatIA && split.chatAberto && mapa && (
+        <div className="ws-chat">
+          <div className="ws-cabecalho">
+            <span className="ws-titulo">Assistente IA</span>
+            <button className="btn-icon" title="Fechar" onClick={() => setSplit((s) => ({ ...s, chatAberto: false }))}>✕</button>
+          </div>
+          <ChatIA caminhoSessao={mapa.caminho} cadernoDirRel={cadernoDirRel} repoNotas={repo} />
+        </div>
+      )}
     </div>
   )
 }

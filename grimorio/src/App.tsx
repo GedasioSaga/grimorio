@@ -57,6 +57,7 @@ export default function App() {
             cadernoDirAbs={`${vaultPath}/${dirNotasDoMapa(aberto.caminho)}`}
             mapa={{ caminho: aberto.caminho, nome: aberto.nome }}
             notasLado="direita"
+            comChatIA
           />
         )}
 
