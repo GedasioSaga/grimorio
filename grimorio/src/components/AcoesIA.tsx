@@ -62,8 +62,13 @@ export function AcoesIA({
   const raizRef = useRef<HTMLDivElement | null>(null)
   const montadoRef = useRef(true)
 
-  useEffect(() => () => {
-    montadoRef.current = false
+  useEffect(() => {
+    // re-arma no setup: o StrictMode (dev) roda cleanup+setup extras mantendo os refs —
+    // sem isso montadoRef ficaria false pra sempre e preview/erros seriam descartados
+    montadoRef.current = true
+    return () => {
+      montadoRef.current = false
+    }
   }, [])
 
   useEffect(() => {

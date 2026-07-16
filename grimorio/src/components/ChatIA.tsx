@@ -82,15 +82,21 @@ export function ChatIA({
       repo?.salvarChatIA(cadernoDirRel, novas).catch((e) => console.error('Falha ao salvar chat:', e))
     }, SALVAR_CHAT_DEBOUNCE_MS)
   }
-  useEffect(() => () => {
-    montadoRef.current = false
-    // desmontou com gravação pendente: cancela o debounce e grava já (fire-and-forget)
-    if (timerSalvar.current) {
-      clearTimeout(timerSalvar.current)
-      timerSalvar.current = null
-      const { repo: r } = useApp.getState()
-      r?.salvarChatIA(cadernoDirRel, mensagensRef.current)
-        .catch((e) => console.error('Falha no save final do chat:', e))
+  useEffect(() => {
+    // re-arma no setup: o StrictMode (dev) roda cleanup+setup extras mantendo os refs —
+    // sem isso o cleanup extra deixaria montadoRef=false pra sempre e a resposta da IA
+    // (e os erros) seriam descartados silenciosamente
+    montadoRef.current = true
+    return () => {
+      montadoRef.current = false
+      // desmontou com gravação pendente: cancela o debounce e grava já (fire-and-forget)
+      if (timerSalvar.current) {
+        clearTimeout(timerSalvar.current)
+        timerSalvar.current = null
+        const { repo: r } = useApp.getState()
+        r?.salvarChatIA(cadernoDirRel, mensagensRef.current)
+          .catch((e) => console.error('Falha no save final do chat:', e))
+      }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])

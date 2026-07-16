@@ -79,6 +79,7 @@ export async function gerarConteudo(opts: {
 
   const inicio = indiceChave++ // reserva o ponto de partida desta chamada (síncrono, sem corrida entre chamadas concorrentes)
   let ultimoStatus = 0 // 0 = nenhuma resposta HTTP (só erro de rede)
+  let ultimoDetalhe = '' // motivo real da última falha (para diagnóstico; sempre sanitizado)
   for (let tentativa = 0; tentativa < chaves.length; tentativa++) {
     const chave = chaves[(inicio + tentativa) % chaves.length]
     try {
@@ -90,6 +91,7 @@ export async function gerarConteudo(opts: {
       })
       if (!resp.ok) {
         ultimoStatus = resp.status
+        ultimoDetalhe = `HTTP ${resp.status}`
         continue // qualquer erro HTTP (429/503, mas também 400/403 de chave inválida): tenta a próxima chave
       }
       const texto = extrairTexto(await resp.json())
@@ -98,8 +100,18 @@ export async function gerarConteudo(opts: {
     } catch (e) {
       // conteúdo vazio é definitivo (bloqueio/refusa): não adianta trocar de chave
       if (e instanceof Error && e.message === 'A IA não retornou conteúdo.') throw e
-      continue // erro de rede/CORS/WebView: tenta a próxima chave
+      ultimoDetalhe = sanitizarErro(String(e), chaves)
+      continue // erro de rede/plugin/timeout: tenta a próxima chave
     }
   }
-  throw new Error(`IA indisponível após tentar todas as chaves (último HTTP ${ultimoStatus}).`)
+  throw new Error(
+    `IA indisponível após tentar todas as chaves (último HTTP ${ultimoStatus}${ultimoDetalhe ? `; ${ultimoDetalhe}` : ''}).`,
+  )
+}
+
+/** Remove qualquer chave que apareça num texto de erro (defesa em profundidade). */
+function sanitizarErro(msg: string, chaves: string[]): string {
+  let limpo = msg.replace(/\s+/g, ' ').slice(0, 220)
+  for (const c of chaves) limpo = limpo.split(c).join('***')
+  return limpo
 }
