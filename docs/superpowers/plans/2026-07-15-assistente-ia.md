@@ -252,7 +252,7 @@ import { describe, it, expect } from 'vitest'
 import {
   acharCampanhaDaSessao,
   achatarCenarios,
-  frasesDeVinculos,
+  frasesDeVinculosNoEscopo,
   montarContextoCampanha,
 } from '../lib/contextoIA'
 import { htmlParaTexto } from '../lib/htmlTexto'
@@ -615,7 +615,7 @@ import { gerarConteudo, type ImagemIA } from '../lib/gemini'
 import {
   acharCampanhaDaSessao,
   achatarCenarios,
-  frasesDeVinculos,
+  frasesDeVinculosNoEscopo,
   montarContextoCampanha,
 } from '../lib/contextoIA'
 import { filtrarArvoreCenarios } from '../lib/filtroCampanha'
@@ -733,7 +733,9 @@ export function ChatIA({
     const linhasCen = achatarCenarios(arvoreCen, (id) => cenarios[id]?.resumo ?? '')
 
     const nomeDe = (id: string) => personagens[id]?.nome ?? cenarios[id]?.nome ?? null
-    const frases = frasesDeVinculos(vinculos, nomeDe)
+    // vínculos só entre entidades EM contexto (participantes + pasta da campanha) — sem vazar de outras campanhas
+    const idsCtx = new Set<string>([...ids, ...doElenco.keys()])
+    const frases = frasesDeVinculosNoEscopo(vinculos, idsCtx, nomeDe)
 
     let notas = ''
     if (slugAtivo) {
@@ -1016,7 +1018,7 @@ import { gerarConteudo, type ImagemIA } from '../lib/gemini'
 import { SYSTEM_MESTRE } from '../lib/chatIA'
 import {
   achatarCenarios,
-  frasesDeVinculos,
+  frasesDeVinculosNoEscopo,
   montarContextoCampanha,
 } from '../lib/contextoIA'
 import { filtrarArvoreCenarios } from '../lib/filtroCampanha'
@@ -1092,7 +1094,7 @@ export function AcoesIA({
       nomeCampanha: camp.nome,
       personagens: parts,
       cenarios: linhasCen,
-      vinculos: frasesDeVinculos(vinculos, nomeDe),
+      vinculos: frasesDeVinculosNoEscopo(vinculos, ids, nomeDe), // só vínculos entre participantes desta campanha
       notas: '',
     })
   }
