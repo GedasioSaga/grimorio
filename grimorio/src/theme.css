@@ -451,8 +451,9 @@ button:hover { border-color: var(--dourado); color: var(--dourado-claro); }
 .acoes-ia { position: relative; }
 .acoes-ia-menu {
   position: absolute; top: 100%; right: 0; z-index: 20; min-width: 220px;
+  max-height: 60vh;
   background: var(--fundo-painel); border: 1px solid var(--dourado); border-radius: 6px;
-  display: flex; flex-direction: column; overflow: hidden;
+  display: flex; flex-direction: column; overflow-x: hidden; overflow-y: auto;
 }
 .acoes-ia-menu button { border: none; border-radius: 0; text-align: left; padding: 8px 12px; background: transparent; }
 .acoes-ia-menu button:hover { background: var(--fundo-elevado); color: var(--dourado-claro); }

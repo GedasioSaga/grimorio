@@ -201,7 +201,7 @@ export function AcoesIA({
                 }
               }}
             />
-            <button disabled={!pergunta.trim()} onClick={enviarPergunta}>Enviar</button>
+            <button disabled={rodando || !pergunta.trim()} onClick={enviarPergunta}>Enviar</button>
           </div>
         </div>
       )}
@@ -224,6 +224,10 @@ export function AcoesIA({
               <button
                 className="acoes-ia-inserir"
                 onClick={() => {
+                  const { personagens, cenarios } = useApp.getState()
+                  const ent = entidadeTipo === 'personagem' ? personagens[entidadeId] : cenarios[entidadeId]
+                  const atualDestino = ent ? htmlParaTexto((ent as unknown as Record<string, string>)[preview.destino] ?? '') : ''
+                  if (atualDestino && !confirm(`Substituir o texto atual de "${preview.rotuloDestino}"? O conteúdo atual será apagado.`)) return
                   onInserir(preview.destino, textoParaHtml(preview.texto), 'substituir')
                   setPreview(null)
                 }}
