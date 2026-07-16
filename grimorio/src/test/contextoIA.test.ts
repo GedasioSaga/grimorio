@@ -1,11 +1,15 @@
 import { describe, it, expect } from 'vitest'
 import {
   acharCampanhaDaSessao,
+  acharCampanhaPorCaminho,
   achatarCenarios,
   campanhaDeEntidade,
+  contextoDeEntidade,
+  contextoDoCaminho,
   frasesDeVinculos,
   frasesDeVinculosNoEscopo,
   montarContextoCampanha,
+  montarContextoDaCampanha,
 } from '../lib/contextoIA'
 import type { PastaCenarioNode, VaultTree, Vinculo } from '../lib/types'
 
@@ -122,5 +126,57 @@ describe('montarContextoCampanha', () => {
   it('omite seções vazias', () => {
     const ctx = montarContextoCampanha({ nomeCampanha: '', personagens: [], cenarios: [], vinculos: [], notas: '' })
     expect(ctx).toBe('')
+  })
+})
+
+describe('acharCampanhaPorCaminho', () => {
+  const tree = {
+    campanhas: [{ id: 'c1', slug: 'rpg', nome: 'RPG', sessoes: [], personagens: [], canvases: [], escritas: [] }],
+  } as unknown as VaultTree
+  it('acha pelo slug de um caminho de escrita', () => {
+    expect(acharCampanhaPorCaminho(tree, 'campanhas/rpg/escrita/lore.notas')?.id).toBe('c1')
+  })
+  it('caminho fora de campanha → null', () => {
+    expect(acharCampanhaPorCaminho(tree, 'canvases-soltos/x')).toBeNull()
+  })
+})
+
+describe('montarContextoDaCampanha / wrappers', () => {
+  const camp = { id: 'c1', slug: 'rpg', nome: 'RPG', sessoes: [], personagens: [], canvases: [], escritas: [] }
+  const tree = {
+    campanhas: [camp],
+    cenarios: {
+      slug: 'cenarios', nome: 'Cenários', caminho: 'cenarios', subpastas: [],
+      cenarios: [{ id: 'cen1', slug: 'oxonia', nome: 'Oxonia', caminho: 'cenarios/oxonia', filhos: [] }],
+    },
+  } as unknown as VaultTree
+  const participa = (deId: string): Vinculo => ({
+    id: `v-${deId}`, deTipo: 'personagem', deId, paraTipo: 'campanha', paraId: 'c1',
+    tipo: 'participa', notas: '', criadoEm: '',
+  })
+  const deps = {
+    tree,
+    personagens: { p1: { id: 'p1', nome: 'Alice', resumo: 'maga' } },
+    cenarios: { cen1: { id: 'cen1', nome: 'Oxonia', resumo: 'cidade' } },
+    vinculos: [participa('p1'), participa('cen1')],
+  }
+
+  it('monta o contexto com personagens e cenários no escopo da campanha', () => {
+    const ctx = montarContextoDaCampanha(camp as never, deps)
+    expect(ctx).toContain('## Campanha\nRPG')
+    expect(ctx).toContain('- Alice — maga')
+    expect(ctx).toContain('- Oxonia — cidade')
+  })
+
+  it('contextoDoCaminho acha a campanha pelo caminho do caderno', () => {
+    expect(contextoDoCaminho('campanhas/rpg/escrita/lore.notas', deps)).toContain('## Campanha\nRPG')
+  })
+
+  it('contextoDoCaminho fora de campanha → string vazia', () => {
+    expect(contextoDoCaminho('canvases-soltos/x', deps)).toBe('')
+  })
+
+  it('contextoDeEntidade acha a campanha pelo vínculo participa', () => {
+    expect(contextoDeEntidade('p1', { ...deps, caminhoPorId: {} })).toContain('## Campanha\nRPG')
   })
 })

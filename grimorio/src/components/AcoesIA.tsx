@@ -3,14 +3,7 @@ import { convertFileSrc } from '@tauri-apps/api/core'
 import { useApp } from '../state/store'
 import { gerarConteudo, type ImagemIA } from '../lib/gemini'
 import { SYSTEM_MESTRE } from '../lib/chatIA'
-import {
-  achatarCenarios,
-  campanhaDeEntidade,
-  frasesDeVinculosNoEscopo,
-  montarContextoCampanha,
-} from '../lib/contextoIA'
-import { filtrarArvoreCenarios } from '../lib/filtroCampanha'
-import { idsDaCampanha } from '../lib/vinculos'
+import { contextoDeEntidade } from '../lib/contextoIA'
 import { htmlParaTexto, textoParaHtml } from '../lib/htmlTexto'
 import { mimeDaImagem, uint8ParaBase64 } from '../lib/bin'
 import { promptMelhorar, promptVersao } from '../lib/promptsIA'
@@ -83,19 +76,8 @@ export function AcoesIA({
   /** Contexto: campanha da entidade (vínculo participa ou pasta) + vínculos no escopo. */
   function montarContexto(): string {
     const { tree, personagens, cenarios, vinculos, caminhoPorId } = useApp.getState()
-    const camp = tree ? campanhaDeEntidade(tree, vinculos, (id) => caminhoPorId[id], entidadeId) : null
-    if (!camp || !tree) return ''
-    const ids = idsDaCampanha(vinculos, camp.id)
-    const parts = Object.values(personagens).filter((p) => ids.has(p.id)).map((p) => ({ nome: p.nome, resumo: p.resumo }))
-    const linhasCen = achatarCenarios(filtrarArvoreCenarios(tree.cenarios, ids), (id) => cenarios[id]?.resumo ?? '')
-    const nomeDe = (id: string) => personagens[id]?.nome ?? cenarios[id]?.nome ?? null
-    return montarContextoCampanha({
-      nomeCampanha: camp.nome,
-      personagens: parts,
-      cenarios: linhasCen,
-      vinculos: frasesDeVinculosNoEscopo(vinculos, ids, nomeDe),
-      notas: '',
-    })
+    if (!tree) return ''
+    return contextoDeEntidade(entidadeId, { tree, personagens, cenarios, vinculos, caminhoPorId })
   }
 
   async function executar(opts: {

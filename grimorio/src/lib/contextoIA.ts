@@ -1,5 +1,6 @@
 import type { CampanhaNode, CenarioNode, PastaCenarioNode, VaultTree, Vinculo } from './types'
-import { campanhasDe } from './vinculos'
+import { campanhasDe, idsDaCampanha } from './vinculos'
+import { filtrarArvoreCenarios } from './filtroCampanha'
 
 export interface EntidadeCtx {
   nome: string
@@ -10,11 +11,16 @@ export interface CenarioCtx extends EntidadeCtx {
   nivel: number
 }
 
-/** Campanha dona de uma sessão (slug em campanhas/<slug>/sessoes/...), ou null. */
-export function acharCampanhaDaSessao(tree: VaultTree, caminhoSessao: string): CampanhaNode | null {
-  const m = caminhoSessao.match(/^campanhas\/([^/]+)\//)
+/** Campanha dona de um caminho do cofre (slug em campanhas/<slug>/...), ou null. */
+export function acharCampanhaPorCaminho(tree: VaultTree, caminho: string): CampanhaNode | null {
+  const m = caminho.match(/^campanhas\/([^/]+)\//)
   if (!m) return null
   return tree.campanhas.find((c) => c.slug === m[1]) ?? null
+}
+
+/** Campanha dona de uma sessão (slug em campanhas/<slug>/sessoes/...), ou null. */
+export function acharCampanhaDaSessao(tree: VaultTree, caminhoSessao: string): CampanhaNode | null {
+  return acharCampanhaPorCaminho(tree, caminhoSessao)
 }
 
 /** Campanha de uma entidade: 1º por vínculo 'participa'; senão (personagem) pela pasta campanhas/<slug>/. */
@@ -95,4 +101,49 @@ export function montarContextoCampanha(d: {
   if (d.vinculos.length > 0) secoes.push(`## Vínculos\n${d.vinculos.map((v) => `- ${v}`).join('\n')}`)
   if (d.notas) secoes.push(`## Notas da sessão\n${d.notas}`)
   return secoes.join('\n\n')
+}
+
+/** Dados do store necessários para montar o contexto (estrutural: aceita Personagem/Cenário reais). */
+export interface DepsContexto {
+  tree: VaultTree
+  personagens: Record<string, { id: string; nome: string; resumo: string }>
+  cenarios: Record<string, { id: string; nome: string; resumo: string }>
+  vinculos: Vinculo[]
+}
+
+/**
+ * Contexto textual da campanha: personagens, cenários e vínculos no escopo dela.
+ * Núcleo compartilhado — antes vivia dentro do AcoesIA (só servia entidade); agora
+ * serve modais (por entidade) e escrita (por caminho do caderno).
+ */
+export function montarContextoDaCampanha(camp: CampanhaNode, deps: DepsContexto): string {
+  const { tree, personagens, cenarios, vinculos } = deps
+  const ids = idsDaCampanha(vinculos, camp.id)
+  const parts = Object.values(personagens)
+    .filter((p) => ids.has(p.id))
+    .map((p) => ({ nome: p.nome, resumo: p.resumo }))
+  const linhasCen = achatarCenarios(filtrarArvoreCenarios(tree.cenarios, ids), (id) => cenarios[id]?.resumo ?? '')
+  const nomeDe = (id: string) => personagens[id]?.nome ?? cenarios[id]?.nome ?? null
+  return montarContextoCampanha({
+    nomeCampanha: camp.nome,
+    personagens: parts,
+    cenarios: linhasCen,
+    vinculos: frasesDeVinculosNoEscopo(vinculos, ids, nomeDe),
+    notas: '',
+  })
+}
+
+/** Contexto a partir de uma entidade (modais): acha a campanha por vínculo 'participa' ou pasta. */
+export function contextoDeEntidade(
+  entidadeId: string,
+  deps: DepsContexto & { caminhoPorId: Record<string, string | undefined> },
+): string {
+  const camp = campanhaDeEntidade(deps.tree, deps.vinculos, (id) => deps.caminhoPorId[id], entidadeId)
+  return camp ? montarContextoDaCampanha(camp, deps) : ''
+}
+
+/** Contexto a partir de um caminho do cofre (escrita): acha a campanha pelo slug do caminho. */
+export function contextoDoCaminho(caminho: string, deps: DepsContexto): string {
+  const camp = acharCampanhaPorCaminho(deps.tree, caminho)
+  return camp ? montarContextoDaCampanha(camp, deps) : ''
 }
