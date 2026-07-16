@@ -43,6 +43,7 @@ export function AcoesIA({
   imagensParaIA,
   conteudoDoDestino,
   onInserir,
+  sufixoPrompt = '',
 }: {
   system: string
   abaAtual: string
@@ -53,6 +54,8 @@ export function AcoesIA({
   imagensParaIA?: () => Promise<ImagemIA[]>
   conteudoDoDestino: (destino: string) => string
   onInserir: (destino: string, textoCru: string, modo: ModoInserir) => void
+  /** Anexado a todo prompt (ex.: regra de marcadores de imagem na escrita). */
+  sufixoPrompt?: string
 }) {
   const [menuAberto, setMenuAberto] = useState(false)
   const [rodando, setRodando] = useState(false)
@@ -96,10 +99,11 @@ export function AcoesIA({
         dadosBase + (abaEhTexto && textoAtual ? `\nTexto atual da seção "${rotuloAbaAtual}":\n${textoAtual}` : '')
       const systemFull = contexto ? `${system}\n\n# Contexto da campanha\n${contexto}` : system
       const imagens = opts.comImagem && imagensParaIA ? await imagensParaIA() : []
+      const instrucao = sufixoPrompt ? `${opts.prompt}\n\n${sufixoPrompt}` : opts.prompt
 
       const texto = await gerarConteudo({
         system: systemFull,
-        historico: [{ papel: 'user', texto: `${dados}\n\n${opts.prompt}` }],
+        historico: [{ papel: 'user', texto: `${dados}\n\n${instrucao}` }],
         imagens,
       })
       if (!montadoRef.current) return

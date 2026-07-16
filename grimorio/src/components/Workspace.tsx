@@ -117,7 +117,7 @@ export function Workspace({
             )
             : <PaginasRail repo={repo} cadernoDirRel={cadernoDirRel} onRecolher={() => setSplit((s) => ({ ...s, railRecolhida: true }))} />}
           {slugAtivo
-            ? <NotasEditor key={slugAtivo} repo={repo} slug={slugAtivo} />
+            ? <NotasEditor key={slugAtivo} repo={repo} slug={slugAtivo} cadernoDirRel={cadernoDirRel} />
             : <div className="notas-vazio">Selecione ou crie uma página.</div>}
         </div>
       )}

@@ -7,38 +7,59 @@ import { ImagemCofre } from './ImagemCofre'
 import { ParagrafoFinal } from './paragrafoFinal'
 import { uint8ParaBase64 } from '../lib/bin'
 import { useApp } from '../state/store'
+import { AcoesIA, type AcaoIA, type ModoInserir } from './AcoesIA'
+import { SYSTEM_ESCRITOR, promptEstruturar, REGRA_MARCADORES } from '../lib/promptsIA'
+import { markdownParaHtml } from '../lib/markdownHtml'
+import { extrairImagens, reinserirImagens } from '../lib/imagensMarcador'
+import { htmlParaTexto } from '../lib/htmlTexto'
+import { contextoDoCaminho } from '../lib/contextoIA'
 
 const AUTOSAVE_MS = 800
+
+/** Ação específica da escrita (curta/longa/melhorar/perguntar já vêm do próprio AcoesIA). */
+const ACOES_IA_ESCRITA: AcaoIA[] = [
+  {
+    rotulo: 'Estruturar',
+    prompt: promptEstruturar(),
+    abaDestino: 'corpo',
+    rotuloDestino: 'esta página',
+  },
+]
 
 function idImagem(): string {
   return crypto.randomUUID().replace(/-/g, '').slice(0, 16)
 }
 
 /** Carregador: busca o corpo da página e só então monta o editor (keyed pelo slug). */
-export function NotasEditor({ repo, slug }: { repo: NotebookRepo; slug: string }) {
+export function NotasEditor({ repo, slug, cadernoDirRel }: { repo: NotebookRepo; slug: string; cadernoDirRel: string }) {
   const [corpo, setCorpo] = useState<string | null>(null)
+  const [titulo, setTitulo] = useState('')
   const [erroCarga, setErroCarga] = useState<string | null>(null)
 
   useEffect(() => {
     let ativo = true
     setCorpo(null); setErroCarga(null)
     repo.lerPagina(slug)
-      .then((p) => { if (ativo) setCorpo(p.corpo ?? '') })
+      .then((p) => { if (ativo) { setCorpo(p.corpo ?? ''); setTitulo(p.titulo ?? '') } })
       .catch((e) => { if (ativo) setErroCarga(String(e)) })
     return () => { ativo = false }
   }, [repo, slug])
 
   if (erroCarga) return <div className="notas-erro">Não foi possível abrir esta página.<br /><code>{erroCarga}</code></div>
   if (corpo === null) return <div className="notas-carregando">Carregando…</div>
-  return <EditorInterno key={slug} repo={repo} slug={slug} corpoInicial={corpo} />
+  return <EditorInterno key={slug} repo={repo} slug={slug} corpoInicial={corpo} titulo={titulo} cadernoDirRel={cadernoDirRel} />
 }
 
-function EditorInterno({ repo, slug, corpoInicial }: { repo: NotebookRepo; slug: string; corpoInicial: string }) {
+function EditorInterno({ repo, slug, corpoInicial, titulo, cadernoDirRel }: {
+  repo: NotebookRepo; slug: string; corpoInicial: string; titulo: string; cadernoDirRel: string
+}) {
   const vaultPath = useApp((s) => s.vaultPath)
   const [salvarErro, setSalvarErro] = useState<string | null>(null)
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const htmlRef = useRef<string>(corpoInicial)
+  // imagens extraídas no momento do envio à IA: reinseridas depois pelos seus marcadores
+  const imagensSnapshotRef = useRef<string[]>([])
 
   const editor = useEditor({
     extensions: [StarterKit, ImagemCofre, ParagrafoFinal],
@@ -93,6 +114,22 @@ function EditorInterno({ repo, slug, corpoInicial }: { repo: NotebookRepo; slug:
       console.error('Falha ao salvar página:', e)
       setSalvarErro(String(e))
     }
+  }
+
+  /** Aplica o texto da IA: substitui a página (reinserindo imagens) ou anexa no fim. */
+  function aplicarDaIA(textoCru: string, modo: ModoInserir) {
+    if (!editor) return
+    if (modo === 'substituir') {
+      const html = reinserirImagens(markdownParaHtml(textoCru), imagensSnapshotRef.current)
+      editor.commands.setContent(html)
+    } else {
+      // adicionar: a página já tem suas imagens — não reinsere (evita duplicar);
+      // limpa marcadores órfãos que a IA possa ter ecoado
+      const html = markdownParaHtml(textoCru.replace(/\{\{IMG:\d+\}\}/g, '').trim())
+      editor.chain().focus('end').insertContent(html).run()
+    }
+    htmlRef.current = editor.getHTML()
+    agendarSalvar()
   }
 
   async function inserirImagem() {
@@ -151,6 +188,28 @@ function EditorInterno({ repo, slug, corpoInicial }: { repo: NotebookRepo; slug:
         <button onClick={() => editor.chain().focus().setHorizontalRule().run()}>―</button>
         <span className="sep" />
         <button onClick={() => void inserirImagem()}>🖼 Imagem</button>
+        <span className="notas-toolbar-ia">
+          <AcoesIA
+            system={SYSTEM_ESCRITOR}
+            abaAtual="corpo"
+            rotuloAbaAtual={titulo || 'esta página'}
+            abaEhTexto
+            acoes={ACOES_IA_ESCRITA}
+            sufixoPrompt={REGRA_MARCADORES}
+            snapshot={() => {
+              const { html, imagens } = extrairImagens(htmlRef.current)
+              imagensSnapshotRef.current = imagens
+              const s = useApp.getState()
+              return {
+                dadosBase: `# Página de escrita\nTítulo: ${titulo}`,
+                textoAtual: htmlParaTexto(html),
+                contexto: s.tree ? contextoDoCaminho(cadernoDirRel, { ...s, tree: s.tree }) : '',
+              }
+            }}
+            conteudoDoDestino={() => htmlParaTexto(htmlRef.current)}
+            onInserir={(_dest, textoCru, modo) => aplicarDaIA(textoCru, modo)}
+          />
+        </span>
       </div>
       <EditorContent editor={editor} className="notas-corpo" />
       {salvarErro && <div className="notas-salvar-erro">Falha ao salvar: {salvarErro}</div>}

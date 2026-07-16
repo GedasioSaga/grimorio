@@ -369,6 +369,7 @@ button:hover { border-color: var(--dourado); color: var(--dourado-claro); }
 .notas-toolbar { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; padding: 6px 10px; border-bottom: 1px solid var(--borda); }
 .notas-toolbar .sep { width: 1px; height: 18px; background: var(--borda); margin: 0 4px; }
 .notas-toolbar button.ativo { border-color: var(--dourado); color: var(--dourado-claro); }
+.notas-toolbar-ia { margin-left: auto; display: inline-flex; }
 /* padding-top: espaço p/ a barra de opções da imagem (fica -34px acima dela) não
    ser cortada em imagens no topo. padding-bottom: rolar além do último bloco. */
 .notas-corpo { flex: 1; min-height: 0; overflow-y: auto; padding: 40px 28px 120px; }
