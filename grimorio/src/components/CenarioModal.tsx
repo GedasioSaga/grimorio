@@ -29,12 +29,6 @@ const ABAS: { id: Aba; rotulo: string }[] = [
 
 const ACOES_IA_CENARIO: AcaoIA[] = [
   {
-    rotulo: 'Gerar/melhorar descrição',
-    prompt: 'Escreva (ou melhore) a descrição deste cenário em 2-3 parágrafos evocativos, coerentes com o contexto.',
-    abaDestino: 'descricao',
-    rotuloDestino: 'Descrição',
-  },
-  {
     rotulo: 'Sugerir eventos',
     prompt: 'Sugira 3 eventos que podem acontecer neste cenário (lista curta, um por linha, com gatilho e consequência).',
     abaDestino: 'eventos',
@@ -160,11 +154,15 @@ export function CenarioModal({ cenarioId }: { cenarioId: string }) {
           <AcoesIA
             entidadeTipo="cenario"
             entidadeId={cenarioId}
+            abaAtual={aba}
+            rotuloAbaAtual={ABAS.find((a) => a.id === aba)?.rotulo ?? aba}
+            abaEhTexto={aba !== 'imagens' && aba !== 'conteudo' && aba !== 'vinculos'}
             acoes={ACOES_IA_CENARIO}
-            onInserir={(abaDestino, html) => {
+            onInserir={(abaDestino, html, modo) => {
               const atual = useApp.getState().cenarios[cenarioId]
-              const base = atual ? (atual[abaDestino as 'descricao' | 'eventos' | 'anotacoes'] ?? '') : ''
-              agendarSalvar({ [abaDestino]: base + html } as Partial<Cenario>)
+              const base = atual ? (atual[abaDestino as AbaTexto] ?? '') : ''
+              const novo = modo === 'substituir' ? html : base + html
+              agendarSalvar({ [abaDestino]: novo } as Partial<Cenario>)
               setAba(abaDestino as Aba)
             }}
           />

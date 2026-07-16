@@ -456,6 +456,14 @@ button:hover { border-color: var(--dourado); color: var(--dourado-claro); }
 }
 .acoes-ia-menu button { border: none; border-radius: 0; text-align: left; padding: 8px 12px; background: transparent; }
 .acoes-ia-menu button:hover { background: var(--fundo-elevado); color: var(--dourado-claro); }
+.acoes-ia-perguntar { display: flex; flex-direction: column; gap: 6px; padding: 8px; border-top: 1px solid var(--borda); }
+.acoes-ia-perguntar textarea {
+  background: var(--fundo); border: 1px solid var(--borda); border-radius: 6px;
+  color: var(--texto); padding: 6px 8px; font-size: 12px; font-family: var(--sans);
+  resize: vertical; min-height: 44px;
+}
+.acoes-ia-perguntar button { align-self: flex-end; font-size: 12px; padding: 4px 12px; }
+.acoes-ia-perguntar button:disabled { opacity: 0.4; cursor: default; }
 .acoes-ia-erro { position: absolute; top: 100%; right: 0; z-index: 20; color: var(--erro); font-size: 12px; background: var(--fundo-painel); border: 1px solid var(--erro); border-radius: 6px; padding: 6px 10px; max-width: 280px; }
 .acoes-ia-overlay {
   position: fixed; inset: 0; background: rgba(0, 0, 0, 0.6);
@@ -468,5 +476,5 @@ button:hover { border-color: var(--dourado); color: var(--dourado-claro); }
 }
 .acoes-ia-preview-titulo { font-family: var(--serif); color: var(--dourado-claro); padding: 14px 16px 8px; }
 .acoes-ia-preview-texto { flex: 1; overflow-y: auto; padding: 0 16px 12px; font-size: 13px; line-height: 1.55; white-space: pre-wrap; }
-.acoes-ia-preview-acoes { display: flex; justify-content: flex-end; gap: 8px; padding: 10px 16px; border-top: 1px solid var(--borda); }
+.acoes-ia-preview-acoes { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; padding: 10px 16px; border-top: 1px solid var(--borda); }
 .acoes-ia-inserir { border-color: var(--dourado); color: var(--dourado-claro); }

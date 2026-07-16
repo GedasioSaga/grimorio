@@ -25,12 +25,6 @@ const ABAS: { id: Aba; rotulo: string }[] = [
 
 const ACOES_IA_PERSONAGEM: AcaoIA[] = [
   {
-    rotulo: 'Gerar/melhorar descrição',
-    prompt: 'Escreva (ou melhore) a descrição deste personagem em 2-3 parágrafos evocativos, coerentes com o contexto.',
-    abaDestino: 'descricao',
-    rotuloDestino: 'Descrição',
-  },
-  {
     rotulo: 'Sugerir segredos e ganchos',
     prompt: 'Sugira 3 segredos ou ganchos de aventura envolvendo este personagem, em lista curta.',
     abaDestino: 'anotacoes',
@@ -153,11 +147,15 @@ export function PerfilModal({ personagemId }: { personagemId: string }) {
           <AcoesIA
             entidadeTipo="personagem"
             entidadeId={personagemId}
+            abaAtual={aba}
+            rotuloAbaAtual={ABAS.find((a) => a.id === aba)?.rotulo ?? aba}
+            abaEhTexto={aba !== 'imagens' && aba !== 'vinculos'}
             acoes={ACOES_IA_PERSONAGEM}
-            onInserir={(abaDestino, html) => {
+            onInserir={(abaDestino, html, modo) => {
               const atual = useApp.getState().personagens[personagemId]
-              const base = atual ? (atual[abaDestino as 'descricao' | 'anotacoes'] ?? '') : ''
-              agendarSalvar({ [abaDestino]: base + html } as Partial<Personagem>)
+              const base = atual ? (atual[abaDestino as AbaTexto] ?? '') : ''
+              const novo = modo === 'substituir' ? html : base + html
+              agendarSalvar({ [abaDestino]: novo } as Partial<Personagem>)
               setAba(abaDestino as Aba)
             }}
           />
