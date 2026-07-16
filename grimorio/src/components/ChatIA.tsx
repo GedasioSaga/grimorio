@@ -16,6 +16,7 @@ import { filtrarArvoreCenarios } from '../lib/filtroCampanha'
 import { idsDaCampanha } from '../lib/vinculos'
 import { htmlParaTexto } from '../lib/htmlTexto'
 import { editorAtivo } from '../lib/canvasAtivo'
+import { uint8ParaBase64 } from '../lib/bin'
 
 const SALVAR_CHAT_DEBOUNCE_MS = 800
 
@@ -23,16 +24,6 @@ interface Anexo {
   nome: string
   blocoTexto: string
   imagem: ImagemIA | null
-}
-
-/** Blob → base64 puro (sem prefixo data:). */
-function blobParaBase64(blob: Blob): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const r = new FileReader()
-    r.onload = () => resolve(String(r.result).split(',')[1] ?? '')
-    r.onerror = () => reject(new Error('falha ao ler imagem'))
-    r.readAsDataURL(blob)
-  })
 }
 
 function mimeDaExtensaoImg(rel: string): string {
@@ -64,6 +55,9 @@ export function ChatIA({
   const [anexo, setAnexo] = useState<Anexo | null>(null)
   const timerSalvar = useRef<ReturnType<typeof setTimeout> | null>(null)
   const fimRef = useRef<HTMLDivElement | null>(null)
+  // false após o unmount: bloqueia o save da resposta de um enviar() em voo (evita
+  // clobber da conversa de outra sessão se o usuário trocar de sessão durante o await)
+  const montadoRef = useRef(true)
 
   // carrega o histórico salvo da sessão
   useEffect(() => {
@@ -97,6 +91,7 @@ export function ChatIA({
     }, SALVAR_CHAT_DEBOUNCE_MS)
   }
   useEffect(() => () => {
+    montadoRef.current = false
     // desmontou com gravação pendente: cancela o debounce e grava já (fire-and-forget)
     if (timerSalvar.current) {
       clearTimeout(timerSalvar.current)
@@ -126,7 +121,9 @@ export function ChatIA({
     const arvoreCen = ids.size > 0 ? filtrarArvoreCenarios(tree.cenarios, ids) : { ...tree.cenarios, cenarios: [], subpastas: [] }
     const linhasCen = achatarCenarios(arvoreCen, (id) => cenarios[id]?.resumo ?? '')
 
-    // vínculos só do escopo da campanha (participantes + elenco da pasta): sem campanha → nenhum
+    // vínculos só do escopo da campanha (participantes + elenco da pasta): sem campanha → nenhum.
+    // cenários incluídos só por herança de subárvore (filhos de um cenário participante) ficam
+    // fora deste escopo de vínculo — sub-inclusão consciente no contexto, não vazamento.
     const idsCtx = new Set<string>([...ids, ...doElenco.keys()])
     const nomeDe = (id: string) => personagens[id]?.nome ?? cenarios[id]?.nome ?? null
     const frases = frasesDeVinculosNoEscopo(vinculos, idsCtx, nomeDe)
@@ -163,13 +160,13 @@ export function ChatIA({
     let retratoRel: string | null = null
     if (shape.type === 'character-card') {
       const p = personagens[(shape as CharacterCardShapeType).props.personagemId]
-      if (!p) return
+      if (!p) { setErro('Entidade do card não encontrada.'); return }
       nome = p.nome
       retratoRel = p.retrato
       bloco = `Card anexado — Personagem: ${p.nome}\nResumo: ${p.resumo}\nDescrição: ${htmlParaTexto(p.descricao)}`
     } else if (shape.type === 'cenario-card') {
       const c = cenarios[(shape as CenarioCardShapeType).props.cenarioId]
-      if (!c) return
+      if (!c) { setErro('Entidade do card não encontrada.'); return }
       nome = c.nome
       retratoRel = c.retrato
       bloco = `Card anexado — Cenário: ${c.nome}\nResumo: ${c.resumo}\nDescrição: ${htmlParaTexto(c.descricao)}`
@@ -180,8 +177,10 @@ export function ChatIA({
     let imagem: ImagemIA | null = null
     if (retratoRel && vaultPath) {
       try {
-        const blob = await (await fetch(convertFileSrc(`${vaultPath}/${retratoRel}`))).blob()
-        imagem = { mimeType: mimeDaExtensaoImg(retratoRel), base64: await blobParaBase64(blob) }
+        const resp = await fetch(convertFileSrc(`${vaultPath}/${retratoRel}`))
+        if (!resp.ok) throw new Error(`fetch falhou: ${resp.status}`)
+        const blob = await resp.blob()
+        imagem = { mimeType: mimeDaExtensaoImg(retratoRel), base64: uint8ParaBase64(new Uint8Array(await blob.arrayBuffer())) }
       } catch {
         // sem imagem: só o texto (o chip avisa)
       }
@@ -209,9 +208,12 @@ export function ChatIA({
         historico: janela,
         imagens: anexo?.imagem ? [anexo.imagem] : [],
       })
+      // desmontou durante o await (troca de sessão): a pergunta já foi persistida
+      // por agendarSalvar(novas)/flush; descartar a resposta evita clobber da conversa nova
+      if (!montadoRef.current) return
       agendarSalvar([...novas, { papel: 'model', texto: resposta, em: new Date().toISOString() }])
     } catch (e) {
-      setErro(e instanceof Error ? e.message : String(e))
+      if (montadoRef.current) setErro(e instanceof Error ? e.message : String(e))
     } finally {
       setAnexo(null)
       setPensando(false)

@@ -1024,6 +1024,7 @@ import {
 import { filtrarArvoreCenarios } from '../lib/filtroCampanha'
 import { campanhasDe, idsDaCampanha } from '../lib/vinculos'
 import { htmlParaTexto, textoParaHtml } from '../lib/htmlTexto'
+import { uint8ParaBase64 } from '../lib/bin'
 
 export interface AcaoIA {
   rotulo: string
@@ -1035,16 +1036,6 @@ export interface AcaoIA {
   rotuloDestino?: string
   /** Anexa o retrato da entidade (análise de imagem). */
   comImagem?: boolean
-}
-
-/** Blob → base64 puro (sem prefixo data:). */
-function blobParaBase64(blob: Blob): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const r = new FileReader()
-    r.onload = () => resolve(String(r.result).split(',')[1] ?? '')
-    r.onerror = () => reject(new Error('falha ao ler imagem'))
-    r.readAsDataURL(blob)
-  })
 }
 
 function mimeDaExtensaoImg(rel: string): string {
@@ -1114,8 +1105,10 @@ export function AcoesIA({
       const imagens: ImagemIA[] = []
       if (acao.comImagem) {
         if (!ent.retrato || !vaultPath) throw new Error('Esta entidade não tem imagem.')
-        const blob = await (await fetch(convertFileSrc(`${vaultPath}/${ent.retrato}`))).blob()
-        imagens.push({ mimeType: mimeDaExtensaoImg(ent.retrato), base64: await blobParaBase64(blob) })
+        const resp = await fetch(convertFileSrc(`${vaultPath}/${ent.retrato}`))
+        if (!resp.ok) throw new Error(`fetch falhou: ${resp.status}`)
+        const blob = await resp.blob()
+        imagens.push({ mimeType: mimeDaExtensaoImg(ent.retrato), base64: uint8ParaBase64(new Uint8Array(await blob.arrayBuffer())) })
       }
 
       const texto = await gerarConteudo({
