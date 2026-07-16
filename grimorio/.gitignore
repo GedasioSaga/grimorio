@@ -22,3 +22,7 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# segredos — nunca commitar
+.env
+.env.*
