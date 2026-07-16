@@ -1,5 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { fetch as fetchTauri } from '@tauri-apps/plugin-http'
 import { extrairTexto, gerarConteudo, montarBody, parsearChaves } from '../lib/gemini'
+
+// gemini.ts usa o fetch do plugin HTTP do Tauri (não o global): mocka o módulo.
+vi.mock('@tauri-apps/plugin-http', () => ({ fetch: vi.fn() }))
+const fetchMock = vi.mocked(fetchTauri)
 
 describe('parsearChaves', () => {
   it('separa por vírgula e apara espaços', () => {
@@ -60,42 +65,34 @@ const pedido = { system: 'p', historico: [{ papel: 'user' as const, texto: 'oi' 
 
 describe('gerarConteudo (round-robin com fetch mockado)', () => {
   beforeEach(() => {
+    fetchMock.mockReset()
     // 3 chaves fictícias: cobre rotação/retry sem tocar no .env real nem na rede.
     vi.stubEnv('GEMINI_API_KEYS', 'k1,k2,k3')
   })
   afterEach(() => {
-    vi.unstubAllGlobals()
     vi.unstubAllEnvs()
   })
 
   it('sucesso na 1ª chave', async () => {
-    const fetchMock = vi.fn().mockResolvedValue(respOk('resposta'))
-    vi.stubGlobal('fetch', fetchMock)
+    fetchMock.mockResolvedValue(respOk('resposta') as never)
     expect(await gerarConteudo(pedido)).toBe('resposta')
     expect(fetchMock).toHaveBeenCalledTimes(1)
   })
 
   it('429 na 1ª chave → tenta a próxima e tem sucesso', async () => {
-    const fetchMock = vi.fn()
-      .mockResolvedValueOnce(respStatus(429))
-      .mockResolvedValueOnce(respOk('segunda'))
-    vi.stubGlobal('fetch', fetchMock)
+    fetchMock.mockResolvedValueOnce(respStatus(429) as never).mockResolvedValueOnce(respOk('segunda') as never)
     expect(await gerarConteudo(pedido)).toBe('segunda')
     expect(fetchMock).toHaveBeenCalledTimes(2)
   })
 
   it('erro de rede na 1ª chave → tenta a próxima e tem sucesso', async () => {
-    const fetchMock = vi.fn()
-      .mockRejectedValueOnce(new Error('falha de rede'))
-      .mockResolvedValueOnce(respOk('recuperou'))
-    vi.stubGlobal('fetch', fetchMock)
+    fetchMock.mockRejectedValueOnce(new Error('falha de rede')).mockResolvedValueOnce(respOk('recuperou') as never)
     expect(await gerarConteudo(pedido)).toBe('recuperou')
     expect(fetchMock).toHaveBeenCalledTimes(2)
   })
 
   it('todas as chaves em 429 → lança erro sem vazar a chave', async () => {
-    const fetchMock = vi.fn().mockResolvedValue(respStatus(429))
-    vi.stubGlobal('fetch', fetchMock)
+    fetchMock.mockResolvedValue(respStatus(429) as never)
     let erro: Error | null = null
     try {
       await gerarConteudo(pedido)

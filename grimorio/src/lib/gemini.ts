@@ -1,10 +1,16 @@
 /**
  * Cliente do Gemini (REST v1beta, sem SDK). Chaves em GEMINI_API_KEYS
- * (round-robin; 429/503 tenta a próxima). As chaves NUNCA aparecem em
- * logs ou mensagens de erro.
+ * (round-robin; qualquer erro/rede tenta a próxima). As chaves NUNCA aparecem
+ * em logs ou mensagens de erro.
+ *
+ * Usa o `fetch` do plugin HTTP do Tauri (requisição pelo backend Rust): o webview
+ * não consegue chamar a API do Google direto (CORS). Sem isso a chamada trava.
  */
+import { fetch } from '@tauri-apps/plugin-http'
+
 const URL_BASE = 'https://generativelanguage.googleapis.com/v1beta/models'
 const MODELO_PADRAO = 'gemini-3.1-flash-lite'
+const TIMEOUT_MS = 30000 // aborta requisição pendurada → vira erro visível, não "pensando" eterno
 
 export interface MensagemIA {
   papel: 'user' | 'model'
@@ -80,6 +86,7 @@ export async function gerarConteudo(opts: {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'x-goog-api-key': chave },
         body,
+        signal: AbortSignal.timeout(TIMEOUT_MS),
       })
       if (!resp.ok) {
         ultimoStatus = resp.status
