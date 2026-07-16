@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest'
 import {
   acharCampanhaDaSessao,
   achatarCenarios,
+  campanhaDeEntidade,
   frasesDeVinculos,
   frasesDeVinculosNoEscopo,
   montarContextoCampanha,
@@ -17,6 +18,29 @@ describe('acharCampanhaDaSessao', () => {
   })
   it('caminho fora de campanha → null', () => {
     expect(acharCampanhaDaSessao(tree, 'canvases-soltos/x.json')).toBeNull()
+  })
+})
+
+describe('campanhaDeEntidade', () => {
+  const tree = {
+    campanhas: [{ id: 'c1', slug: 'rpg', nome: 'RPG', sessoes: [], personagens: [], canvases: [], escritas: [] }],
+  } as unknown as VaultTree
+  const participa = (deId: string, paraId: string): Vinculo => ({
+    id: `v-${deId}`, deTipo: 'personagem', deId, paraTipo: 'campanha', paraId,
+    tipo: 'participa', notas: '', criadoEm: '',
+  })
+  it('acha por vínculo participa', () => {
+    expect(campanhaDeEntidade(tree, [participa('a', 'c1')], () => undefined, 'a')?.id).toBe('c1')
+  })
+  it('sem vínculo, acha personagem pela pasta da campanha', () => {
+    const caminhoDe = (id: string) => (id === 'a' ? 'campanhas/rpg/personagens/a.json' : undefined)
+    expect(campanhaDeEntidade(tree, [], caminhoDe, 'a')?.slug).toBe('rpg')
+  })
+  it('cenário global (caminho fora de campanhas/) → null', () => {
+    expect(campanhaDeEntidade(tree, [], () => 'cenarios/reino/cidade-alta', 'x')).toBeNull()
+  })
+  it('sem vínculo e sem caminho → null', () => {
+    expect(campanhaDeEntidade(tree, [], () => undefined, 'z')).toBeNull()
   })
 })
 

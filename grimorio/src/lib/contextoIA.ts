@@ -1,4 +1,5 @@
 import type { CampanhaNode, CenarioNode, PastaCenarioNode, VaultTree, Vinculo } from './types'
+import { campanhasDe } from './vinculos'
 
 export interface EntidadeCtx {
   nome: string
@@ -14,6 +15,21 @@ export function acharCampanhaDaSessao(tree: VaultTree, caminhoSessao: string): C
   const m = caminhoSessao.match(/^campanhas\/([^/]+)\//)
   if (!m) return null
   return tree.campanhas.find((c) => c.slug === m[1]) ?? null
+}
+
+/** Campanha de uma entidade: 1º por vínculo 'participa'; senão (personagem) pela pasta campanhas/<slug>/. */
+export function campanhaDeEntidade(
+  tree: VaultTree,
+  vinculos: Vinculo[],
+  caminhoDe: (id: string) => string | undefined,
+  entidadeId: string,
+): CampanhaNode | null {
+  const campId = campanhasDe(vinculos, entidadeId)[0]
+  if (campId) return tree.campanhas.find((c) => c.id === campId) ?? null
+  const caminho = caminhoDe(entidadeId)
+  const m = caminho?.match(/^campanhas\/([^/]+)\//)
+  if (m) return tree.campanhas.find((c) => c.slug === m[1]) ?? null
+  return null
 }
 
 /** Frases legíveis dos vínculos ("Alice conhece Bob (nota)"); participação e órfãos fora. */

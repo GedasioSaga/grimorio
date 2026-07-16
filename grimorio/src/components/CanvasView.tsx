@@ -23,7 +23,7 @@ import type { VaultRepo } from '../lib/vaultRepo'
 import type { PastaCenarioNode, Vinculo } from '../lib/types'
 import { slugify } from '../lib/slug'
 import { caminhoAbsolutoImagem } from '../lib/caminhos'
-import { uint8ParaBase64 } from '../lib/bin'
+import { mimeDaImagem, uint8ParaBase64 } from '../lib/bin'
 import {
   CARD_ALTURA_PADRAO,
   CARD_LARGURA_PADRAO,
@@ -79,15 +79,6 @@ function criarStoreCanvas(vaultPath: string, repo: VaultRepo): TLStore {
   })
 }
 
-/** Deriva o mimeType da imagem a partir da extensão do arquivo. */
-function mimeDaExtensao(rel: string): string {
-  const ext = (rel.split('.').pop() ?? 'png').toLowerCase()
-  if (ext === 'jpg' || ext === 'jpeg') return 'image/jpeg'
-  if (ext === 'webp') return 'image/webp'
-  if (ext === 'gif') return 'image/gif'
-  return 'image/png'
-}
-
 /** Lê o tamanho natural da imagem; devolve fallback se o arquivo não carregar. */
 function medirImagem(url: string): Promise<{ w: number; h: number }> {
   return new Promise((resolve) => {
@@ -124,7 +115,7 @@ async function soltarImagemNoMapa(
         src: url,
         w: dims.w,
         h: dims.h,
-        mimeType: mimeDaExtensao(rel),
+        mimeType: mimeDaImagem(rel),
         isAnimated: false,
       },
       meta: { rel },

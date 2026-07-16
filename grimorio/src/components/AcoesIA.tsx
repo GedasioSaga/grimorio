@@ -5,11 +5,12 @@ import { gerarConteudo, type ImagemIA } from '../lib/gemini'
 import { SYSTEM_MESTRE } from '../lib/chatIA'
 import {
   achatarCenarios,
+  campanhaDeEntidade,
   frasesDeVinculosNoEscopo,
   montarContextoCampanha,
 } from '../lib/contextoIA'
 import { filtrarArvoreCenarios } from '../lib/filtroCampanha'
-import { campanhasDe, idsDaCampanha } from '../lib/vinculos'
+import { idsDaCampanha } from '../lib/vinculos'
 import { htmlParaTexto, textoParaHtml } from '../lib/htmlTexto'
 import { mimeDaImagem, uint8ParaBase64 } from '../lib/bin'
 
@@ -64,9 +65,8 @@ export function AcoesIA({
 
   /** Contexto: primeira campanha em que a entidade participa (ou só a entidade). */
   function montarContexto(): string {
-    const { tree, personagens, cenarios, vinculos } = useApp.getState()
-    const campId = campanhasDe(vinculos, entidadeId)[0] ?? null
-    const camp = campId && tree ? tree.campanhas.find((c) => c.id === campId) ?? null : null
+    const { tree, personagens, cenarios, vinculos, caminhoPorId } = useApp.getState()
+    const camp = tree ? campanhaDeEntidade(tree, vinculos, (id) => caminhoPorId[id], entidadeId) : null
     if (!camp || !tree) return ''
     const ids = idsDaCampanha(vinculos, camp.id)
     const parts = Object.values(personagens)
