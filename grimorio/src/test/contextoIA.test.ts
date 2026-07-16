@@ -5,18 +5,7 @@ import {
   frasesDeVinculos,
   montarContextoCampanha,
 } from '../lib/contextoIA'
-import { htmlParaTexto } from '../lib/htmlTexto'
 import type { PastaCenarioNode, VaultTree, Vinculo } from '../lib/types'
-
-describe('htmlParaTexto', () => {
-  it('converte parágrafos/br em quebras e remove tags', () => {
-    expect(htmlParaTexto('<p>Oi <b>mestre</b></p><p>linha 2</p>')).toBe('Oi mestre\nlinha 2')
-  })
-  it('vazio/null → ""', () => {
-    expect(htmlParaTexto(null)).toBe('')
-    expect(htmlParaTexto('<p></p>')).toBe('')
-  })
-})
 
 describe('acharCampanhaDaSessao', () => {
   const tree = {

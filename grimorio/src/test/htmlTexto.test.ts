@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { temConteudo } from '../lib/htmlTexto'
+import { htmlParaTexto, temConteudo } from '../lib/htmlTexto'
 
 describe('temConteudo', () => {
   it('vazio/null/undefined → false', () => {
@@ -24,5 +24,19 @@ describe('temConteudo', () => {
 
   it('lista com itens → true', () => {
     expect(temConteudo('<ul><li>Cabelos brancos</li></ul>')).toBe(true)
+  })
+})
+
+describe('htmlParaTexto', () => {
+  it('converte parágrafos/br em quebras e remove tags', () => {
+    expect(htmlParaTexto('<p>Oi <b>mestre</b></p><p>linha 2</p>')).toBe('Oi mestre\nlinha 2')
+  })
+  it('vazio/null → ""', () => {
+    expect(htmlParaTexto(null)).toBe('')
+    expect(htmlParaTexto('<p></p>')).toBe('')
+  })
+  it('separa blocos <pre>/<blockquote> do texto seguinte', () => {
+    expect(htmlParaTexto('<blockquote>cita</blockquote><p>depois</p>')).toBe('cita\ndepois')
+    expect(htmlParaTexto('<pre>code</pre><p>fim</p>')).toBe('code\nfim')
   })
 })

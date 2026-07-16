@@ -9,9 +9,10 @@ export function temConteudo(html: string | null | undefined): boolean {
 export function htmlParaTexto(html: string | null | undefined): string {
   if (!html) return ''
   return html
-    .replace(/<\/(p|div|li|h[1-6])>/gi, '\n')
+    .replace(/<\/(p|div|li|h[1-6]|pre|blockquote)>/gi, '\n')
     .replace(/<br\s*\/?>/gi, '\n')
     .replace(/<[^>]*>/g, '')
+    // decodifica só as entidades que o serializador do TipTap gera
     .replace(/&nbsp;/g, ' ')
     .replace(/&amp;/g, '&')
     .replace(/&lt;/g, '<')

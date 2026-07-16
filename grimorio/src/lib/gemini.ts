@@ -71,23 +71,28 @@ export async function gerarConteudo(opts: {
   const modelo = import.meta.env.GEMINI_MODEL || MODELO_PADRAO
   const body = JSON.stringify(montarBody(opts.system, opts.historico, opts.imagens ?? []))
 
-  let ultimoStatus = 0
+  const inicio = indiceChave++ // reserva o ponto de partida desta chamada (síncrono, sem corrida entre chamadas concorrentes)
+  let ultimoStatus = 0 // 0 = nenhuma resposta HTTP (só erro de rede)
   for (let tentativa = 0; tentativa < chaves.length; tentativa++) {
-    const chave = chaves[indiceChave % chaves.length]
-    indiceChave++
-    const resp = await fetch(`${URL_BASE}/${modelo}:generateContent`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'x-goog-api-key': chave },
-      body,
-    })
-    if (resp.status === 429 || resp.status === 503) {
-      ultimoStatus = resp.status
-      continue // rate limit/indisponível: tenta a próxima chave
+    const chave = chaves[(inicio + tentativa) % chaves.length]
+    try {
+      const resp = await fetch(`${URL_BASE}/${modelo}:generateContent`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-goog-api-key': chave },
+        body,
+      })
+      if (!resp.ok) {
+        ultimoStatus = resp.status
+        continue // qualquer erro HTTP (429/503, mas também 400/403 de chave inválida): tenta a próxima chave
+      }
+      const texto = extrairTexto(await resp.json())
+      if (!texto) throw new Error('A IA não retornou conteúdo.')
+      return texto
+    } catch (e) {
+      // conteúdo vazio é definitivo (bloqueio/refusa): não adianta trocar de chave
+      if (e instanceof Error && e.message === 'A IA não retornou conteúdo.') throw e
+      continue // erro de rede/CORS/WebView: tenta a próxima chave
     }
-    if (!resp.ok) throw new Error(`IA indisponível: HTTP ${resp.status}`)
-    const texto = extrairTexto(await resp.json())
-    if (!texto) throw new Error('A IA não retornou conteúdo.')
-    return texto
   }
-  throw new Error(`IA ocupada (limite de uso, HTTP ${ultimoStatus}); tente em instantes.`)
+  throw new Error(`IA indisponível após tentar todas as chaves (último HTTP ${ultimoStatus}).`)
 }
