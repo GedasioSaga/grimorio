@@ -1,5 +1,12 @@
 # Assistente IA (Gemini) — Implementation Plan
 
+> **STATUS: IMPLEMENTADO** (Tasks 1-5 entregues e revisadas). Após os reviews, o
+> código em `grimorio/src/` recebeu fixes que NÃO estão refletidos nos blocos de
+> código abaixo (round-robin com reserva síncrona de índice, guardas `montadoRef`,
+> `frasesDeVinculosNoEscopo`, `mimeDaImagem` em `lib/bin.ts`, `campanhaDeEntidade`,
+> menu ✨ com fechar-ao-clicar-fora). **A fonte de verdade é `src/`, não este plano.**
+> Este documento é um snapshot histórico do plano original.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Chat de assistente de mestre (Gemini) no workspace da sessão, com contexto automático da campanha (cenários, personagens, vínculos, notas) e análise de imagem; ações ✨ com preview nos modais de personagem/cenário.
