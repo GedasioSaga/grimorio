@@ -9,7 +9,7 @@ import { gerarConteudo, type ImagemIA } from '../lib/gemini'
 import {
   acharCampanhaDaSessao,
   achatarCenarios,
-  frasesDeVinculos,
+  frasesDeVinculosNoEscopo,
   montarContextoCampanha,
 } from '../lib/contextoIA'
 import { filtrarArvoreCenarios } from '../lib/filtroCampanha'
@@ -126,8 +126,10 @@ export function ChatIA({
     const arvoreCen = ids.size > 0 ? filtrarArvoreCenarios(tree.cenarios, ids) : { ...tree.cenarios, cenarios: [], subpastas: [] }
     const linhasCen = achatarCenarios(arvoreCen, (id) => cenarios[id]?.resumo ?? '')
 
+    // vínculos só do escopo da campanha (participantes + elenco da pasta): sem campanha → nenhum
+    const idsCtx = new Set<string>([...ids, ...doElenco.keys()])
     const nomeDe = (id: string) => personagens[id]?.nome ?? cenarios[id]?.nome ?? null
-    const frases = frasesDeVinculos(vinculos, nomeDe)
+    const frases = frasesDeVinculosNoEscopo(vinculos, idsCtx, nomeDe)
 
     let notas = ''
     if (slugAtivo) {

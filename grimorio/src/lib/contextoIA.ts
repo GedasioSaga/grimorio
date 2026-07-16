@@ -29,6 +29,21 @@ export function frasesDeVinculos(vinculos: Vinculo[], nomeDe: (id: string) => st
   return out
 }
 
+/**
+ * Frases de vínculos cujos DOIS lados estão no escopo (ids em contexto da campanha).
+ * Sem escopo (set vazio) → nenhuma frase. Participação/órfãos já saem em frasesDeVinculos.
+ */
+export function frasesDeVinculosNoEscopo(
+  vinculos: Vinculo[],
+  idsEscopo: Set<string>,
+  nomeDe: (id: string) => string | null,
+): string[] {
+  return frasesDeVinculos(
+    vinculos.filter((v) => v.paraTipo !== 'campanha' && idsEscopo.has(v.deId) && idsEscopo.has(v.paraId)),
+    nomeDe,
+  )
+}
+
 /** Achata a árvore (já filtrada) em linhas com nível de indentação. */
 export function achatarCenarios(raiz: PastaCenarioNode, resumoDe: (id: string) => string): CenarioCtx[] {
   const out: CenarioCtx[] = []

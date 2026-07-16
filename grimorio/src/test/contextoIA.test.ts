@@ -3,6 +3,7 @@ import {
   acharCampanhaDaSessao,
   achatarCenarios,
   frasesDeVinculos,
+  frasesDeVinculosNoEscopo,
   montarContextoCampanha,
 } from '../lib/contextoIA'
 import type { PastaCenarioNode, VaultTree, Vinculo } from '../lib/types'
@@ -35,6 +36,26 @@ describe('frasesDeVinculos', () => {
       v({ paraTipo: 'campanha', paraId: 'c1', tipo: 'participa' }),
       v({ id: 'v2', paraId: 'zzz' }),
     ], nomeDe)).toEqual([])
+  })
+})
+
+describe('frasesDeVinculosNoEscopo', () => {
+  const nomes: Record<string, string> = { a: 'Alice', b: 'Bob', c: 'Caio' }
+  const nomeDe = (id: string) => nomes[id] ?? null
+  const v = (p: Partial<Vinculo>): Vinculo => ({
+    id: 'v1', deTipo: 'personagem', deId: 'a', paraTipo: 'personagem', paraId: 'b',
+    tipo: 'conhece', notas: '', criadoEm: '', ...p,
+  })
+  it('inclui só o par com os dois lados no escopo', () => {
+    expect(frasesDeVinculosNoEscopo([v({})], new Set(['a', 'b']), nomeDe))
+      .toEqual(['Alice conhece Bob'])
+  })
+  it('exclui par com um lado fora do escopo (vínculo de outra campanha)', () => {
+    expect(frasesDeVinculosNoEscopo([v({ id: 'v2', paraId: 'c', tipo: 'teme' })], new Set(['a', 'b']), nomeDe))
+      .toEqual([])
+  })
+  it('escopo vazio → []', () => {
+    expect(frasesDeVinculosNoEscopo([v({})], new Set(), nomeDe)).toEqual([])
   })
 })
 
