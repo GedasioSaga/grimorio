@@ -6,6 +6,7 @@ import type { Personagem } from '../lib/types'
 import { EditorTexto } from './EditorTexto'
 import { GaleriaPersonagem } from './GaleriaPersonagem'
 import { AbaVinculos } from './AbaVinculos'
+import { AcoesIA, type AcaoIA } from './AcoesIA'
 
 const AUTOSAVE_DEBOUNCE_MS = 800
 
@@ -20,6 +21,21 @@ const ABAS: { id: Aba; rotulo: string }[] = [
   { id: 'extras', rotulo: 'Extras' },
   { id: 'anotacoes', rotulo: 'Anotações' },
   { id: 'vinculos', rotulo: 'Vínculos' },
+]
+
+const ACOES_IA_PERSONAGEM: AcaoIA[] = [
+  {
+    rotulo: 'Gerar/melhorar descrição',
+    prompt: 'Escreva (ou melhore) a descrição deste personagem em 2-3 parágrafos evocativos, coerentes com o contexto.',
+    abaDestino: 'descricao',
+    rotuloDestino: 'Descrição',
+  },
+  {
+    rotulo: 'Sugerir segredos e ganchos',
+    prompt: 'Sugira 3 segredos ou ganchos de aventura envolvendo este personagem, em lista curta.',
+    abaDestino: 'anotacoes',
+    rotuloDestino: 'Anotações',
+  },
 ]
 
 export function PerfilModal({ personagemId }: { personagemId: string }) {
@@ -134,6 +150,17 @@ export function PerfilModal({ personagemId }: { personagemId: string }) {
               value={p.resumo}
               onChange={(e) => agendarSalvar({ resumo: e.target.value })} />
           </div>
+          <AcoesIA
+            entidadeTipo="personagem"
+            entidadeId={personagemId}
+            acoes={ACOES_IA_PERSONAGEM}
+            onInserir={(aba, html) => {
+              const atual = useApp.getState().personagens[personagemId]
+              const base = atual ? (atual[aba as 'descricao' | 'anotacoes'] ?? '') : ''
+              agendarSalvar({ [aba]: base + html } as Partial<Personagem>)
+              setAba(aba as Aba)
+            }}
+          />
           <button className="btn-icon perfil-fechar" onClick={() => void fechar()}>✕</button>
         </div>
         <div className="perfil-abas">

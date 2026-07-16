@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { htmlParaTexto, temConteudo } from '../lib/htmlTexto'
+import { htmlParaTexto, temConteudo, textoParaHtml } from '../lib/htmlTexto'
 
 describe('temConteudo', () => {
   it('vazio/null/undefined → false', () => {
@@ -38,5 +38,14 @@ describe('htmlParaTexto', () => {
   it('separa blocos <pre>/<blockquote> do texto seguinte', () => {
     expect(htmlParaTexto('<blockquote>cita</blockquote><p>depois</p>')).toBe('cita\ndepois')
     expect(htmlParaTexto('<pre>code</pre><p>fim</p>')).toBe('code\nfim')
+  })
+})
+
+describe('textoParaHtml', () => {
+  it('parágrafos por linha, escapando HTML', () => {
+    expect(textoParaHtml('linha 1\n\nlinha <2> & fim')).toBe('<p>linha 1</p><p>linha &lt;2&gt; &amp; fim</p>')
+  })
+  it('vazio → ""', () => {
+    expect(textoParaHtml('  \n ')).toBe('')
   })
 })

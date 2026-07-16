@@ -8,6 +8,7 @@ import { desvincularPersonagem, personagensVivos, vincularPersonagem } from '../
 import { EditorTexto } from './EditorTexto'
 import { GaleriaPersonagem } from './GaleriaPersonagem'
 import { AbaVinculos } from './AbaVinculos'
+import { AcoesIA, type AcaoIA } from './AcoesIA'
 
 const AUTOSAVE_DEBOUNCE_MS = 800
 
@@ -24,6 +25,28 @@ const ABAS: { id: Aba; rotulo: string }[] = [
   { id: 'imagens', rotulo: 'Imagens' },
   { id: 'anotacoes', rotulo: 'Anotações' },
   { id: 'vinculos', rotulo: 'Vínculos' },
+]
+
+const ACOES_IA_CENARIO: AcaoIA[] = [
+  {
+    rotulo: 'Gerar/melhorar descrição',
+    prompt: 'Escreva (ou melhore) a descrição deste cenário em 2-3 parágrafos evocativos, coerentes com o contexto.',
+    abaDestino: 'descricao',
+    rotuloDestino: 'Descrição',
+  },
+  {
+    rotulo: 'Sugerir eventos',
+    prompt: 'Sugira 3 eventos que podem acontecer neste cenário (lista curta, um por linha, com gatilho e consequência).',
+    abaDestino: 'eventos',
+    rotuloDestino: 'Eventos',
+  },
+  {
+    rotulo: 'Analisar imagem',
+    prompt: 'Analise a imagem deste cenário: descreva o que se vê e sugira 3 pontos de interesse para os jogadores explorarem.',
+    abaDestino: 'anotacoes',
+    rotuloDestino: 'Anotações',
+    comImagem: true,
+  },
 ]
 
 export function CenarioModal({ cenarioId }: { cenarioId: string }) {
@@ -134,6 +157,17 @@ export function CenarioModal({ cenarioId }: { cenarioId: string }) {
               value={c.resumo}
               onChange={(e) => agendarSalvar({ resumo: e.target.value })} />
           </div>
+          <AcoesIA
+            entidadeTipo="cenario"
+            entidadeId={cenarioId}
+            acoes={ACOES_IA_CENARIO}
+            onInserir={(aba, html) => {
+              const atual = useApp.getState().cenarios[cenarioId]
+              const base = atual ? (atual[aba as 'descricao' | 'eventos' | 'anotacoes'] ?? '') : ''
+              agendarSalvar({ [aba]: base + html } as Partial<Cenario>)
+              setAba(aba as Aba)
+            }}
+          />
           <button className="btn-icon perfil-fechar" onClick={() => void fechar()}>✕</button>
         </div>
         <div className="perfil-abas">

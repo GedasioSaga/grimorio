@@ -20,3 +20,13 @@ export function htmlParaTexto(html: string | null | undefined): string {
     .replace(/\n{3,}/g, '\n\n')
     .trim()
 }
+
+/** Texto plano da IA → HTML simples (um <p> por linha não-vazia; conteúdo escapado). */
+export function textoParaHtml(texto: string): string {
+  return texto
+    .split('\n')
+    .map((l) => l.trim())
+    .filter(Boolean)
+    .map((l) => `<p>${l.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</p>`)
+    .join('')
+}

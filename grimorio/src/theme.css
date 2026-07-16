@@ -446,3 +446,27 @@ button:hover { border-color: var(--dourado); color: var(--dourado-claro); }
 .galeria-lightbox-conteudo img { max-width: 80vw; max-height: 65vh; object-fit: contain; border-radius: 6px; border: 1px solid var(--borda); }
 .galeria-legenda { background: var(--fundo-elevado); border: 1px solid var(--borda); border-radius: 4px; color: var(--texto); padding: 6px 8px; resize: vertical; min-height: 40px; font-family: inherit; }
 .galeria-lightbox-acoes { display: flex; gap: 8px; justify-content: flex-end; }
+
+/* ---- ações IA (modais) ---- */
+.acoes-ia { position: relative; }
+.acoes-ia-menu {
+  position: absolute; top: 100%; right: 0; z-index: 20; min-width: 220px;
+  background: var(--fundo-painel); border: 1px solid var(--dourado); border-radius: 6px;
+  display: flex; flex-direction: column; overflow: hidden;
+}
+.acoes-ia-menu button { border: none; border-radius: 0; text-align: left; padding: 8px 12px; background: transparent; }
+.acoes-ia-menu button:hover { background: var(--fundo-elevado); color: var(--dourado-claro); }
+.acoes-ia-erro { position: absolute; top: 100%; right: 0; z-index: 20; color: var(--erro); font-size: 12px; background: var(--fundo-painel); border: 1px solid var(--erro); border-radius: 6px; padding: 6px 10px; max-width: 280px; }
+.acoes-ia-overlay {
+  position: fixed; inset: 0; background: rgba(0, 0, 0, 0.6);
+  display: flex; align-items: center; justify-content: center; z-index: 1100;
+}
+.acoes-ia-preview {
+  width: min(560px, 90vw); max-height: 70vh; overflow: hidden;
+  background: var(--fundo-painel); border: 1px solid var(--dourado); border-radius: 8px;
+  display: flex; flex-direction: column;
+}
+.acoes-ia-preview-titulo { font-family: var(--serif); color: var(--dourado-claro); padding: 14px 16px 8px; }
+.acoes-ia-preview-texto { flex: 1; overflow-y: auto; padding: 0 16px 12px; font-size: 13px; line-height: 1.55; white-space: pre-wrap; }
+.acoes-ia-preview-acoes { display: flex; justify-content: flex-end; gap: 8px; padding: 10px 16px; border-top: 1px solid var(--borda); }
+.acoes-ia-inserir { border-color: var(--dourado); color: var(--dourado-claro); }
