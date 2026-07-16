@@ -21,3 +21,33 @@ export function promptMelhorar(rotuloAba: string): string {
     `Responda só com o texto revisado, sem título nem preâmbulo.`
   )
 }
+
+/**
+ * Persona da IA na escrita (worldbuilding). Irmã de `SYSTEM_MESTRE` (chatIA.ts):
+ * aquela é de mesa (respostas curtas); esta é de texto trabalhado e organizado.
+ */
+export const SYSTEM_ESCRITOR = [
+  'Você é um assistente de escrita e worldbuilding para RPG, em português do Brasil.',
+  'Ajuda a desenvolver, revisar e organizar o material do mundo: enredo, mecânicas, lore e regras.',
+  'Você recebe o contexto da campanha (personagens, cenários, vínculos); mantenha coerência e NUNCA contradiga esses fatos.',
+  'Escreva texto desenvolvido e claro; use Markdown (## títulos, listas, **negrito**) para organizar quando fizer sentido.',
+].join(' ')
+
+/** Reorganiza/formata o texto da página em seções, listas e títulos, sem mudar o sentido. */
+export function promptEstruturar(): string {
+  return (
+    'Reorganize e formate o texto a seguir para ficar claro e bem estruturado: ' +
+    'use títulos (##, ###), listas e parágrafos curtos, agrupando os assuntos relacionados. ' +
+    'Corrija ortografia e clareza SEM mudar o sentido nem inventar fatos novos. ' +
+    'Responda em Markdown, só com o texto reorganizado, sem preâmbulo.'
+  )
+}
+
+/**
+ * Anexada aos prompts de escrita quando a página tem imagens: os `<img>` viram
+ * marcadores `{{IMG:n}}` (imagensMarcador.ts) e a IA precisa preservá-los.
+ */
+export const REGRA_MARCADORES =
+  'O texto pode conter marcadores como {{IMG:0}} que representam imagens. ' +
+  'Mantenha cada marcador EXATAMENTE como está, em linha própria, na posição adequada. ' +
+  'Não crie, não renomeie e não remova marcadores.'
