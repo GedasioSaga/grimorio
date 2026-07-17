@@ -18,16 +18,16 @@ const pastaP: PastaNode = {
 }
 
 describe('filtrarPastaPersonagens', () => {
-  it('mantém só caminhos permitidos; pastas ficam TODAS visíveis (estrutura não é filtrada)', () => {
+  it('poda subpastas sem personagem da campanha (inclusive as vazias)', () => {
     const r = filtrarPastaPersonagens(pastaP, new Set(['personagens-soltos/a.json']))
     expect(r.personagens.map((p) => p.slug)).toEqual(['a'])
-    // pasta recém-criada (vazia) precisa aparecer mesmo sob filtro — senão criar parece quebrado
-    expect(r.subpastas.map((s) => s.slug)).toEqual(['viloes', 'vazia'])
-    expect(r.subpastas[0].personagens).toHaveLength(0)
+    // 'viloes' (só tem x, fora do filtro) e 'vazia' (sem nada) somem
+    expect(r.subpastas).toHaveLength(0)
   })
-  it('personagem dentro de subpasta sobrevive quando permitido', () => {
+  it('subpasta com personagem permitido fica; irmãs sem item da campanha somem', () => {
     const r = filtrarPastaPersonagens(pastaP, new Set(['personagens-soltos/viloes/x.json']))
     expect(r.personagens).toHaveLength(0)
+    expect(r.subpastas.map((s) => s.slug)).toEqual(['viloes']) // 'vazia' podada
     expect(r.subpastas[0].personagens.map((p) => p.slug)).toEqual(['x'])
   })
 })
@@ -44,11 +44,10 @@ const arvoreC: PastaCenarioNode = {
 }
 
 describe('filtrarArvoreCenarios', () => {
-  it('mantém cenário permitido; pastas ficam sempre visíveis', () => {
+  it('mantém cenário permitido; poda pastas sem cenário da campanha', () => {
     const r = filtrarArvoreCenarios(arvoreC, new Set(['a']))
     expect(r.cenarios.map((c) => c.id)).toEqual(['a'])
-    expect(r.subpastas.map((s) => s.slug)).toEqual(['p1'])
-    expect(r.subpastas[0].cenarios).toHaveLength(0)
+    expect(r.subpastas).toHaveLength(0) // 'p1' (só tem 'd') é podada
   })
   it('cenário permitido traz a subárvore inteira (filhos herdam)', () => {
     const r = filtrarArvoreCenarios(arvoreC, new Set(['a']))
