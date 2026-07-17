@@ -6,6 +6,7 @@ import { Workspace } from './components/Workspace'
 import { PerfilModal } from './components/PerfilModal'
 import { CenarioModal } from './components/CenarioModal'
 import { HostDialogos } from './components/dialogos'
+import { checarAtualizacao } from './lib/atualizador'
 import { dirNotasDoMapa } from './lib/caminhos'
 import './theme.css'
 
@@ -29,6 +30,11 @@ export default function App() {
     const salvo = localStorage.getItem('grimorio.vault')
     if (salvo) abrirCofre(salvo).catch(() => localStorage.removeItem('grimorio.vault'))
   }, [abrirCofre])
+
+  // checa por nova versão publicada uma vez ao abrir (silencioso se não houver)
+  useEffect(() => {
+    checarAtualizacao()
+  }, [])
 
   if (!vaultPath) return <VaultPicker />
 

@@ -1,0 +1,49 @@
+name: release
+
+# Disparo manual: você edita a version em grimorio/src-tauri/tauri.conf.json,
+# commita, e roda este workflow (aba Actions > release > Run workflow, ou
+# `gh workflow run release.yml`). A tauri-action lê a version da conf e cria a
+# tag v<version> sozinha, então tag e version nunca divergem.
+on:
+  workflow_dispatch:
+
+jobs:
+  release:
+    permissions:
+      contents: write # criar a release e subir os artefatos
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: setup node
+        uses: actions/setup-node@v4
+        with:
+          node-version: lts/*
+          cache: npm
+          cache-dependency-path: grimorio/package-lock.json
+
+      - name: install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Rust cache
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: grimorio/src-tauri -> target
+
+      - name: install frontend dependencies
+        run: npm ci
+        working-directory: grimorio
+
+      - uses: tauri-apps/tauri-action@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        with:
+          projectPath: grimorio
+          tagName: v__VERSION__
+          releaseName: Grimório v__VERSION__
+          releaseBody: Baixe o instalador (.exe) nos arquivos abaixo. Se você já tem o Grimório instalado, ele oferece a atualização sozinho.
+          releaseDraft: true
+          prerelease: false

@@ -4,3 +4,7 @@ dist/
 src-tauri/target/
 .env
 .env.*
+
+# chaves de assinatura do updater — NUNCA commitar (privada mora em ~/.tauri)
+*.key
+*.key.pub
