@@ -72,6 +72,10 @@ describe('participação em campanha', () => {
     expect(participacaoDe(lista, 'a', 'camp1')?.id).toBe('p1')
     expect(participacaoDe(lista, 'a', 'zzz')).toBeUndefined()
   })
+  it('idsDaCampanha inclui canvas participante (novo tipo de vínculo)', () => {
+    const comCanvas = [...lista, v({ id: 'cv', deTipo: 'canvas', deId: 'cv1', paraTipo: 'campanha', paraId: 'camp1', tipo: TIPO_PARTICIPA })]
+    expect([...idsDaCampanha(comCanvas, 'camp1')].sort()).toEqual(['a', 'cen1', 'cv1'])
+  })
 })
 
 describe('agruparPorPar', () => {
@@ -109,6 +113,10 @@ describe('normalizarVinculos', () => {
       vinculos: [v({}), { ...v({ id: 'v2' }), deTipo: 'monstro' }, { ...v({ id: 'v3' }), paraTipo: 'mundo' }],
     }
     expect(normalizarVinculos(suja).map((x) => x.id)).toEqual(['v1'])
+  })
+  it('aceita deTipo canvas (participação de canvas em campanha)', () => {
+    const cru = { vinculos: [v({ id: 'cv', deTipo: 'canvas', deId: 'cv1', paraTipo: 'campanha', paraId: 'camp1', tipo: TIPO_PARTICIPA })] }
+    expect(normalizarVinculos(cru).map((x) => x.deTipo)).toEqual(['canvas'])
   })
   it('repara notas/criadoEm ausentes com defaults', () => {
     const cru: Record<string, unknown> = { ...v({}) }

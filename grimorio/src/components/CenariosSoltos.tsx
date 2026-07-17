@@ -5,6 +5,7 @@ import type { CenarioNode, PastaCenarioNode } from '../lib/types'
 import { contarDescendentes } from '../lib/cenarioArvore'
 import { personagensVivos, vincularPersonagem } from '../lib/cenarioVinculo'
 import { pedirTexto } from './dialogos'
+import { associarNaCriacao, editarCampanhas } from './dialogoCampanhas'
 
 const RAIZ = 'cenarios'
 export const MIME_CENARIO = 'application/x-grimorio-cenario'
@@ -73,8 +74,8 @@ export function CenariosSoltos({ raiz, aoMudar, ocultos = 0, aoMostrarTodos }: {
     if (!nome || !repo) return
     await comAviso(async () => {
       const ref = await repo.criarCenarioEm(RAIZ, nome)
-      // sob filtro ativo, já vincula à campanha filtrada — senão nasceria oculto
-      useApp.getState().vincularAoFiltro('cenario', ref.id)
+      // filtro ativo → etiqueta na campanha filtrada; "Todas" → pergunta as campanhas (0..N)
+      await associarNaCriacao('cenario', ref.id, nome)
       await aoMudar()
     })
   }
@@ -118,7 +119,7 @@ function PastaCenarioLinha({ pasta, nivel, aoMudar }: { pasta: PastaCenarioNode;
         await repo.criarPasta(pasta.caminho, nome)
       } else {
         const ref = await repo.criarCenarioEm(pasta.caminho, nome)
-        useApp.getState().vincularAoFiltro('cenario', ref.id)
+        await associarNaCriacao('cenario', ref.id, nome)
       }
       await aoMudar()
     })
@@ -181,7 +182,7 @@ function CenarioLinha({ node, nivel, aoMudar }: { node: CenarioNode; nivel: numb
     if (!nome || !repo) return
     await comAviso(async () => {
       const ref = await repo.criarCenarioEm(node.caminho, nome)
-      useApp.getState().vincularAoFiltro('cenario', ref.id)
+      await associarNaCriacao('cenario', ref.id, nome)
       await aoMudar()
     })
   }
@@ -224,6 +225,9 @@ function CenarioLinha({ node, nivel, aoMudar }: { node: CenarioNode; nivel: numb
         <span className="rail-titulo">🗺 {node.nome}{node.erro ? ' ⚠' : ''}</span>
         <span className="rail-acoes" onClick={(e) => e.stopPropagation()}>
           <button className="btn-icon" title="Novo sub-cenário" onClick={novoSub}>+</button>
+          {node.id && (
+            <button className="btn-icon" title="Campanhas" onClick={(e) => { e.stopPropagation(); void editarCampanhas('cenario', node.id, node.nome) }}>🏷️</button>
+          )}
           <button className="btn-icon" title="Renomear" onClick={renomear}>✎</button>
           <button className="btn-icon" title="Excluir" onClick={excluir}>🗑</button>
         </span>

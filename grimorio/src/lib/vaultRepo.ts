@@ -116,13 +116,13 @@ export class VaultRepo {
     return { slug, nome, caminho, id: p.id }
   }
 
-  /** Cria sessão ou canvas (mesmo formato) no diretório dado. */
-  async criarCanvasDoc(dir: string, nome: string): Promise<ItemRef> {
+  /** Cria sessão ou canvas (mesmo formato) no diretório dado. Retorna o id p/ etiqueta de campanha. */
+  async criarCanvasDoc(dir: string, nome: string): Promise<ItemRef & { id: string }> {
     const slug = await this.slugLivre(dir, nome)
     const doc: CanvasDoc = { id: novoId(), nome, documento: null, criadoEm: agora(), modificadoEm: agora() }
     const caminho = `${dir}/${slug}.json`
     await this.fs.writeTextAtomic(this.abs(caminho), JSON.stringify(doc, null, 2))
-    return { slug, nome, caminho }
+    return { slug, nome, caminho, id: doc.id }
   }
 
   /** Cria uma pasta (com pasta.json guardando o nome) dentro de dirPai. Retorna o caminho da nova pasta. */
@@ -470,7 +470,7 @@ export class VaultRepo {
         const caminho = `${dir}/${e.name}`
         try {
           const obj = JSON.parse(await this.fs.readText(this.abs(caminho)))
-          personagens.push({ slug, nome: obj.nome ?? slug, caminho })
+          personagens.push({ slug, nome: obj.nome ?? slug, caminho, id: obj.id })
         } catch {
           personagens.push({ slug, nome: slug, caminho, erro: true })
         }
@@ -509,7 +509,7 @@ export class VaultRepo {
       const caminho = `${dir}/${e.name}`
       try {
         const obj = JSON.parse(await this.fs.readText(this.abs(caminho)))
-        itens.push({ slug, nome: obj.nome ?? slug, caminho })
+        itens.push({ slug, nome: obj.nome ?? slug, caminho, id: obj.id })
       } catch {
         itens.push({ slug, nome: slug, caminho, erro: true })
       }

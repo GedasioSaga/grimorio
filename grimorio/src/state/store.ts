@@ -3,7 +3,7 @@ import type { Cenario, ItemRef, PastaNode, Personagem, TipoEntidadeVinculo, Vaul
 import { tauriFs } from '../lib/fsBridge'
 import { VaultRepo } from '../lib/vaultRepo'
 import { coletarCenarioRefs } from '../lib/cenarioArvore'
-import { adicionarVinculo as adicionarVinculoPuro, removerVinculo as removerVinculoPuro, participacaoDe, TIPO_PARTICIPA } from '../lib/vinculos'
+import { adicionarVinculo as adicionarVinculoPuro, removerVinculo as removerVinculoPuro, campanhasDe, participacaoDe, TIPO_PARTICIPA } from '../lib/vinculos'
 
 export type TipoAberto = 'sessao' | 'canvas' | 'escrita'
 
@@ -71,8 +71,8 @@ interface AppState {
   removerVinculo(id: string): void
   alternarParticipacao(entidadeTipo: TipoEntidadeVinculo, entidadeId: string, campanhaId: string): void
   setCampanhaFiltro(id: string | null): void
-  /** Sob filtro ativo, vincula entidade recém-criada à campanha filtrada (senão ela nasceria oculta). */
-  vincularAoFiltro(entidadeTipo: TipoEntidadeVinculo, entidadeId: string): void
+  /** Ajusta os vínculos 'participa' da entidade para bater EXATAMENTE com a lista (add os novos, remove os que saíram). */
+  definirCampanhas(entidadeTipo: TipoEntidadeVinculo, entidadeId: string, campanhaIds: string[]): void
 }
 
 const SALVAR_VINCULOS_DEBOUNCE_MS = 800
@@ -298,13 +298,24 @@ export const useApp = create<AppState>((set, get) => ({
     set({ campanhaFiltro: id })
   },
 
-  vincularAoFiltro(entidadeTipo, entidadeId) {
-    const campId = get().campanhaFiltro
-    if (!campId) return
-    get().adicionarVinculo({
-      deTipo: entidadeTipo, deId: entidadeId,
-      paraTipo: 'campanha', paraId: campId,
-      tipo: TIPO_PARTICIPA, notas: '',
-    })
+  definirCampanhas(entidadeTipo, entidadeId, campanhaIds) {
+    const alvo = new Set(campanhaIds)
+    const atuais = campanhasDe(get().vinculos, entidadeId)
+    const atualSet = new Set(atuais)
+    // remove os que saíram
+    for (const campId of atuais) {
+      if (alvo.has(campId)) continue
+      const v = participacaoDe(get().vinculos, entidadeId, campId)
+      if (v) get().removerVinculo(v.id)
+    }
+    // adiciona os novos (adicionarVinculo já deduplica)
+    for (const campId of campanhaIds) {
+      if (atualSet.has(campId)) continue
+      get().adicionarVinculo({
+        deTipo: entidadeTipo, deId: entidadeId,
+        paraTipo: 'campanha', paraId: campId,
+        tipo: TIPO_PARTICIPA, notas: '',
+      })
+    }
   },
 }))

@@ -1,4 +1,4 @@
-import type { CenarioNode, PastaCenarioNode, PastaNode } from './types'
+import type { CenarioNode, ItemRef, PastaCenarioNode, PastaNode } from './types'
 
 /**
  * Filtra a árvore de personagens soltos: mantém personagens cujo CAMINHO está no
@@ -32,6 +32,14 @@ export function filtrarArvoreCenarios(raiz: PastaCenarioNode, ids: Set<string>):
   const cenarios = filtrarCenarios(raiz.cenarios, ids, false)
   const subpastas = raiz.subpastas.map((s) => filtrarArvoreCenarios(s, ids))
   return { ...raiz, cenarios, subpastas }
+}
+
+/**
+ * Filtra canvases soltos pelos ids permitidos (etiqueta de campanha). Canvas sem id
+ * (legado/ilegível) fica visível — filtro não esconde arquivo que não sabe classificar.
+ */
+export function filtrarCanvasesSoltos(itens: ItemRef[], ids: Set<string>): ItemRef[] {
+  return itens.filter((i) => !i.id || ids.has(i.id))
 }
 
 /** Total de personagens na árvore (recursivo) — para o aviso de "N ocultos pelo filtro". */

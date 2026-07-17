@@ -6,6 +6,7 @@ import { Workspace } from './components/Workspace'
 import { PerfilModal } from './components/PerfilModal'
 import { CenarioModal } from './components/CenarioModal'
 import { HostDialogos } from './components/dialogos'
+import { HostDialogoCampanhas } from './components/dialogoCampanhas'
 import { checarAtualizacao } from './lib/atualizador'
 import { dirNotasDoMapa } from './lib/caminhos'
 import './theme.css'
@@ -81,6 +82,7 @@ export default function App() {
       {perfilAbertoId && <PerfilModal key={perfilAbertoId} personagemId={perfilAbertoId} />}
       {cenarioAbertoId && <CenarioModal key={cenarioAbertoId} cenarioId={cenarioAbertoId} />}
       <HostDialogos />
+      <HostDialogoCampanhas />
     </div>
   )
 }

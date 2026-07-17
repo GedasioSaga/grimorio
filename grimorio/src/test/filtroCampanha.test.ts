@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
-import { contarCenarios, contarPersonagens, filtrarArvoreCenarios, filtrarPastaPersonagens } from '../lib/filtroCampanha'
-import type { PastaCenarioNode, PastaNode } from '../lib/types'
+import { contarCenarios, contarPersonagens, filtrarArvoreCenarios, filtrarCanvasesSoltos, filtrarPastaPersonagens } from '../lib/filtroCampanha'
+import type { ItemRef, PastaCenarioNode, PastaNode } from '../lib/types'
 
 const pastaP: PastaNode = {
   slug: 'raiz', nome: 'raiz', caminho: 'personagens-soltos',
@@ -64,6 +64,21 @@ describe('filtrarArvoreCenarios', () => {
   it('cenário permitido dentro de pasta continua visível', () => {
     const r = filtrarArvoreCenarios(arvoreC, new Set(['d']))
     expect(r.subpastas[0].cenarios.map((c) => c.id)).toEqual(['d'])
+  })
+})
+
+const canvases: ItemRef[] = [
+  { slug: 'a', nome: 'A', caminho: 'canvases-soltos/a.json', id: 'ca' },
+  { slug: 'b', nome: 'B', caminho: 'canvases-soltos/b.json', id: 'cb' },
+  { slug: 'leg', nome: 'Legado', caminho: 'canvases-soltos/leg.json' }, // sem id (legado)
+]
+
+describe('filtrarCanvasesSoltos', () => {
+  it('mantém só os canvases com id permitido; sem-id fica sempre visível', () => {
+    expect(filtrarCanvasesSoltos(canvases, new Set(['ca'])).map((c) => c.slug)).toEqual(['a', 'leg'])
+  })
+  it('id fora do conjunto some; canvas sem id (legado/ilegível) não é escondido', () => {
+    expect(filtrarCanvasesSoltos(canvases, new Set(['zzz'])).map((c) => c.slug)).toEqual(['leg'])
   })
 })
 

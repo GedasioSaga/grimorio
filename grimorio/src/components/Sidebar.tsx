@@ -6,7 +6,8 @@ import { pedirTexto } from './dialogos'
 import type { CampanhaNode, ItemRef } from '../lib/types'
 import { escritaDirDaCampanha } from '../lib/caminhos'
 import { idsDaCampanha } from '../lib/vinculos'
-import { contarCenarios, contarPersonagens, filtrarArvoreCenarios, filtrarPastaPersonagens } from '../lib/filtroCampanha'
+import { contarCenarios, contarPersonagens, filtrarArvoreCenarios, filtrarCanvasesSoltos, filtrarPastaPersonagens } from '../lib/filtroCampanha'
+import { associarNaCriacao, editarCampanhas } from './dialogoCampanhas'
 import { PersonagensSoltos } from './PersonagensSoltos'
 import { CenariosSoltos } from './CenariosSoltos'
 
@@ -41,8 +42,14 @@ export function Sidebar({ recolhida, onToggle }: { recolhida: boolean; onToggle:
     const nome = await pedirTexto('Nome da campanha:')
     if (!nome || !repo) return
     await comAvisoDeErro(async () => {
-      await repo.criarCampanha(nome)
+      const slug = await repo.criarCampanha(nome)
       await recarregar()
+      // sob filtro ativo, a nova campanha nasceria escondida (a seção mostra só a filtrada);
+      // cai já filtrado nela para não sumir de vista
+      if (useApp.getState().campanhaFiltro) {
+        const nova = useApp.getState().tree?.campanhas.find((c) => c.slug === slug)
+        if (nova?.id) setCampanhaFiltro(nova.id)
+      }
     })
   }
 
@@ -50,7 +57,8 @@ export function Sidebar({ recolhida, onToggle }: { recolhida: boolean; onToggle:
     const nome = await pedirTexto('Nome do canvas:')
     if (!nome || !repo) return
     await comAvisoDeErro(async () => {
-      await repo.criarCanvasDoc('canvases-soltos', nome)
+      const ref = await repo.criarCanvasDoc('canvases-soltos', nome)
+      await associarNaCriacao('canvas', ref.id, nome)
       await recarregar()
     })
   }
@@ -72,6 +80,10 @@ export function Sidebar({ recolhida, onToggle }: { recolhida: boolean; onToggle:
   // aviso "N ocultos": sem ele, item criado sem vínculo some e criar parece quebrado
   const ocultosPersonagens = idsFiltro ? contarPersonagens(tree.personagensSoltos) - contarPersonagens(raizPersonagens) : 0
   const ocultosCenarios = idsFiltro ? contarCenarios(tree.cenarios) - contarCenarios(raizCenarios) : 0
+  // sob filtro: seção Campanhas mostra só a selecionada; canvases soltos podados por etiqueta
+  const campanhasVisiveis = campanhaValida ? tree.campanhas.filter((c) => c.id === campanhaValida) : tree.campanhas
+  const canvasesVisiveis = idsFiltro ? filtrarCanvasesSoltos(tree.canvasesSoltos, idsFiltro) : tree.canvasesSoltos
+  const ocultosCanvases = tree.canvasesSoltos.length - canvasesVisiveis.length
   const limparFiltro = () => setCampanhaFiltro(null)
 
   return (
@@ -83,7 +95,7 @@ export function Sidebar({ recolhida, onToggle }: { recolhida: boolean; onToggle:
 
       <div className="sidebar-filtro">
         <select
-          title="Filtrar personagens e cenários por campanha"
+          title="Filtrar o cofre por campanha"
           value={campanhaValida ?? ''}
           onChange={(e) => setCampanhaFiltro(e.target.value || null)}
         >
@@ -99,7 +111,7 @@ export function Sidebar({ recolhida, onToggle }: { recolhida: boolean; onToggle:
           <span>Campanhas</span>
           <button className="btn-icon" title="Nova campanha" onClick={novaCampanha}>+</button>
         </div>
-        {tree.campanhas.map((c) => (
+        {campanhasVisiveis.map((c) => (
           <CampanhaItem key={c.slug} camp={c} aoMudar={async () => { await recarregar(); await carregarPersonagens() }} />
         ))}
       </div>
@@ -109,8 +121,19 @@ export function Sidebar({ recolhida, onToggle }: { recolhida: boolean; onToggle:
           <span>Canvases soltos</span>
           <button className="btn-icon" title="Novo canvas" onClick={novoCanvasSolto}>+</button>
         </div>
-        {tree.canvasesSoltos.map((i) => (
-          <ItemLinha key={i.caminho} item={i} tipo="canvas" aoMudar={recarregar} />
+        {ocultosCanvases > 0 && (
+          <button className="filtro-ocultos" onClick={limparFiltro}>
+            {ocultosCanvases} {ocultosCanvases === 1 ? 'canvas oculto' : 'canvases ocultos'} pelo filtro — mostrar todos
+          </button>
+        )}
+        {canvasesVisiveis.map((i) => (
+          <ItemLinha
+            key={i.caminho}
+            item={i}
+            tipo="canvas"
+            aoMudar={recarregar}
+            aoEtiquetar={i.id ? () => void editarCampanhas('canvas', i.id!, i.nome) : undefined}
+          />
         ))}
       </div>
 
@@ -186,8 +209,10 @@ function Grupo({ titulo, itens, tipo, tipoAbertura, aoMudar }: {
   )
 }
 
-function ItemLinha({ item, tipo, tipoAbertura, aoMudar }: {
+function ItemLinha({ item, tipo, tipoAbertura, aoMudar, aoEtiquetar }: {
   item: ItemRef; tipo: 'canvas' | 'personagem'; tipoAbertura?: TipoAberto; aoMudar: () => Promise<void>
+  /** quando presente, mostra o botão 🏷️ que abre o seletor de campanhas (só itens soltos) */
+  aoEtiquetar?: () => void
 }) {
   const repo = useApp((s) => s.repo)
   const abrirItem = useApp((s) => s.abrirItem)
@@ -242,6 +267,9 @@ function ItemLinha({ item, tipo, tipoAbertura, aoMudar }: {
     >
       <span className="item-nome">{tipo === 'personagem' ? '👤 ' : tipoAbertura === 'escrita' ? '✍ ' : '▦ '}{item.nome}{item.erro ? ' ⚠' : ''}</span>
       <span className="item-acoes" onClick={(e) => e.stopPropagation()}>
+        {aoEtiquetar && (
+          <button className="btn-icon" title="Campanhas" onClick={(e) => { e.stopPropagation(); aoEtiquetar() }}>🏷️</button>
+        )}
         <button className="btn-icon" title="Renomear" onClick={renomear}>✎</button>
         <button className="btn-icon" title="Excluir" onClick={excluir}>🗑</button>
       </span>

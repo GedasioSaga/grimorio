@@ -35,8 +35,8 @@ export interface Cenario {
   modificadoEm: string
 }
 
-/** Ponta de vínculo entre entidades (campanha só aparece como destino). */
-export type TipoEntidadeVinculo = 'personagem' | 'cenario'
+/** Ponta de vínculo entre entidades. Canvas só participa de campanha (nunca é alvo de relação). */
+export type TipoEntidadeVinculo = 'personagem' | 'cenario' | 'canvas'
 
 /** Relação tipada entre entidades OU participação em campanha (tipo TIPO_PARTICIPA). */
 export interface Vinculo {
@@ -71,6 +71,7 @@ export interface ItemRef {
   slug: string
   nome: string
   caminho: string // relativo ao cofre, ex.: "campanhas/x/sessoes/sessao-01.json"
+  id?: string // id do doc (canvas/personagem) p/ etiqueta de campanha; ausente se ilegível
   erro?: boolean // arquivo ilegível/corrompido
 }
 

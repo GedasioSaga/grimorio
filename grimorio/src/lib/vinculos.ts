@@ -91,7 +91,8 @@ export function normalizarVinculos(raw: unknown): Vinculo[] {
     if (typeof v.deId !== 'string' || !v.deId) continue
     if (typeof v.paraId !== 'string' || !v.paraId) continue
     if (typeof v.tipo !== 'string' || !v.tipo) continue
-    if (v.deTipo !== 'personagem' && v.deTipo !== 'cenario') continue
+    if (v.deTipo !== 'personagem' && v.deTipo !== 'cenario' && v.deTipo !== 'canvas') continue
+    // canvas nunca é alvo de relação (só participa de campanha) → fora do paraTipo aceito
     if (v.paraTipo !== 'personagem' && v.paraTipo !== 'cenario' && v.paraTipo !== 'campanha') continue
     out.push({
       id: v.id,

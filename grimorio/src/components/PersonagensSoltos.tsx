@@ -3,6 +3,7 @@ import { ask, message } from '@tauri-apps/plugin-dialog'
 import { useApp } from '../state/store'
 import type { ItemRef, PastaNode } from '../lib/types'
 import { pedirTexto } from './dialogos'
+import { associarNaCriacao, editarCampanhas } from './dialogoCampanhas'
 
 const RAIZ = 'personagens-soltos'
 const MIME = 'application/x-grimorio-personagem'
@@ -53,8 +54,8 @@ export function PersonagensSoltos({ raiz, aoMudar, ocultos = 0, aoMostrarTodos }
     if (!nome || !repo) return
     await comAviso(async () => {
       const ref = await repo.criarPersonagemEm(RAIZ, nome)
-      // sob filtro ativo, já vincula à campanha filtrada — senão nasceria oculto
-      useApp.getState().vincularAoFiltro('personagem', ref.id)
+      // filtro ativo → etiqueta na campanha filtrada; "Todas" → pergunta as campanhas (0..N)
+      await associarNaCriacao('personagem', ref.id, nome)
       await aoMudar()
     })
   }
@@ -98,7 +99,7 @@ function PastaLinha({ pasta, nivel, aoMudar }: { pasta: PastaNode; nivel: number
         await repo.criarPasta(pasta.caminho, nome)
       } else {
         const ref = await repo.criarPersonagemEm(pasta.caminho, nome)
-        useApp.getState().vincularAoFiltro('personagem', ref.id)
+        await associarNaCriacao('personagem', ref.id, nome)
       }
       await aoMudar()
     })
@@ -176,6 +177,9 @@ function PersonagemLinha({ item, nivel, aoMudar }: { item: ItemRef; nivel: numbe
       <span className="chevron-vazio" />
       <span className="rail-titulo">👤 {item.nome}{item.erro ? ' ⚠' : ''}</span>
       <span className="rail-acoes" onClick={(e) => e.stopPropagation()}>
+        {id && (
+          <button className="btn-icon" title="Campanhas" onClick={(e) => { e.stopPropagation(); void editarCampanhas('personagem', id, item.nome) }}>🏷️</button>
+        )}
         <button className="btn-icon" title="Renomear" onClick={renomear}>✎</button>
         <button className="btn-icon" title="Excluir" onClick={excluir}>🗑</button>
       </span>

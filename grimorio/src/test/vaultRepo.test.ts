@@ -239,4 +239,26 @@ describe('VaultRepo', () => {
     await repo.moverPersonagem(ref.caminho, 'personagens-soltos')
     expect(await fs.exists(`C:/Cofre/${ref.caminho}`)).toBe(true)
   })
+
+  // ---- id na criação e na árvore (etiqueta de campanha) ----
+
+  it('criarCanvasDoc retorna o id do doc (p/ etiquetar em campanha)', async () => {
+    await repo.inicializar()
+    const ref = await repo.criarCanvasDoc('canvases-soltos', 'Mapa')
+    expect(ref.id).toBeTruthy()
+    expect((await repo.lerCanvasDoc(ref.caminho)).id).toBe(ref.id)
+  })
+
+  it('a árvore traz o id dos canvases soltos (usado pelo filtro de campanha)', async () => {
+    await repo.inicializar()
+    const ref = await repo.criarCanvasDoc('canvases-soltos', 'Rabisco')
+    const tree = await repo.montarArvore()
+    expect(tree.canvasesSoltos[0].id).toBe(ref.id)
+  })
+
+  it('a árvore de pastas traz o id dos personagens', async () => {
+    const ref = await repo.criarPersonagemEm('personagens-soltos', 'Solo')
+    const raiz = await repo.montarArvorePastas('personagens-soltos')
+    expect(raiz.personagens[0].id).toBe(ref.id)
+  })
 })

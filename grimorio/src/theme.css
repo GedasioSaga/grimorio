@@ -239,6 +239,16 @@ button:hover { border-color: var(--dourado); color: var(--dourado-claro); }
 .dialogo-botoes { display: flex; justify-content: flex-end; gap: 8px; }
 .dialogo-ok { border-color: var(--dourado); color: var(--dourado-claro); }
 
+/* lista de checkboxes do diálogo de multi-seleção de campanhas */
+.dialogo-lista { display: flex; flex-direction: column; gap: 2px; max-height: 40vh; overflow-y: auto; }
+.dialogo-lista-item {
+  display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-radius: 4px;
+  color: var(--texto); font-size: 13px; cursor: pointer;
+}
+.dialogo-lista-item:hover { background: var(--fundo-elevado); }
+.dialogo-lista-item input { accent-color: var(--dourado); cursor: pointer; }
+.dialogo-lista:empty::after { content: 'Nenhuma campanha ainda.'; color: var(--texto-fraco); font-size: 13px; }
+
 /* aviso de itens escondidos pelo filtro de campanha (sidebar) */
 .filtro-ocultos {
   display: block; width: calc(100% - 16px); margin: 2px 8px; padding: 4px 8px;
