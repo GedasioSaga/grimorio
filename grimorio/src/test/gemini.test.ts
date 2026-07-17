@@ -1,20 +1,10 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { fetch as fetchTauri } from '@tauri-apps/plugin-http'
-import { extrairTexto, gerarConteudo, montarBody, parsearChaves } from '../lib/gemini'
+import { extrairTexto, gerarConteudo, montarBody } from '../lib/gemini'
 
 // gemini.ts usa o fetch do plugin HTTP do Tauri (não o global): mocka o módulo.
 vi.mock('@tauri-apps/plugin-http', () => ({ fetch: vi.fn() }))
 const fetchMock = vi.mocked(fetchTauri)
-
-describe('parsearChaves', () => {
-  it('separa por vírgula e apara espaços', () => {
-    expect(parsearChaves(' k1 , k2,k3 ')).toEqual(['k1', 'k2', 'k3'])
-  })
-  it('vazio/undefined → []', () => {
-    expect(parsearChaves(undefined)).toEqual([])
-    expect(parsearChaves(' , ,')).toEqual([])
-  })
-})
 
 describe('montarBody', () => {
   it('mapeia papel→role e injeta system_instruction', () => {
@@ -61,16 +51,12 @@ const respOk = (texto: string) => ({
 })
 const respStatus = (status: number) => ({ ok: false, status })
 
-const pedido = { system: 'p', historico: [{ papel: 'user' as const, texto: 'oi' }] }
+// 3 chaves fictícias injetadas: cobre rotação/retry sem tocar na rede.
+const pedido = { system: 'p', historico: [{ papel: 'user' as const, texto: 'oi' }], chaves: ['k1', 'k2', 'k3'] }
 
 describe('gerarConteudo (round-robin com fetch mockado)', () => {
   beforeEach(() => {
     fetchMock.mockReset()
-    // 3 chaves fictícias: cobre rotação/retry sem tocar no .env real nem na rede.
-    vi.stubEnv('GEMINI_API_KEYS', 'k1,k2,k3')
-  })
-  afterEach(() => {
-    vi.unstubAllEnvs()
   })
 
   it('sucesso na 1ª chave', async () => {

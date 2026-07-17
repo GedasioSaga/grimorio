@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import { ask } from '@tauri-apps/plugin-dialog'
 import { gerarConteudo, type ImagemIA } from '../lib/gemini'
+import { garantirChaves } from '../lib/chavesIA'
+import { pedirTexto } from './dialogos'
 import { promptMelhorar, promptVersao } from '../lib/promptsIA'
 
 export interface AcaoIA {
@@ -106,6 +108,7 @@ export function AcoesIA({
         system: systemFull,
         historico: [{ papel: 'user', texto: `${dados}\n\n${instrucao}` }],
         imagens,
+        chaves: await garantirChaves(pedirTexto),
       })
       if (!montadoRef.current) return
       setPreview({ rotulo: opts.rotulo, destino: opts.destino, rotuloDestino: opts.rotuloDestino, texto })

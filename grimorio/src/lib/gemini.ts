@@ -1,7 +1,7 @@
 /**
- * Cliente do Gemini (REST v1beta, sem SDK). Chaves em GEMINI_API_KEYS
- * (round-robin; qualquer erro/rede tenta a próxima). As chaves NUNCA aparecem
- * em logs ou mensagens de erro.
+ * Cliente do Gemini (REST v1beta, sem SDK). As chaves são injetadas pelo chamador
+ * (a UI as obtém via chavesIA.garantirChaves) e usadas em round-robin; qualquer
+ * erro/rede tenta a próxima. As chaves NUNCA aparecem em logs ou mensagens de erro.
  *
  * Usa o `fetch` do plugin HTTP do Tauri (requisição pelo backend Rust): o webview
  * não consegue chamar a API do Google direto (CORS). Sem isso a chamada trava.
@@ -30,11 +30,6 @@ interface ParteIA {
 export interface BodyGemini {
   system_instruction: { parts: { text: string }[] }
   contents: { role: 'user' | 'model'; parts: ParteIA[] }[]
-}
-
-/** "k1, k2,k3" → ['k1','k2','k3'] (vazios fora). */
-export function parsearChaves(raw: string | undefined): string[] {
-  return (raw ?? '').split(',').map((s) => s.trim()).filter(Boolean)
 }
 
 /** Monta o body do generateContent; imagens entram nas parts da ÚLTIMA mensagem user. */
@@ -69,12 +64,14 @@ export async function gerarConteudo(opts: {
   system: string
   historico: MensagemIA[]
   imagens?: ImagemIA[]
+  /** Chaves da API (a UI obtém via garantirChaves e injeta; a lib não conhece o storage). */
+  chaves: string[]
 }): Promise<string> {
-  const chaves = parsearChaves(import.meta.env.GEMINI_API_KEYS)
+  const chaves = opts.chaves
   if (chaves.length === 0) {
-    throw new Error('IA não configurada (defina GEMINI_API_KEYS no .env).')
+    throw new Error('IA não configurada. Cole sua chave da API do Gemini quando solicitado.')
   }
-  const modelo = import.meta.env.GEMINI_MODEL || MODELO_PADRAO
+  const modelo = MODELO_PADRAO
   const body = JSON.stringify(montarBody(opts.system, opts.historico, opts.imagens ?? []))
 
   const inicio = indiceChave++ // reserva o ponto de partida desta chamada (síncrono, sem corrida entre chamadas concorrentes)

@@ -7,6 +7,8 @@ import type { CenarioCardShapeType } from './CenarioCardShape'
 import type { CharacterCardShapeType } from './CharacterCardShape'
 import { JANELA_HISTORICO, SYSTEM_MESTRE, type MensagemChat } from '../lib/chatIA'
 import { gerarConteudo, type ImagemIA } from '../lib/gemini'
+import { garantirChaves } from '../lib/chavesIA'
+import { pedirTexto } from './dialogos'
 import {
   acharCampanhaDaSessao,
   achatarCenarios,
@@ -206,6 +208,7 @@ export function ChatIA({
         system,
         historico: janela,
         imagens: anexo?.imagem ? [anexo.imagem] : [],
+        chaves: await garantirChaves(pedirTexto),
       })
       // desmontou durante o await (troca de sessão): a pergunta já foi persistida
       // por agendarSalvar(novas)/flush; descartar a resposta evita clobber da conversa nova
