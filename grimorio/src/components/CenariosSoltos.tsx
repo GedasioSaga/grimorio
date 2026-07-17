@@ -1,8 +1,10 @@
 import { useState } from 'react'
+import { ask, message } from '@tauri-apps/plugin-dialog'
 import { useApp } from '../state/store'
 import type { CenarioNode, PastaCenarioNode } from '../lib/types'
 import { contarDescendentes } from '../lib/cenarioArvore'
 import { personagensVivos, vincularPersonagem } from '../lib/cenarioVinculo'
+import { pedirTexto } from './dialogos'
 
 const RAIZ = 'cenarios'
 export const MIME_CENARIO = 'application/x-grimorio-cenario'
@@ -12,7 +14,7 @@ async function comAviso(acao: () => Promise<void>) {
   try {
     await acao()
   } catch (e) {
-    alert(`Operação falhou: ${e}`)
+    await message(`Operação falhou: ${e}`, { title: 'Grimório', kind: 'error' })
   }
 }
 
@@ -52,18 +54,29 @@ function aceitaCenarioOuPersonagem(e: React.DragEvent) {
 }
 
 /** Seção raiz "Cenários" da sidebar. */
-export function CenariosSoltos({ raiz, aoMudar }: { raiz: PastaCenarioNode; aoMudar: () => Promise<void> }) {
+export function CenariosSoltos({ raiz, aoMudar, ocultos = 0, aoMostrarTodos }: {
+  raiz: PastaCenarioNode
+  aoMudar: () => Promise<void>
+  /** quantos o filtro de campanha escondeu (aviso honesto em vez de "sem cenários") */
+  ocultos?: number
+  aoMostrarTodos?: () => void
+}) {
   const repo = useApp((s) => s.repo)
 
   async function novaPasta() {
-    const nome = prompt('Nome da pasta:')
+    const nome = await pedirTexto('Nome da pasta:')
     if (!nome || !repo) return
     await comAviso(async () => { await repo.criarPasta(RAIZ, nome); await aoMudar() })
   }
   async function novoCenario() {
-    const nome = prompt('Nome do cenário:')
+    const nome = await pedirTexto('Nome do cenário:')
     if (!nome || !repo) return
-    await comAviso(async () => { await repo.criarCenarioEm(RAIZ, nome); await aoMudar() })
+    await comAviso(async () => {
+      const ref = await repo.criarCenarioEm(RAIZ, nome)
+      // sob filtro ativo, já vincula à campanha filtrada — senão nasceria oculto
+      useApp.getState().vincularAoFiltro('cenario', ref.id)
+      await aoMudar()
+    })
   }
 
   return (
@@ -79,6 +92,11 @@ export function CenariosSoltos({ raiz, aoMudar }: { raiz: PastaCenarioNode; aoMu
           <button className="btn-icon" title="Novo cenário" onClick={novoCenario}>+</button>
         </span>
       </div>
+      {ocultos > 0 && aoMostrarTodos && (
+        <button className="filtro-ocultos" onClick={aoMostrarTodos}>
+          {ocultos} {ocultos === 1 ? 'cenário oculto' : 'cenários ocultos'} pelo filtro — mostrar todos
+        </button>
+      )}
       {raiz.subpastas.map((p) => <PastaCenarioLinha key={p.caminho} pasta={p} nivel={0} aoMudar={aoMudar} />)}
       {raiz.cenarios.map((c) => <CenarioLinha key={c.caminho} node={c} nivel={0} aoMudar={aoMudar} />)}
       {raiz.subpastas.length === 0 && raiz.cenarios.length === 0 && (
@@ -93,24 +111,28 @@ function PastaCenarioLinha({ pasta, nivel, aoMudar }: { pasta: PastaCenarioNode;
   const [aberta, setAberta] = useState(true)
 
   async function criar(tipo: 'pasta' | 'cenario') {
-    const nome = prompt(tipo === 'pasta' ? 'Nome da subpasta:' : 'Nome do cenário:')
+    const nome = await pedirTexto(tipo === 'pasta' ? 'Nome da subpasta:' : 'Nome do cenário:')
     if (!nome || !repo) return
     await comAviso(async () => {
-      if (tipo === 'pasta') await repo.criarPasta(pasta.caminho, nome)
-      else await repo.criarCenarioEm(pasta.caminho, nome)
+      if (tipo === 'pasta') {
+        await repo.criarPasta(pasta.caminho, nome)
+      } else {
+        const ref = await repo.criarCenarioEm(pasta.caminho, nome)
+        useApp.getState().vincularAoFiltro('cenario', ref.id)
+      }
       await aoMudar()
     })
   }
   async function renomear(e: React.MouseEvent) {
     e.stopPropagation()
-    const nome = prompt('Novo nome da pasta:', pasta.nome)
+    const nome = await pedirTexto('Novo nome da pasta:', pasta.nome)
     if (!nome || !repo) return
     await comAviso(async () => { await repo.renomearItem(`${pasta.caminho}/pasta.json`, nome); await aoMudar() })
   }
   async function excluir(e: React.MouseEvent) {
     e.stopPropagation()
     if (!repo) return
-    if (!confirm(`Excluir a pasta "${pasta.nome}" e tudo dentro dela?`)) return
+    if (!(await ask(`Excluir a pasta "${pasta.nome}" e tudo dentro dela?`, { title: 'Grimório', kind: 'warning' }))) return
     await comAviso(async () => { await repo.excluirItem(pasta.caminho); await aoMudar() })
   }
 
@@ -155,13 +177,17 @@ function CenarioLinha({ node, nivel, aoMudar }: { node: CenarioNode; nivel: numb
 
   async function novoSub(e: React.MouseEvent) {
     e.stopPropagation()
-    const nome = prompt('Nome do sub-cenário:')
+    const nome = await pedirTexto('Nome do sub-cenário:')
     if (!nome || !repo) return
-    await comAviso(async () => { await repo.criarCenarioEm(node.caminho, nome); await aoMudar() })
+    await comAviso(async () => {
+      const ref = await repo.criarCenarioEm(node.caminho, nome)
+      useApp.getState().vincularAoFiltro('cenario', ref.id)
+      await aoMudar()
+    })
   }
   async function renomear(e: React.MouseEvent) {
     e.stopPropagation()
-    const nome = prompt('Novo nome:', node.nome)
+    const nome = await pedirTexto('Novo nome:', node.nome)
     if (!nome || !repo) return
     await comAviso(async () => { await repo.renomearCenario(node.caminho, nome); await aoMudar() })
   }
@@ -170,7 +196,7 @@ function CenarioLinha({ node, nivel, aoMudar }: { node: CenarioNode; nivel: numb
     if (!repo) return
     const qtd = contarDescendentes(node)
     const aviso = qtd > 0 ? ` e ${qtd} sub-cenário(s) dentro dele` : ''
-    if (!confirm(`Excluir "${node.nome}"${aviso}?`)) return
+    if (!(await ask(`Excluir "${node.nome}"${aviso}?`, { title: 'Grimório', kind: 'warning' }))) return
     await comAviso(async () => { await repo.excluirCenario(node.caminho); await aoMudar() })
   }
 

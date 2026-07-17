@@ -1,13 +1,15 @@
 import { useEffect, useState } from 'react'
+import { ask, message } from '@tauri-apps/plugin-dialog'
 import { NotebookRepo } from '../lib/notebookRepo'
 import type { PaginaNode } from '../lib/types'
 import { useApp } from '../state/store'
+import { pedirTexto } from './dialogos'
 
 async function comAviso(acao: () => Promise<void>) {
   try {
     await acao()
   } catch (e) {
-    alert(`Operação falhou: ${e}`)
+    await message(`Operação falhou: ${e}`, { title: 'Grimório', kind: 'error' })
   }
 }
 
@@ -45,7 +47,7 @@ export function PaginasRail({ repo, cadernoDirRel, onRecolher }: { repo: Noteboo
   }, [repo])
 
   async function nova(paiId: string | null) {
-    const titulo = prompt('Título da página:')
+    const titulo = await pedirTexto('Título da página:')
     if (!titulo) return
     await comAviso(async () => {
       const ref = await repo.criarPagina(titulo, paiId)
@@ -114,7 +116,7 @@ function LinhaPagina({
 
   async function renomear(e: React.MouseEvent) {
     e.stopPropagation()
-    const titulo = prompt('Novo título:', node.titulo)
+    const titulo = await pedirTexto('Novo título:', node.titulo)
     if (!titulo) return
     await comAviso(async () => {
       await repo.renomearPagina(node.slug, titulo)
@@ -124,7 +126,7 @@ function LinhaPagina({
 
   async function excluir(e: React.MouseEvent) {
     e.stopPropagation()
-    if (!confirm(`Excluir "${node.titulo}" e as subpáginas?`)) return
+    if (!(await ask(`Excluir "${node.titulo}" e as subpáginas?`, { title: 'Grimório', kind: 'warning' }))) return
     await comAviso(async () => {
       await repo.excluirPagina(node.slug)
       await recarregar()

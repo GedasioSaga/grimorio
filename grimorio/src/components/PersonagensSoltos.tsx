@@ -1,6 +1,8 @@
 import { useState } from 'react'
+import { ask, message } from '@tauri-apps/plugin-dialog'
 import { useApp } from '../state/store'
 import type { ItemRef, PastaNode } from '../lib/types'
+import { pedirTexto } from './dialogos'
 
 const RAIZ = 'personagens-soltos'
 const MIME = 'application/x-grimorio-personagem'
@@ -9,7 +11,7 @@ async function comAviso(acao: () => Promise<void>) {
   try {
     await acao()
   } catch (e) {
-    alert(`Operação falhou: ${e}`)
+    await message(`Operação falhou: ${e}`, { title: 'Grimório', kind: 'error' })
   }
 }
 
@@ -32,18 +34,29 @@ function aceitaPersonagem(e: React.DragEvent) {
 }
 
 /** Seção raiz "Personagens" (fora de campanha). */
-export function PersonagensSoltos({ raiz, aoMudar }: { raiz: PastaNode; aoMudar: () => Promise<void> }) {
+export function PersonagensSoltos({ raiz, aoMudar, ocultos = 0, aoMostrarTodos }: {
+  raiz: PastaNode
+  aoMudar: () => Promise<void>
+  /** quantos o filtro de campanha escondeu (aviso honesto em vez de "sem personagens") */
+  ocultos?: number
+  aoMostrarTodos?: () => void
+}) {
   const repo = useApp((s) => s.repo)
 
   async function novaPasta() {
-    const nome = prompt('Nome da pasta:')
+    const nome = await pedirTexto('Nome da pasta:')
     if (!nome || !repo) return
     await comAviso(async () => { await repo.criarPasta(RAIZ, nome); await aoMudar() })
   }
   async function novoPersonagem() {
-    const nome = prompt('Nome do personagem:')
+    const nome = await pedirTexto('Nome do personagem:')
     if (!nome || !repo) return
-    await comAviso(async () => { await repo.criarPersonagemEm(RAIZ, nome); await aoMudar() })
+    await comAviso(async () => {
+      const ref = await repo.criarPersonagemEm(RAIZ, nome)
+      // sob filtro ativo, já vincula à campanha filtrada — senão nasceria oculto
+      useApp.getState().vincularAoFiltro('personagem', ref.id)
+      await aoMudar()
+    })
   }
 
   return (
@@ -59,6 +72,11 @@ export function PersonagensSoltos({ raiz, aoMudar }: { raiz: PastaNode; aoMudar:
           <button className="btn-icon" title="Novo personagem" onClick={novoPersonagem}>+</button>
         </span>
       </div>
+      {ocultos > 0 && aoMostrarTodos && (
+        <button className="filtro-ocultos" onClick={aoMostrarTodos}>
+          {ocultos} {ocultos === 1 ? 'personagem oculto' : 'personagens ocultos'} pelo filtro — mostrar todos
+        </button>
+      )}
       {raiz.subpastas.map((p) => <PastaLinha key={p.caminho} pasta={p} nivel={0} aoMudar={aoMudar} />)}
       {raiz.personagens.map((pr) => <PersonagemLinha key={pr.caminho} item={pr} nivel={0} aoMudar={aoMudar} />)}
       {raiz.subpastas.length === 0 && raiz.personagens.length === 0 && (
@@ -73,24 +91,28 @@ function PastaLinha({ pasta, nivel, aoMudar }: { pasta: PastaNode; nivel: number
   const [aberta, setAberta] = useState(true)
 
   async function criar(tipo: 'pasta' | 'personagem') {
-    const nome = prompt(tipo === 'pasta' ? 'Nome da subpasta:' : 'Nome do personagem:')
+    const nome = await pedirTexto(tipo === 'pasta' ? 'Nome da subpasta:' : 'Nome do personagem:')
     if (!nome || !repo) return
     await comAviso(async () => {
-      if (tipo === 'pasta') await repo.criarPasta(pasta.caminho, nome)
-      else await repo.criarPersonagemEm(pasta.caminho, nome)
+      if (tipo === 'pasta') {
+        await repo.criarPasta(pasta.caminho, nome)
+      } else {
+        const ref = await repo.criarPersonagemEm(pasta.caminho, nome)
+        useApp.getState().vincularAoFiltro('personagem', ref.id)
+      }
       await aoMudar()
     })
   }
   async function renomear(e: React.MouseEvent) {
     e.stopPropagation()
-    const nome = prompt('Novo nome da pasta:', pasta.nome)
+    const nome = await pedirTexto('Novo nome da pasta:', pasta.nome)
     if (!nome || !repo) return
     await comAviso(async () => { await repo.renomearItem(`${pasta.caminho}/pasta.json`, nome); await aoMudar() })
   }
   async function excluir(e: React.MouseEvent) {
     e.stopPropagation()
     if (!repo) return
-    if (!confirm(`Excluir a pasta "${pasta.nome}" e tudo dentro dela?`)) return
+    if (!(await ask(`Excluir a pasta "${pasta.nome}" e tudo dentro dela?`, { title: 'Grimório', kind: 'warning' }))) return
     await comAviso(async () => { await repo.excluirItem(pasta.caminho); await aoMudar() })
   }
 
@@ -131,14 +153,14 @@ function PersonagemLinha({ item, nivel, aoMudar }: { item: ItemRef; nivel: numbe
 
   async function renomear(e: React.MouseEvent) {
     e.stopPropagation()
-    const nome = prompt('Novo nome:', item.nome)
+    const nome = await pedirTexto('Novo nome:', item.nome)
     if (!nome || !repo) return
     await comAviso(async () => { await repo.renomearItem(item.caminho, nome); await aoMudar() })
   }
   async function excluir(e: React.MouseEvent) {
     e.stopPropagation()
     if (!repo) return
-    if (!confirm(`Excluir "${item.nome}"?`)) return
+    if (!(await ask(`Excluir "${item.nome}"?`, { title: 'Grimório', kind: 'warning' }))) return
     await comAviso(async () => { await repo.excluirItem(item.caminho); await aoMudar() })
   }
 

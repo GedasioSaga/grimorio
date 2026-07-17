@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { filtrarPastaPersonagens, filtrarArvoreCenarios } from '../lib/filtroCampanha'
+import { contarCenarios, contarPersonagens, filtrarArvoreCenarios, filtrarPastaPersonagens } from '../lib/filtroCampanha'
 import type { PastaCenarioNode, PastaNode } from '../lib/types'
 
 const pastaP: PastaNode = {
@@ -18,15 +18,17 @@ const pastaP: PastaNode = {
 }
 
 describe('filtrarPastaPersonagens', () => {
-  it('mantém só caminhos permitidos e poda pastas vazias', () => {
+  it('mantém só caminhos permitidos; pastas ficam TODAS visíveis (estrutura não é filtrada)', () => {
     const r = filtrarPastaPersonagens(pastaP, new Set(['personagens-soltos/a.json']))
     expect(r.personagens.map((p) => p.slug)).toEqual(['a'])
-    expect(r.subpastas).toHaveLength(0) // viloes sem match e vazia podadas
+    // pasta recém-criada (vazia) precisa aparecer mesmo sob filtro — senão criar parece quebrado
+    expect(r.subpastas.map((s) => s.slug)).toEqual(['viloes', 'vazia'])
+    expect(r.subpastas[0].personagens).toHaveLength(0)
   })
-  it('subpasta com match sobrevive', () => {
+  it('personagem dentro de subpasta sobrevive quando permitido', () => {
     const r = filtrarPastaPersonagens(pastaP, new Set(['personagens-soltos/viloes/x.json']))
     expect(r.personagens).toHaveLength(0)
-    expect(r.subpastas.map((s) => s.slug)).toEqual(['viloes'])
+    expect(r.subpastas[0].personagens.map((p) => p.slug)).toEqual(['x'])
   })
 })
 
@@ -42,10 +44,11 @@ const arvoreC: PastaCenarioNode = {
 }
 
 describe('filtrarArvoreCenarios', () => {
-  it('mantém cenário permitido', () => {
+  it('mantém cenário permitido; pastas ficam sempre visíveis', () => {
     const r = filtrarArvoreCenarios(arvoreC, new Set(['a']))
     expect(r.cenarios.map((c) => c.id)).toEqual(['a'])
-    expect(r.subpastas).toHaveLength(0)
+    expect(r.subpastas.map((s) => s.slug)).toEqual(['p1'])
+    expect(r.subpastas[0].cenarios).toHaveLength(0)
   })
   it('cenário permitido traz a subárvore inteira (filhos herdam)', () => {
     const r = filtrarArvoreCenarios(arvoreC, new Set(['a']))
@@ -58,8 +61,21 @@ describe('filtrarArvoreCenarios', () => {
     expect(r.cenarios[0].filhos.map((c) => c.id)).toEqual(['b'])
     expect(r.cenarios[0].filhos[0].filhos.map((c) => c.id)).toEqual(['c'])
   })
-  it('pasta sem nada permitido é podada; com match fica', () => {
-    expect(filtrarArvoreCenarios(arvoreC, new Set(['d'])).subpastas.map((s) => s.slug)).toEqual(['p1'])
-    expect(filtrarArvoreCenarios(arvoreC, new Set(['a'])).subpastas).toHaveLength(0)
+  it('cenário permitido dentro de pasta continua visível', () => {
+    const r = filtrarArvoreCenarios(arvoreC, new Set(['d']))
+    expect(r.subpastas[0].cenarios.map((c) => c.id)).toEqual(['d'])
+  })
+})
+
+describe('contadores (aviso de ocultos pelo filtro)', () => {
+  it('contarPersonagens soma recursivo', () => {
+    expect(contarPersonagens(pastaP)).toBe(3) // a, b, viloes/x
+    const filtrada = filtrarPastaPersonagens(pastaP, new Set(['personagens-soltos/a.json']))
+    expect(contarPersonagens(pastaP) - contarPersonagens(filtrada)).toBe(2) // b e x ocultos
+  })
+  it('contarCenarios soma sub-cenários e pastas', () => {
+    expect(contarCenarios(arvoreC)).toBe(4) // a, b, c, d
+    const filtrada = filtrarArvoreCenarios(arvoreC, new Set(['d']))
+    expect(contarCenarios(arvoreC) - contarCenarios(filtrada)).toBe(3) // a, b, c ocultos
   })
 })

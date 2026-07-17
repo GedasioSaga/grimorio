@@ -224,6 +224,29 @@ button:hover { border-color: var(--dourado); color: var(--dourado-claro); }
 .perfil-corpo h2, .perfil-corpo h3 { color: var(--dourado-claro); }
 .perfil-salvar-erro { color: var(--erro); font-size: 12px; padding: 8px 20px; border-top: 1px solid var(--borda); }
 
+/* ---- diálogo de texto in-app (substitui window.prompt) ---- */
+.dialogo-caixa {
+  width: min(420px, 90vw); background: var(--fundo-painel);
+  border: 1px solid var(--dourado); border-radius: 8px;
+  padding: 20px; display: flex; flex-direction: column; gap: 12px;
+}
+.dialogo-titulo { color: var(--dourado-claro); font-size: 14px; }
+.dialogo-input {
+  background: var(--fundo); border: 1px solid var(--borda); border-radius: 4px;
+  color: var(--texto); padding: 8px 10px; outline: none; font-size: 14px;
+}
+.dialogo-input:focus { border-color: var(--dourado); }
+.dialogo-botoes { display: flex; justify-content: flex-end; gap: 8px; }
+.dialogo-ok { border-color: var(--dourado); color: var(--dourado-claro); }
+
+/* aviso de itens escondidos pelo filtro de campanha (sidebar) */
+.filtro-ocultos {
+  display: block; width: calc(100% - 16px); margin: 2px 8px; padding: 4px 8px;
+  font-size: 12px; text-align: left; color: var(--texto-fraco);
+  background: transparent; border: 1px dashed var(--borda); border-radius: 4px; cursor: pointer;
+}
+.filtro-ocultos:hover { color: var(--dourado-claro); border-color: var(--dourado); }
+
 /* aba Conteúdo do cenário: sub-cenários + vínculo de personagens */
 .cenario-conteudo { flex: 1; overflow-y: auto; padding: 12px 20px; }
 .cenario-sub-item {

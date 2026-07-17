@@ -5,6 +5,7 @@ import { Sidebar } from './components/Sidebar'
 import { Workspace } from './components/Workspace'
 import { PerfilModal } from './components/PerfilModal'
 import { CenarioModal } from './components/CenarioModal'
+import { HostDialogos } from './components/dialogos'
 import { dirNotasDoMapa } from './lib/caminhos'
 import './theme.css'
 
@@ -73,6 +74,7 @@ export default function App() {
       </main>
       {perfilAbertoId && <PerfilModal key={perfilAbertoId} personagemId={perfilAbertoId} />}
       {cenarioAbertoId && <CenarioModal key={cenarioAbertoId} cenarioId={cenarioAbertoId} />}
+      <HostDialogos />
     </div>
   )
 }

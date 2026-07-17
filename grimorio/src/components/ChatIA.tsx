@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { ask } from '@tauri-apps/plugin-dialog'
 import { convertFileSrc } from '@tauri-apps/api/core'
 import { useApp } from '../state/store'
 import type { NotebookRepo } from '../lib/notebookRepo'
@@ -218,8 +219,8 @@ export function ChatIA({
     }
   }
 
-  function limpar() {
-    if (!confirm('Limpar a conversa desta sessão?')) return
+  async function limpar() {
+    if (!(await ask('Limpar a conversa desta sessão?', { title: 'Grimório', kind: 'warning' }))) return
     agendarSalvar([])
   }
 

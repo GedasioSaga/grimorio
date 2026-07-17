@@ -17,7 +17,7 @@ import {
 } from 'tldraw'
 import 'tldraw/tldraw.css'
 import { convertFileSrc } from '@tauri-apps/api/core'
-import { save } from '@tauri-apps/plugin-dialog'
+import { save, message } from '@tauri-apps/plugin-dialog'
 import { useApp } from '../state/store'
 import type { VaultRepo } from '../lib/vaultRepo'
 import type { PastaCenarioNode, Vinculo } from '../lib/types'
@@ -307,7 +307,7 @@ export function CanvasView({ caminho, nome }: { caminho: string; nome: string })
         await repo.escreverTextoAbsoluto(destino, svg.svg)
       }
     } catch (e) {
-      alert(`Falha ao exportar: ${e}`)
+      await message(`Falha ao exportar: ${e}`, { title: 'Grimório', kind: 'error' })
     }
   }
 

@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { ask } from '@tauri-apps/plugin-dialog'
 import { gerarConteudo, type ImagemIA } from '../lib/gemini'
 import { promptMelhorar, promptVersao } from '../lib/promptsIA'
 
@@ -197,9 +198,9 @@ export function AcoesIA({
               </button>
               <button
                 className="acoes-ia-inserir"
-                onClick={() => {
+                onClick={async () => {
                   const atual = conteudoDoDestino(preview.destino)
-                  if (atual && !confirm(`Substituir o texto atual de "${preview.rotuloDestino}"? O conteúdo atual será apagado.`)) return
+                  if (atual && !(await ask(`Substituir o texto atual de "${preview.rotuloDestino}"? O conteúdo atual será apagado.`, { title: 'Grimório', kind: 'warning' }))) return
                   onInserir(preview.destino, preview.texto, 'substituir')
                   setPreview(null)
                 }}

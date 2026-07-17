@@ -2,14 +2,13 @@ import type { CenarioNode, PastaCenarioNode, PastaNode } from './types'
 
 /**
  * Filtra a árvore de personagens soltos: mantém personagens cujo CAMINHO está no
- * conjunto e poda subpastas que ficarem sem nada (personagem é referenciado por
- * caminho na árvore; o chamador converte ids → caminhos via caminhoPorId).
+ * conjunto (o chamador converte ids → caminhos via caminhoPorId). PASTAS ficam
+ * sempre visíveis — filtro esconde entidades, não estrutura; senão uma pasta
+ * recém-criada (vazia) sumiria e criar pareceria quebrado.
  */
 export function filtrarPastaPersonagens(pasta: PastaNode, caminhosPermitidos: Set<string>): PastaNode {
   const personagens = pasta.personagens.filter((p) => caminhosPermitidos.has(p.caminho))
-  const subpastas = pasta.subpastas
-    .map((s) => filtrarPastaPersonagens(s, caminhosPermitidos))
-    .filter((s) => s.personagens.length > 0 || s.subpastas.length > 0)
+  const subpastas = pasta.subpastas.map((s) => filtrarPastaPersonagens(s, caminhosPermitidos))
   return { ...pasta, personagens, subpastas }
 }
 
@@ -28,11 +27,23 @@ function filtrarCenarios(nos: CenarioNode[], ids: Set<string>, herdado: boolean)
   return out
 }
 
-/** Filtra a árvore de cenários por ids permitidos (subárvore herda); pastas vazias são podadas. */
+/** Filtra cenários por ids permitidos (subárvore herda); pastas ficam sempre visíveis. */
 export function filtrarArvoreCenarios(raiz: PastaCenarioNode, ids: Set<string>): PastaCenarioNode {
   const cenarios = filtrarCenarios(raiz.cenarios, ids, false)
-  const subpastas = raiz.subpastas
-    .map((s) => filtrarArvoreCenarios(s, ids))
-    .filter((s) => s.cenarios.length > 0 || s.subpastas.length > 0)
+  const subpastas = raiz.subpastas.map((s) => filtrarArvoreCenarios(s, ids))
   return { ...raiz, cenarios, subpastas }
+}
+
+/** Total de personagens na árvore (recursivo) — para o aviso de "N ocultos pelo filtro". */
+export function contarPersonagens(pasta: PastaNode): number {
+  return pasta.personagens.length + pasta.subpastas.reduce((acc, s) => acc + contarPersonagens(s), 0)
+}
+
+function contarNos(nos: CenarioNode[]): number {
+  return nos.reduce((acc, n) => acc + 1 + contarNos(n.filhos), 0)
+}
+
+/** Total de cenários na árvore, incluindo sub-cenários (recursivo). */
+export function contarCenarios(raiz: PastaCenarioNode): number {
+  return contarNos(raiz.cenarios) + raiz.subpastas.reduce((acc, s) => acc + contarCenarios(s), 0)
 }

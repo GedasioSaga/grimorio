@@ -71,6 +71,8 @@ interface AppState {
   removerVinculo(id: string): void
   alternarParticipacao(entidadeTipo: TipoEntidadeVinculo, entidadeId: string, campanhaId: string): void
   setCampanhaFiltro(id: string | null): void
+  /** Sob filtro ativo, vincula entidade recém-criada à campanha filtrada (senão ela nasceria oculta). */
+  vincularAoFiltro(entidadeTipo: TipoEntidadeVinculo, entidadeId: string): void
 }
 
 const SALVAR_VINCULOS_DEBOUNCE_MS = 800
@@ -294,5 +296,15 @@ export const useApp = create<AppState>((set, get) => ({
     if (id) localStorage.setItem('grimorio.campanhaFiltro', id)
     else localStorage.removeItem('grimorio.campanhaFiltro')
     set({ campanhaFiltro: id })
+  },
+
+  vincularAoFiltro(entidadeTipo, entidadeId) {
+    const campId = get().campanhaFiltro
+    if (!campId) return
+    get().adicionarVinculo({
+      deTipo: entidadeTipo, deId: entidadeId,
+      paraTipo: 'campanha', paraId: campId,
+      tipo: TIPO_PARTICIPA, notas: '',
+    })
   },
 }))

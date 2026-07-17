@@ -1,10 +1,12 @@
 import { useState } from 'react'
+import { ask, message } from '@tauri-apps/plugin-dialog'
 import { useApp } from '../state/store'
 import type { TipoAberto } from '../state/store'
+import { pedirTexto } from './dialogos'
 import type { CampanhaNode, ItemRef } from '../lib/types'
 import { escritaDirDaCampanha } from '../lib/caminhos'
 import { idsDaCampanha } from '../lib/vinculos'
-import { filtrarArvoreCenarios, filtrarPastaPersonagens } from '../lib/filtroCampanha'
+import { contarCenarios, contarPersonagens, filtrarArvoreCenarios, filtrarPastaPersonagens } from '../lib/filtroCampanha'
 import { PersonagensSoltos } from './PersonagensSoltos'
 import { CenariosSoltos } from './CenariosSoltos'
 
@@ -12,7 +14,7 @@ async function comAvisoDeErro(acao: () => Promise<void>) {
   try {
     await acao()
   } catch (e) {
-    alert(`Operação falhou: ${e}`)
+    await message(`Operação falhou: ${e}`, { title: 'Grimório', kind: 'error' })
   }
 }
 
@@ -36,7 +38,7 @@ export function Sidebar({ recolhida, onToggle }: { recolhida: boolean; onToggle:
   }
 
   async function novaCampanha() {
-    const nome = prompt('Nome da campanha:')
+    const nome = await pedirTexto('Nome da campanha:')
     if (!nome || !repo) return
     await comAvisoDeErro(async () => {
       await repo.criarCampanha(nome)
@@ -45,7 +47,7 @@ export function Sidebar({ recolhida, onToggle }: { recolhida: boolean; onToggle:
   }
 
   async function novoCanvasSolto() {
-    const nome = prompt('Nome do canvas:')
+    const nome = await pedirTexto('Nome do canvas:')
     if (!nome || !repo) return
     await comAvisoDeErro(async () => {
       await repo.criarCanvasDoc('canvases-soltos', nome)
@@ -67,6 +69,10 @@ export function Sidebar({ recolhida, onToggle }: { recolhida: boolean; onToggle:
       )
     : tree.personagensSoltos
   const raizCenarios = idsFiltro ? filtrarArvoreCenarios(tree.cenarios, idsFiltro) : tree.cenarios
+  // aviso "N ocultos": sem ele, item criado sem vínculo some e criar parece quebrado
+  const ocultosPersonagens = idsFiltro ? contarPersonagens(tree.personagensSoltos) - contarPersonagens(raizPersonagens) : 0
+  const ocultosCenarios = idsFiltro ? contarCenarios(tree.cenarios) - contarCenarios(raizCenarios) : 0
+  const limparFiltro = () => setCampanhaFiltro(null)
 
   return (
     <aside className="sidebar">
@@ -108,9 +114,11 @@ export function Sidebar({ recolhida, onToggle }: { recolhida: boolean; onToggle:
         ))}
       </div>
 
-      <PersonagensSoltos raiz={raizPersonagens} aoMudar={async () => { await recarregar(); await carregarPersonagens() }} />
+      <PersonagensSoltos raiz={raizPersonagens} ocultos={ocultosPersonagens} aoMostrarTodos={limparFiltro}
+        aoMudar={async () => { await recarregar(); await carregarPersonagens() }} />
 
-      <CenariosSoltos raiz={raizCenarios} aoMudar={async () => { await recarregar(); await carregarCenarios() }} />
+      <CenariosSoltos raiz={raizCenarios} ocultos={ocultosCenarios} aoMostrarTodos={limparFiltro}
+        aoMudar={async () => { await recarregar(); await carregarCenarios() }} />
     </aside>
   )
 }
@@ -122,7 +130,7 @@ function CampanhaItem({ camp, aoMudar }: { camp: CampanhaNode; aoMudar: () => Pr
   async function criar(tipo: 'sessao' | 'personagem' | 'canvas' | 'escrita') {
     if (!repo) return
     const rotulo = { sessao: 'sessão', personagem: 'personagem', canvas: 'canvas', escrita: 'escrita' }[tipo]
-    const nome = prompt(`Nome da ${rotulo}:`)
+    const nome = await pedirTexto(`Nome da ${rotulo}:`)
     if (!nome) return
     await comAvisoDeErro(async () => {
       if (tipo === 'personagem') await repo.criarPersonagem(camp.slug, nome)
@@ -134,7 +142,7 @@ function CampanhaItem({ camp, aoMudar }: { camp: CampanhaNode; aoMudar: () => Pr
 
   async function excluir() {
     if (!repo) return
-    if (!confirm(`Excluir a campanha "${camp.nome}" e todo o conteúdo dela?`)) return
+    if (!(await ask(`Excluir a campanha "${camp.nome}" e todo o conteúdo dela?`, { title: 'Grimório', kind: 'warning' }))) return
     await comAvisoDeErro(async () => {
       await repo.excluirCampanha(camp.slug)
       await aoMudar()
@@ -202,7 +210,7 @@ function ItemLinha({ item, tipo, tipoAbertura, aoMudar }: {
   async function renomear(e: React.MouseEvent) {
     e.stopPropagation()
     if (!repo) return
-    const nome = prompt('Novo nome:', item.nome)
+    const nome = await pedirTexto('Novo nome:', item.nome)
     if (!nome) return
     await comAvisoDeErro(async () => {
       await repo.renomearItem(item.caminho, nome)
@@ -213,7 +221,7 @@ function ItemLinha({ item, tipo, tipoAbertura, aoMudar }: {
   async function excluir(e: React.MouseEvent) {
     e.stopPropagation()
     if (!repo) return
-    if (!confirm(`Excluir "${item.nome}"?`)) return
+    if (!(await ask(`Excluir "${item.nome}"?`, { title: 'Grimório', kind: 'warning' }))) return
     await comAvisoDeErro(async () => {
       // itens de mapa/caderno (canvas) podem ter uma pasta .notas irmã — remove junto
       if (tipo === 'canvas') await repo.excluirItemComNotas(item.caminho)

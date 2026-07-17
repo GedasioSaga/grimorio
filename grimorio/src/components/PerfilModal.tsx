@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { open } from '@tauri-apps/plugin-dialog'
+import { open, message } from '@tauri-apps/plugin-dialog'
 import { convertFileSrc } from '@tauri-apps/api/core'
 import { useApp } from '../state/store'
 import type { Personagem } from '../lib/types'
@@ -117,7 +117,7 @@ export function PerfilModal({ personagemId }: { personagemId: string }) {
       // modificadoEm novo muda o ?v= do retratoSrc na hora (cache-bust otimista)
       agendarSalvar({ retrato: destinoRel, modificadoEm: new Date().toISOString() })
     } catch (e) {
-      alert(`Falha ao trocar retrato: ${e}`)
+      await message(`Falha ao trocar retrato: ${e}`, { title: 'Grimório', kind: 'error' })
     }
   }
 

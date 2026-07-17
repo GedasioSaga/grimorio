@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { open } from '@tauri-apps/plugin-dialog'
+import { open, message } from '@tauri-apps/plugin-dialog'
 import { convertFileSrc } from '@tauri-apps/api/core'
 import { useApp } from '../state/store'
 import type { Cenario } from '../lib/types'
@@ -125,7 +125,7 @@ export function CenarioModal({ cenarioId }: { cenarioId: string }) {
       await repo.copiarParaCofre(arquivo, destinoRel)
       agendarSalvar({ retrato: destinoRel, modificadoEm: new Date().toISOString() })
     } catch (e) {
-      alert(`Falha ao trocar retrato: ${e}`)
+      await message(`Falha ao trocar retrato: ${e}`, { title: 'Grimório', kind: 'error' })
     }
   }
 

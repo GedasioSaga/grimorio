@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { EditorContent, useEditor, useEditorState } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
-import { open } from '@tauri-apps/plugin-dialog'
+import { open, message } from '@tauri-apps/plugin-dialog'
 import type { NotebookRepo } from '../lib/notebookRepo'
 import { ImagemCofre } from './ImagemCofre'
 import { ParagrafoFinal } from './paragrafoFinal'
@@ -149,7 +149,7 @@ function EditorInterno({ repo, slug, corpoInicial, titulo, cadernoDirRel }: {
       await repoCofre.copiarParaCofre(arquivo, rel)
       editor.chain().focus().insertContent({ type: 'image', attrs: { rel } }).run()
     } catch (e) {
-      alert(`Falha ao inserir imagem: ${e}`)
+      await message(`Falha ao inserir imagem: ${e}`, { title: 'Grimório', kind: 'error' })
     }
   }
 
@@ -166,7 +166,7 @@ function EditorInterno({ repo, slug, corpoInicial, titulo, cadernoDirRel }: {
       await repoCofre.escreverBinario(rel, uint8ParaBase64(bytes))
       editor.chain().focus().insertContent({ type: 'image', attrs: { rel } }).run()
     } catch (e) {
-      alert(`Falha ao colar imagem: ${e}`)
+      await message(`Falha ao colar imagem: ${e}`, { title: 'Grimório', kind: 'error' })
     }
   }
 

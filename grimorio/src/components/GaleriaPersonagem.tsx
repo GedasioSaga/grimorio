@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { open } from '@tauri-apps/plugin-dialog'
+import { open, ask, message } from '@tauri-apps/plugin-dialog'
 import { convertFileSrc } from '@tauri-apps/api/core'
 import { useApp } from '../state/store'
 import { caminhoAbsolutoImagem } from '../lib/caminhos'
@@ -60,12 +60,12 @@ export function GaleriaPersonagem({
       if (lista !== imagens) onImagensChange(lista)
     } catch (e) {
       if (lista !== imagens) onImagensChange(lista) // persiste o que já copiou antes do erro
-      alert(`Falha ao adicionar imagens: ${e}`)
+      await message(`Falha ao adicionar imagens: ${e}`, { title: 'Grimório', kind: 'error' })
     }
   }
 
   async function remover(rel: string) {
-    if (!confirm('Remover esta imagem do personagem?')) return
+    if (!(await ask('Remover esta imagem do personagem?', { title: 'Grimório', kind: 'warning' }))) return
     onImagensChange(removerImagem(imagens, rel))
     setAmpliadaRel(null)
     try {

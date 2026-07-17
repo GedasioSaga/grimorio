@@ -103,7 +103,7 @@ export class VaultRepo {
   }
 
   /** Cria um personagem em qualquer diretório (usado tanto por campanha quanto pela área solta). */
-  async criarPersonagemEm(dir: string, nome: string): Promise<ItemRef> {
+  async criarPersonagemEm(dir: string, nome: string): Promise<ItemRef & { id: string }> {
     await this.fs.mkdirAll(this.abs(dir))
     const slug = await this.slugLivre(dir, nome)
     const p: Personagem = {
@@ -113,7 +113,7 @@ export class VaultRepo {
     }
     const caminho = `${dir}/${slug}.json`
     await this.fs.writeTextAtomic(this.abs(caminho), JSON.stringify(p, null, 2))
-    return { slug, nome, caminho }
+    return { slug, nome, caminho, id: p.id }
   }
 
   /** Cria sessão ou canvas (mesmo formato) no diretório dado. */
