@@ -54,7 +54,7 @@ export function AcoesIA({
   abaEhTexto: boolean
   acoes: AcaoIA[]
   snapshot: () => SnapshotIA
-  imagensParaIA?: () => Promise<ImagemIA[]>
+  imagensParaIA?: (incluirGaleria: boolean) => Promise<ImagemIA[]>
   conteudoDoDestino: (destino: string) => string
   onInserir: (destino: string, textoCru: string, modo: ModoInserir) => void
   /** Anexado a todo prompt (ex.: regra de marcadores de imagem na escrita). */
@@ -92,6 +92,7 @@ export function AcoesIA({
     rotuloDestino: string
     prompt: string
     comImagem?: boolean
+    anexarImagem?: boolean
   }) {
     setMenuAberto(false)
     setErro(null)
@@ -101,7 +102,10 @@ export function AcoesIA({
       const dados =
         dadosBase + (abaEhTexto && textoAtual ? `\nTexto atual da seção "${rotuloAbaAtual}":\n${textoAtual}` : '')
       const systemFull = contexto ? `${system}\n\n# Contexto da campanha\n${contexto}` : system
-      const imagens = opts.comImagem && imagensParaIA ? await imagensParaIA() : []
+      // comImagem (ação dedicada) = retrato + galeria e exige imagem; anexarImagem (campo livre) = só retrato, opcional
+      const querImagem = opts.comImagem || opts.anexarImagem
+      const imagens = querImagem && imagensParaIA ? await imagensParaIA(!!opts.comImagem) : []
+      if (opts.comImagem && imagens.length === 0) throw new Error('Esta entidade não tem imagem.')
       const instrucao = sufixoPrompt ? `${opts.prompt}\n\n${sufixoPrompt}` : opts.prompt
 
       const texto = await gerarConteudo({
@@ -126,7 +130,7 @@ export function AcoesIA({
     // resposta vai para a aba atual (se de texto) ou Anotações (abas sem texto)
     const destino = abaEhTexto ? abaAtual : 'anotacoes'
     const rotuloDestino = abaEhTexto ? rotuloAbaAtual : 'Anotações'
-    void executar({ rotulo: 'Resposta da IA', destino, rotuloDestino, prompt: q })
+    void executar({ rotulo: 'Resposta da IA', destino, rotuloDestino, prompt: q, anexarImagem: true })
   }
 
   return (

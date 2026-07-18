@@ -10,6 +10,8 @@ import { AcoesIA, type AcaoIA } from './AcoesIA'
 import { SYSTEM_MESTRE } from '../lib/chatIA'
 import { contextoDeEntidade } from '../lib/contextoIA'
 import { htmlParaTexto, textoParaHtml } from '../lib/htmlTexto'
+import { promptDescreverImagemTopicos } from '../lib/promptsIA'
+import { carregarImagensIA } from '../lib/imagensIA'
 
 const AUTOSAVE_DEBOUNCE_MS = 800
 
@@ -32,6 +34,13 @@ const ACOES_IA_PERSONAGEM: AcaoIA[] = [
     prompt: 'Sugira 3 segredos ou ganchos de aventura envolvendo este personagem, em lista curta.',
     abaDestino: 'anotacoes',
     rotuloDestino: 'Anotações',
+  },
+  {
+    rotulo: 'Descrever imagem em tópicos',
+    prompt: promptDescreverImagemTopicos(),
+    abaDestino: 'descricao',
+    rotuloDestino: 'Descrição',
+    comImagem: true,
   },
 ]
 
@@ -162,6 +171,14 @@ export function PerfilModal({ personagemId }: { personagemId: string }) {
                 textoAtual: ehTexto && ent ? htmlParaTexto((ent as unknown as Record<string, string>)[aba] ?? '') : '',
                 contexto: s.tree ? contextoDeEntidade(personagemId, { ...s, tree: s.tree }) : '',
               }
+            }}
+            imagensParaIA={async (incluirGaleria) => {
+              const s = useApp.getState()
+              const ent = s.personagens[personagemId]
+              if (!ent || !s.vaultPath) return []
+              const rels = ent.retrato ? [ent.retrato] : []
+              if (incluirGaleria) for (const img of ent.imagens ?? []) rels.push(img.rel)
+              return carregarImagensIA(s.vaultPath, rels)
             }}
             conteudoDoDestino={(dest) => {
               const ent = useApp.getState().personagens[personagemId]

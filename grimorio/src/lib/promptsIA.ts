@@ -22,6 +22,17 @@ export function promptMelhorar(rotuloAba: string): string {
   )
 }
 
+/** Descreve a imagem da entidade em tópicos curtos — só o que é visível (sem inventar). */
+export function promptDescreverImagemTopicos(): string {
+  return (
+    'Observe a imagem e liste as principais características VISÍVEIS em tópicos. ' +
+    'Uma característica por linha, cada linha começando com "- ", em frases curtas. ' +
+    'Descreva apenas o que aparece na imagem (aparência, roupas, expressão, ambiente, ' +
+    'objetos, cores, clima); não invente nada que não esteja visível. ' +
+    'Responda só com a lista, sem título nem preâmbulo.'
+  )
+}
+
 /**
  * Persona da IA na escrita (worldbuilding). Irmã de `SYSTEM_MESTRE` (chatIA.ts):
  * aquela é de mesa (respostas curtas); esta é de texto trabalhado e organizado.

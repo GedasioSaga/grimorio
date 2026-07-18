@@ -12,7 +12,8 @@ import { AcoesIA, type AcaoIA } from './AcoesIA'
 import { SYSTEM_MESTRE } from '../lib/chatIA'
 import { contextoDeEntidade } from '../lib/contextoIA'
 import { htmlParaTexto, textoParaHtml } from '../lib/htmlTexto'
-import { mimeDaImagem, uint8ParaBase64 } from '../lib/bin'
+import { carregarImagensIA } from '../lib/imagensIA'
+import { promptDescreverImagemTopicos } from '../lib/promptsIA'
 
 const AUTOSAVE_DEBOUNCE_MS = 800
 
@@ -43,6 +44,13 @@ const ACOES_IA_CENARIO: AcaoIA[] = [
     prompt: 'Analise a imagem deste cenário: descreva o que se vê e sugira 3 pontos de interesse para os jogadores explorarem.',
     abaDestino: 'anotacoes',
     rotuloDestino: 'Anotações',
+    comImagem: true,
+  },
+  {
+    rotulo: 'Descrever imagem em tópicos',
+    prompt: promptDescreverImagemTopicos(),
+    abaDestino: 'descricao',
+    rotuloDestino: 'Descrição',
     comImagem: true,
   },
 ]
@@ -171,14 +179,13 @@ export function CenarioModal({ cenarioId }: { cenarioId: string }) {
                 contexto: s.tree ? contextoDeEntidade(cenarioId, { ...s, tree: s.tree }) : '',
               }
             }}
-            imagensParaIA={async () => {
+            imagensParaIA={async (incluirGaleria) => {
               const s = useApp.getState()
               const ent = s.cenarios[cenarioId]
-              if (!ent?.retrato || !s.vaultPath) throw new Error('Esta entidade não tem imagem.')
-              const resp = await fetch(convertFileSrc(`${s.vaultPath}/${ent.retrato}`))
-              if (!resp.ok) throw new Error(`fetch falhou: ${resp.status}`)
-              const blob = await resp.blob()
-              return [{ mimeType: mimeDaImagem(ent.retrato), base64: uint8ParaBase64(new Uint8Array(await blob.arrayBuffer())) }]
+              if (!ent || !s.vaultPath) return []
+              const rels = ent.retrato ? [ent.retrato] : []
+              if (incluirGaleria) for (const img of ent.imagens ?? []) rels.push(img.rel)
+              return carregarImagensIA(s.vaultPath, rels)
             }}
             conteudoDoDestino={(dest) => {
               const ent = useApp.getState().cenarios[cenarioId]
