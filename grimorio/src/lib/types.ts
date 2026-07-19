@@ -3,17 +3,24 @@ export interface ImagemPersonagem {
   legenda?: string
 }
 
-export interface Personagem {
+export interface VersaoPersonagem {
   id: string
-  nome: string
+  nome: string        // nome do personagem NESTA forma (ex: "Bruce Banner", "Hulk")
   retrato: string | null // caminho relativo ao cofre, ex.: "campanhas/x/assets/foo.png"
   resumo: string
-  descricao: string // HTML gerado pelo TipTap (era `corpo`)
+  descricao: string  // HTML TipTap (era `corpo`)
   informacao: string // HTML (caixa "Informações" do card no canvas)
-  historia: string  // HTML
-  extras: string    // HTML
-  anotacoes: string // HTML
+  historia: string   // HTML
+  extras: string     // HTML
+  anotacoes: string  // HTML
   imagens: ImagemPersonagem[]
+}
+
+export interface Personagem {
+  id: string
+  nome: string           // ESPELHO do nome da versão ativa (para sidebar/vínculos/refs que leem nome do topo)
+  versoes: VersaoPersonagem[]
+  versaoAtivaId: string  // id de uma versoes[]
   criadoEm: string // ISO-8601
   modificadoEm: string
 }
