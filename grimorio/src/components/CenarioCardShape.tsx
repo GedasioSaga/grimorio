@@ -12,7 +12,7 @@ import {
 import { convertFileSrc } from '@tauri-apps/api/core'
 import { useApp } from '../state/store'
 import { temConteudo } from '../lib/htmlTexto'
-import { PAINEL_DESCRICAO_LARGURA, colunasPaineisVisiveis, larguraDoCartao } from '../lib/cartaoCanvas'
+import { ajustarLargura, alturaMoldadaAImagem, colunasPaineisVisiveis, colunasTotais, escalaDoCartao } from '../lib/cartaoCanvas'
 import { CARD_ALTURA_PADRAO, CARD_LARGURA_PADRAO } from './CharacterCardShape'
 import { EditorInline } from './EditorInline'
 import { ControlesFonte } from './ControlesFonte'
@@ -109,14 +109,23 @@ export class CenarioCardShapeUtil extends BaseBoxShapeUtil<CenarioCardShapeType>
     return false
   }
 
+  // recolhido: trava o aspecto p/ o card seguir emoldurado à imagem ao redimensionar.
+  // expandido: livre (os painéis de texto definem a altura).
+  override isAspectRatioLocked(shape: CenarioCardShapeType) {
+    return !shape.props.expandido
+  }
+
   // duplo clique alterna o painel de descrição; o modal abre com espaço
   // com o card selecionado (handler no CanvasView) — mesmo gesto do personagem
   override onDoubleClick = (shape: CenarioCardShapeType) => {
     const expandir = !shape.props.expandido
+    // painéis que aparecem/somem ao expandir = 1 (Descrição) + seções marcadas "ao lado".
+    // largura relativa (não absoluta): preserva a escala que o usuário deu ao card.
+    const delta = colunasPaineisVisiveis(true, contarAoLado(shape.props))
     return {
       id: shape.id,
       type: shape.type,
-      props: { expandido: expandir, w: larguraCenario(shape.props, expandir) },
+      props: { expandido: expandir, w: ajustarLargura(shape.props.w, expandir ? delta : -delta) },
     }
   }
 
@@ -132,11 +141,6 @@ export class CenarioCardShapeUtil extends BaseBoxShapeUtil<CenarioCardShapeType>
 // nº de seções (fora Descrição) em coluna própria
 function contarAoLado(props: CenarioCardShapeType['props']): number {
   return [props.infoAoLado, props.eventosAoLado, props.itensAoLado].filter(Boolean).length
-}
-
-// largura do card conforme expandido + colunas ao lado (1 coluna base + N ao lado)
-function larguraCenario(props: CenarioCardShapeType['props'], expandido: boolean): number {
-  return larguraDoCartao(CARD_LARGURA_PADRAO, colunasPaineisVisiveis(expandido, contarAoLado(props)))
 }
 
 type ChaveSecao = 'informacao' | 'eventos' | 'itens'
@@ -166,6 +170,11 @@ function CartaoCenario({ shape }: { shape: CenarioCardShapeType }) {
   const salvarParcial = useApp((s) => s.salvarCenarioParcial)
   const editor = useEditor()
 
+  // escala uniforme: largura por coluna vs base → multiplica toda fonte (--card-fe),
+  // então imagem e texto crescem juntos ao redimensionar o card
+  const cols = colunasTotais(expandido, contarAoLado(shape.props))
+  const cardFe = escalaDoCartao(shape.props.w, cols) * fonteEscala
+
   const [editando, setEditando] = useState<'descricao' | ChaveSecao | null>(null)
 
   const retratoSrc = c?.retrato && vaultPath ? convertFileSrc(`${vaultPath}/${c.retrato}`) : null
@@ -183,6 +192,27 @@ function CartaoCenario({ shape }: { shape: CenarioCardShapeType }) {
     el.addEventListener('wheel', aoRolar, { passive: true })
     return () => el.removeEventListener('wheel', aoRolar)
   }, [])
+
+  // emoldura à imagem uma vez, só em cards no tamanho padrão (nunca redimensionados)
+  useEffect(() => {
+    if (!retratoSrc) return
+    let cancelado = false
+    const img = new Image()
+    img.onload = () => {
+      if (cancelado || img.naturalWidth <= 0 || img.naturalHeight <= 0) return
+      const atual = editor.getShape(shape.id) as CenarioCardShapeType | undefined
+      if (!atual || atual.props.expandido) return
+      if (atual.props.w !== CARD_LARGURA_PADRAO || atual.props.h !== CARD_ALTURA_PADRAO) return
+      const novaH = alturaMoldadaAImagem(atual.props.w, img.naturalWidth / img.naturalHeight)
+      if (novaH !== atual.props.h) {
+        editor.updateShape<CenarioCardShapeType>({ id: shape.id, type: 'cenario-card', props: { h: novaH } })
+      }
+    }
+    img.src = retratoSrc
+    return () => {
+      cancelado = true
+    }
+  }, [retratoSrc, shape.id, editor])
 
   if (!c) {
     return (
@@ -236,14 +266,13 @@ function CartaoCenario({ shape }: { shape: CenarioCardShapeType }) {
               className="char-card-btn-editar"
               title={aoLado ? 'Mover para baixo' : 'Mover para a direita'}
               onPointerDown={(e) => e.stopPropagation()}
-              onClick={() => {
-                const props = { ...shape.props, [FLAGS[chave].lado]: !aoLado }
+              onClick={() =>
                 editor.updateShape<CenarioCardShapeType>({
                   id: shape.id,
                   type: 'cenario-card',
-                  props: { [FLAGS[chave].lado]: !aoLado, w: larguraCenario(props, expandido) },
+                  props: { [FLAGS[chave].lado]: !aoLado, w: ajustarLargura(shape.props.w, aoLado ? -1 : 1) },
                 })
-              }}
+              }
             >
               {aoLado ? '↓' : '→'}
             </button>
@@ -281,7 +310,7 @@ function CartaoCenario({ shape }: { shape: CenarioCardShapeType }) {
   const aoLado = SECOES.filter((s) => shape.props[FLAGS[s.chave].lado])
 
   return (
-    <HTMLContainer className="char-card" style={{ pointerEvents: 'all', ['--card-fe' as any]: fonteEscala }}>
+    <HTMLContainer className="char-card" style={{ pointerEvents: 'all', ['--card-fe' as any]: cardFe }}>
       {/* HTMLContainer não encaminha ref (não usa forwardRef); wrapper com
           display:contents pega o listener de wheel sem alterar o layout flex. */}
       <div ref={cardRef} style={{ display: 'contents' }}>
@@ -308,7 +337,7 @@ function CartaoCenario({ shape }: { shape: CenarioCardShapeType }) {
         </div>
         {expandido && (
           <>
-            <div className="char-card-painel" style={{ width: PAINEL_DESCRICAO_LARGURA }}>
+            <div className="char-card-painel">
               <div className="char-card-secao">
                 <div className="char-card-secao-header">
                   <span className="char-card-secao-titulo">Descrição</span>
@@ -331,7 +360,7 @@ function CartaoCenario({ shape }: { shape: CenarioCardShapeType }) {
               {empilhadas.map((s) => renderSecao(s.chave, s.rotulo, s.semTexto))}
             </div>
             {aoLado.map((s) => (
-              <div key={s.chave} className="char-card-painel" style={{ width: PAINEL_DESCRICAO_LARGURA }}>
+              <div key={s.chave} className="char-card-painel">
                 {renderSecao(s.chave, s.rotulo, s.semTexto)}
               </div>
             ))}

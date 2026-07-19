@@ -12,7 +12,7 @@ import {
 import { convertFileSrc } from '@tauri-apps/api/core'
 import { useApp } from '../state/store'
 import { temConteudo } from '../lib/htmlTexto'
-import { PAINEL_DESCRICAO_LARGURA, ajustarLargura } from '../lib/cartaoCanvas'
+import { ajustarLargura, alturaMoldadaAImagem, colunasTotais, escalaDoCartao } from '../lib/cartaoCanvas'
 import { EditorInline } from './EditorInline'
 import { ControlesFonte } from './ControlesFonte'
 import { CardRetrato } from './CardRetrato'
@@ -115,6 +115,12 @@ export class CharacterCardShapeUtil extends BaseBoxShapeUtil<CharacterCardShapeT
     return false
   }
 
+  // recolhido: trava o aspecto p/ o card seguir emoldurado à imagem ao redimensionar.
+  // expandido: livre (os painéis de texto definem a altura).
+  override isAspectRatioLocked(shape: CharacterCardShapeType) {
+    return !shape.props.expandido
+  }
+
   // duplo clique alterna o painel de descrição; o cartão completo abre com
   // espaço com o card selecionado (handler no CanvasView)
   override onDoubleClick = (shape: CharacterCardShapeType) => {
@@ -144,6 +150,11 @@ function CartaoPersonagem({ shape }: { shape: CharacterCardShapeType }) {
   const salvarParcial = useApp((s) => s.salvarPersonagemParcial)
   const tldrawEditor = useEditor()
 
+  // escala uniforme: largura por coluna vs base → multiplica toda fonte (--card-fe),
+  // então imagem e texto crescem juntos ao redimensionar o card
+  const cols = colunasTotais(expandido, infoAoLado ? 1 : 0)
+  const cardFe = escalaDoCartao(shape.props.w, cols) * fonteEscala
+
   // qual caixa do painel está em edição inline (transitório; não persiste)
   const [editando, setEditando] = useState<'descricao' | 'informacao' | null>(null)
 
@@ -162,6 +173,27 @@ function CartaoPersonagem({ shape }: { shape: CharacterCardShapeType }) {
     els.forEach((el) => el.addEventListener('wheel', aoRolar, { passive: true }))
     return () => els.forEach((el) => el.removeEventListener('wheel', aoRolar))
   }, [expandido, infoAoLado])
+
+  // emoldura à imagem uma vez, só em cards no tamanho padrão (nunca redimensionados)
+  useEffect(() => {
+    if (!retratoSrc) return
+    let cancelado = false
+    const img = new Image()
+    img.onload = () => {
+      if (cancelado || img.naturalWidth <= 0 || img.naturalHeight <= 0) return
+      const atual = tldrawEditor.getShape(shape.id) as CharacterCardShapeType | undefined
+      if (!atual || atual.props.expandido) return
+      if (atual.props.w !== CARD_LARGURA_PADRAO || atual.props.h !== CARD_ALTURA_PADRAO) return
+      const novaH = alturaMoldadaAImagem(atual.props.w, img.naturalWidth / img.naturalHeight)
+      if (novaH !== atual.props.h) {
+        tldrawEditor.updateShape<CharacterCardShapeType>({ id: shape.id, type: 'character-card', props: { h: novaH } })
+      }
+    }
+    img.src = retratoSrc
+    return () => {
+      cancelado = true
+    }
+  }, [retratoSrc, shape.id, tldrawEditor])
 
   if (!p) {
     return (
@@ -240,7 +272,7 @@ function CartaoPersonagem({ shape }: { shape: CharacterCardShapeType }) {
   )
 
   return (
-    <HTMLContainer className="char-card" style={{ pointerEvents: 'all', ['--card-fe' as any]: fonteEscala }}>
+    <HTMLContainer className="char-card" style={{ pointerEvents: 'all', ['--card-fe' as any]: cardFe }}>
       <div className="char-card-principal">
         <CardRetrato
           src={retratoSrc}
@@ -264,7 +296,7 @@ function CartaoPersonagem({ shape }: { shape: CharacterCardShapeType }) {
       </div>
       {expandido && (
         <>
-          <div ref={painelRef} className="char-card-painel" style={{ width: PAINEL_DESCRICAO_LARGURA }}>
+          <div ref={painelRef} className="char-card-painel">
             <div className="char-card-secao">
               <div className="char-card-secao-header">
                 <span className="char-card-secao-titulo">Descrição</span>
@@ -296,11 +328,7 @@ function CartaoPersonagem({ shape }: { shape: CharacterCardShapeType }) {
             {!infoAoLado && secaoInformacoes}
           </div>
           {infoAoLado && (
-            <div
-              ref={painelInfoRef}
-              className="char-card-painel"
-              style={{ width: PAINEL_DESCRICAO_LARGURA }}
-            >
+            <div ref={painelInfoRef} className="char-card-painel">
               {secaoInformacoes}
             </div>
           )}

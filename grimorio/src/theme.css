@@ -181,9 +181,11 @@ button:hover { border-color: var(--dourado); color: var(--dourado-claro); }
 .char-card-texto { flex-shrink: 0; min-width: 0; }
 .char-card-nome { font-family: var(--serif); font-size: calc(16px * var(--card-fe, 1)); color: var(--dourado-claro); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .char-card-resumo { font-size: calc(12px * var(--card-fe, 1)); color: var(--texto-fraco); margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-/* painel (abre com duplo clique), sempre à direita da imagem: caixas de Descrição e Informações */
+/* painel (abre com duplo clique), sempre à direita da imagem: caixas de Descrição e Informações.
+   flex:1 1 0 = todas as colunas (principal + painéis) com largura igual → cada uma escala
+   junto com a caixa do card, e a escala do texto (--card-fe) acompanha a da imagem. */
 .char-card-painel {
-  flex: 0 0 auto; min-height: 0; overflow-y: auto;
+  flex: 1 1 0; min-width: 0; min-height: 0; overflow-y: auto;
   display: flex; flex-direction: column; gap: 8px;
 }
 .char-card-secao {
