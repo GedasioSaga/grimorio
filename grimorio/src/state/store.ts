@@ -25,10 +25,12 @@ function agendarSalvarCenario(get: () => AppState, id: string) {
     id,
     setTimeout(() => {
       timersSalvarCenario.delete(id)
+      // caminho re-resolvido no disparo: após mover/excluir não grava no lugar antigo
       const { repo, caminhoCenarioPorId, cenarios } = get()
       const caminho = caminhoCenarioPorId[id]
       const c = cenarios[id]
       if (!repo || !caminho || !c) return
+      // fire-and-forget: VaultRepo serializa escritas por caminho
       repo.salvarCenario(caminho, { ...c }).catch((e) => {
         console.error('Falha ao salvar cenário:', e)
       })

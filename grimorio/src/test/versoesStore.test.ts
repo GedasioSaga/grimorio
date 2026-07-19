@@ -50,4 +50,17 @@ describe('ações de versão no store', () => {
     expect(useApp.getState().cenarios.c1.versoes).toHaveLength(1)
     expect(useApp.getState().cenarios.c1.versaoAtivaId).toBe('v1')
   })
+
+  it('renomearVersao só renomeia a versão certa', () => {
+    useApp.getState().renomearVersao('c1', 'v1', 'Manhã')
+    expect(useApp.getState().cenarios.c1.versoes[0].nome).toBe('Manhã')
+  })
+
+  it('removerVersao mantém a ativa quando remove outra versão', () => {
+    useApp.getState().adicionarVersao('c1', 'Noite') // ativa vira Noite
+    const ativaId = useApp.getState().cenarios.c1.versaoAtivaId
+    useApp.getState().removerVersao('c1', 'v1')      // remove a NÃO-ativa
+    expect(useApp.getState().cenarios.c1.versoes).toHaveLength(1)
+    expect(useApp.getState().cenarios.c1.versaoAtivaId).toBe(ativaId)
+  })
 })
