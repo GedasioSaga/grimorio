@@ -175,8 +175,8 @@ button:hover { border-color: var(--dourado); color: var(--dourado-claro); }
   background: var(--fundo); color: var(--dourado-claro);
   font-family: var(--serif); font-size: 40px;
 }
-/* imagem inteira, nunca corta (contain); centralizada na moldura */
-.char-card-retrato img { max-width: 100%; max-height: 100%; object-fit: contain; }
+/* imagem enche o molde (cover); corta só o excedente pra não sobrar vazio */
+.char-card-retrato img { width: 100%; height: 100%; object-fit: cover; }
 .char-card-inicial { font-family: var(--serif); font-size: calc(40px * var(--card-fe, 1)); color: var(--dourado-claro); }
 .char-card-texto { flex-shrink: 0; min-width: 0; }
 .char-card-nome { font-family: var(--serif); font-size: calc(16px * var(--card-fe, 1)); color: var(--dourado-claro); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
