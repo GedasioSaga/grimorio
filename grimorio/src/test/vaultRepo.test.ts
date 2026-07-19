@@ -39,12 +39,12 @@ describe('VaultRepo', () => {
     const camp = await repo.criarCampanha('Teste')
     const ref = await repo.criarPersonagem(camp, 'Baldur')
     const p = await repo.lerPersonagem(ref.caminho)
-    expect(p.descricao).toBe('')
-    expect(p.informacao).toBe('')
-    expect(p.historia).toBe('')
-    expect(p.extras).toBe('')
-    expect(p.anotacoes).toBe('')
-    expect(p.imagens).toEqual([])
+    expect(p.versoes[0].descricao).toBe('')
+    expect(p.versoes[0].informacao).toBe('')
+    expect(p.versoes[0].historia).toBe('')
+    expect(p.versoes[0].extras).toBe('')
+    expect(p.versoes[0].anotacoes).toBe('')
+    expect(p.versoes[0].imagens).toEqual([])
     expect((p as unknown as { corpo?: string }).corpo).toBeUndefined()
   })
 
@@ -59,11 +59,11 @@ describe('VaultRepo', () => {
       criadoEm: '2020-01-01T00:00:00.000Z', modificadoEm: '2020-01-01T00:00:00.000Z',
     }))
     const p = await repo.lerPersonagem(caminho)
-    expect(p.descricao).toBe('<p>antigo</p>')
+    expect(p.versoes[0].descricao).toBe('<p>antigo</p>')
     await repo.salvarPersonagem(caminho, p)
     const cru = JSON.parse(await fs.readText(`C:/Cofre/${caminho}`))
     expect(cru.corpo).toBeUndefined()
-    expect(cru.descricao).toBe('<p>antigo</p>')
+    expect(cru.versoes[0].descricao).toBe('<p>antigo</p>')
   })
 
   it('salva e recarrega personagem preservando id', async () => {
@@ -71,10 +71,10 @@ describe('VaultRepo', () => {
     const camp = await repo.criarCampanha('Teste')
     const ref = await repo.criarPersonagem(camp, 'Baldur')
     const p = await repo.lerPersonagem(ref.caminho)
-    p.resumo = 'taverneiro'
-    await repo.salvarPersonagem(ref.caminho, p)
+    const comResumo = { ...p, versoes: p.versoes.map((v) => ({ ...v, resumo: 'taverneiro' })) }
+    await repo.salvarPersonagem(ref.caminho, comResumo)
     const p2 = await repo.lerPersonagem(ref.caminho)
-    expect(p2.resumo).toBe('taverneiro')
+    expect(p2.versoes[0].resumo).toBe('taverneiro')
     expect(p2.id).toBe(p.id)
   })
 
@@ -119,12 +119,13 @@ describe('VaultRepo', () => {
   })
 
   it('renomeia item (muda campo nome, mantém arquivo)', async () => {
+    // usa um CanvasDoc (nome plano, não por-versão) — personagem tem nome espelhado
+    // da versão ativa e não é mais renomeável pelo caminho genérico (ver normalizarPersonagem)
     await repo.inicializar()
-    const camp = await repo.criarCampanha('Teste')
-    const ref = await repo.criarPersonagem(camp, 'Baldur')
-    await repo.renomearItem(ref.caminho, 'Baldur, o Sábio')
-    const p = await repo.lerPersonagem(ref.caminho)
-    expect(p.nome).toBe('Baldur, o Sábio')
+    const ref = await repo.criarCanvasDoc('canvases-soltos', 'Rabisco')
+    await repo.renomearItem(ref.caminho, 'Rabisco Final')
+    const doc = await repo.lerCanvasDoc(ref.caminho)
+    expect(doc.nome).toBe('Rabisco Final')
   })
 
   it('exclui item', async () => {
@@ -184,11 +185,11 @@ describe('VaultRepo', () => {
     const ref = await repo.criarPersonagem(camp, 'Baldur')
     const p = await repo.lerPersonagem(ref.caminho)
     await Promise.all([
-      repo.salvarPersonagem(ref.caminho, { ...p, resumo: 'primeiro' }),
-      repo.salvarPersonagem(ref.caminho, { ...p, resumo: 'segundo' }),
+      repo.salvarPersonagem(ref.caminho, { ...p, versoes: p.versoes.map((v) => ({ ...v, resumo: 'primeiro' })) }),
+      repo.salvarPersonagem(ref.caminho, { ...p, versoes: p.versoes.map((v) => ({ ...v, resumo: 'segundo' })) }),
     ])
     const final = await repo.lerPersonagem(ref.caminho)
-    expect(final.resumo).toBe('segundo')
+    expect(final.versoes[0].resumo).toBe('segundo')
   })
 
   it('escreve texto e binário em caminho absoluto (export)', async () => {

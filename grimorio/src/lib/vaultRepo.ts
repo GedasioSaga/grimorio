@@ -1,5 +1,5 @@
 import type { FsBridge } from './fsBridge'
-import type { Campanha, CampanhaNode, CanvasDoc, Cenario, CenarioNode, CenarioRef, ItemRef, PastaCenarioNode, PastaNode, Personagem, VaultTree, VersaoCenario, Vinculo } from './types'
+import type { Campanha, CampanhaNode, CanvasDoc, Cenario, CenarioNode, CenarioRef, ItemRef, PastaCenarioNode, PastaNode, Personagem, VaultTree, VersaoCenario, VersaoPersonagem, Vinculo } from './types'
 import { slugify, slugUnico } from './slug'
 import { normalizarVinculos } from './vinculos'
 import { normalizarChat, type MensagemChat } from './chatIA'
@@ -12,26 +12,49 @@ function novoId(): string {
   return crypto.randomUUID()
 }
 
+/** Normaliza uma versão de personagem (campos faltando ganham defaults; id só é gerado se ausente). */
+export function normalizarVersaoPersonagem(raw: Record<string, any>): VersaoPersonagem {
+  return {
+    id: typeof raw?.id === 'string' ? raw.id : novoId(),
+    nome: raw?.nome ?? '',
+    retrato: raw?.retrato ?? null,
+    resumo: raw?.resumo ?? '',
+    descricao: raw?.descricao ?? raw?.corpo ?? '',
+    informacao: raw?.informacao ?? '',
+    historia: raw?.historia ?? '',
+    extras: raw?.extras ?? '',
+    anotacoes: raw?.anotacoes ?? '',
+    imagens: Array.isArray(raw?.imagens) ? raw.imagens : [],
+  }
+}
+
 /**
  * Normaliza um personagem lido do disco para o formato atual.
- * Migração lazy: `corpo` legado vira `descricao`; campos faltando ganham vazios.
+ * Migração lazy: personagem plano legado (sem `versoes`) vira uma versão que HERDA
+ * o nome do personagem (não "Base" — diferente do cenário) + conteúdo antigo (`corpo`->`descricao`).
+ * O `nome` de topo é sempre um ESPELHO do nome da versão ativa.
  */
-export function normalizarPersonagem(
-  raw: Partial<Personagem> & { corpo?: string },
-): Personagem {
+export function normalizarPersonagem(raw: Record<string, any>): Personagem {
+  const versoesRaw = Array.isArray(raw?.versoes) && raw.versoes.length > 0 ? raw.versoes : null
+  const versoes: VersaoPersonagem[] = versoesRaw
+    ? versoesRaw.map((v: Record<string, any>) => normalizarVersaoPersonagem(v))
+    : [normalizarVersaoPersonagem({
+        // migração: a forma base HERDA o nome do personagem + conteúdo plano (corpo->descricao)
+        nome: raw?.nome, retrato: raw?.retrato, resumo: raw?.resumo,
+        descricao: raw?.descricao, corpo: raw?.corpo, informacao: raw?.informacao,
+        historia: raw?.historia, extras: raw?.extras, anotacoes: raw?.anotacoes, imagens: raw?.imagens,
+      })]
+  const versaoAtivaId = typeof raw?.versaoAtivaId === 'string' && versoes.some((v) => v.id === raw.versaoAtivaId)
+    ? raw.versaoAtivaId
+    : versoes[0].id
+  const ativa = versoes.find((v) => v.id === versaoAtivaId) ?? versoes[0]
   return {
-    id: raw.id ?? novoId(),
-    nome: raw.nome ?? '',
-    retrato: raw.retrato ?? null,
-    resumo: raw.resumo ?? '',
-    descricao: raw.descricao ?? raw.corpo ?? '',
-    informacao: raw.informacao ?? '',
-    historia: raw.historia ?? '',
-    extras: raw.extras ?? '',
-    anotacoes: raw.anotacoes ?? '',
-    imagens: raw.imagens ?? [],
-    criadoEm: raw.criadoEm ?? agora(),
-    modificadoEm: raw.modificadoEm ?? agora(),
+    id: typeof raw?.id === 'string' ? raw.id : novoId(),
+    nome: ativa.nome, // espelho
+    versoes,
+    versaoAtivaId,
+    criadoEm: raw?.criadoEm ?? agora(),
+    modificadoEm: raw?.modificadoEm ?? agora(),
   }
 }
 
@@ -131,9 +154,12 @@ export class VaultRepo {
   async criarPersonagemEm(dir: string, nome: string): Promise<ItemRef & { id: string }> {
     await this.fs.mkdirAll(this.abs(dir))
     const slug = await this.slugLivre(dir, nome)
-    const p: Personagem = {
+    const versaoBase: VersaoPersonagem = {
       id: novoId(), nome, retrato: null, resumo: '',
       descricao: '', informacao: '', historia: '', extras: '', anotacoes: '', imagens: [],
+    }
+    const p: Personagem = {
+      id: novoId(), nome, versoes: [versaoBase], versaoAtivaId: versaoBase.id,
       criadoEm: agora(), modificadoEm: agora(),
     }
     const caminho = `${dir}/${slug}.json`
@@ -196,7 +222,8 @@ export class VaultRepo {
 
   async salvarPersonagem(caminho: string, p: Personagem): Promise<void> {
     return this.naFila(caminho, async () => {
-      const salvo = { ...p, modificadoEm: agora() }
+      const ativa = p.versoes.find((v) => v.id === p.versaoAtivaId) ?? p.versoes[0]
+      const salvo = { ...p, nome: ativa?.nome ?? p.nome, modificadoEm: agora() }
       await this.fs.writeTextAtomic(this.abs(caminho), JSON.stringify(salvo, null, 2))
     })
   }
