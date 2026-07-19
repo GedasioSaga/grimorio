@@ -16,6 +16,7 @@ import { ajustarLargura, alturaMoldadaAImagem, colunasTotais, escalaDoCartao } f
 import { EditorInline } from './EditorInline'
 import { ControlesFonte } from './ControlesFonte'
 import { CardRetrato } from './CardRetrato'
+import { versaoAtivaPersonagem, versaoVizinhaPersonagem } from '../lib/personagemVersao'
 
 export const CARD_LARGURA_PADRAO = 240
 export const CARD_ALTURA_PADRAO = 320
@@ -148,6 +149,7 @@ function CartaoPersonagem({ shape }: { shape: CharacterCardShapeType }) {
   const p = useApp((s) => s.personagens[personagemId])
   const vaultPath = useApp((s) => s.vaultPath)
   const salvarParcial = useApp((s) => s.salvarPersonagemParcial)
+  const definirVersaoAtivaPersonagem = useApp((s) => s.definirVersaoAtivaPersonagem)
   const tldrawEditor = useEditor()
 
   // escala uniforme: largura por coluna vs base → multiplica toda fonte (--card-fe),
@@ -158,7 +160,14 @@ function CartaoPersonagem({ shape }: { shape: CharacterCardShapeType }) {
   // qual caixa do painel está em edição inline (transitório; não persiste)
   const [editando, setEditando] = useState<'descricao' | 'informacao' | null>(null)
 
-  const retratoSrc = p?.retrato && vaultPath ? convertFileSrc(`${vaultPath}/${p.retrato}`) : null
+  const retratoRel = p ? versaoAtivaPersonagem(p).retrato : null
+  const retratoSrc = retratoRel && vaultPath ? convertFileSrc(`${vaultPath}/${retratoRel}`) : null
+
+  // trocar de forma fecha edição inline aberta: o EditorInline (Tiptap) não
+  // ressincroniza `value` após montar, então continuar digitando gravaria na forma anterior.
+  useEffect(() => {
+    setEditando(null)
+  }, [p?.versaoAtivaId])
 
   // rolar dentro dos painéis não pode virar zoom/pan do canvas: listener nativo
   // no próprio elemento dispara antes do listener do tldraw e corta a propagação
@@ -202,6 +211,8 @@ function CartaoPersonagem({ shape }: { shape: CharacterCardShapeType }) {
       </HTMLContainer>
     )
   }
+
+  const va = versaoAtivaPersonagem(p)
 
   // usada nos dois layouts: abaixo da Descrição (mesma coluna) ou em coluna própria à direita
   const secaoInformacoes = (
@@ -258,13 +269,13 @@ function CartaoPersonagem({ shape }: { shape: CharacterCardShapeType }) {
         (editando === 'informacao' ? (
           <div className="char-card-editor" onPointerDown={(e) => e.stopPropagation()}>
             <EditorInline
-              value={p.informacao}
+              value={va.informacao}
               onChange={(html) => salvarParcial(personagemId, { informacao: html })}
               onBlur={() => setEditando(null)}
             />
           </div>
-        ) : temConteudo(p.informacao) ? (
-          <div className="char-card-descricao" dangerouslySetInnerHTML={{ __html: p.informacao }} />
+        ) : temConteudo(va.informacao) ? (
+          <div className="char-card-descricao" dangerouslySetInnerHTML={{ __html: va.informacao }} />
         ) : (
           <div className="char-card-sem-descricao">Sem informações</div>
         ))}
@@ -276,12 +287,12 @@ function CartaoPersonagem({ shape }: { shape: CharacterCardShapeType }) {
       <div className="char-card-principal">
         <CardRetrato
           src={retratoSrc}
-          alt={p.nome}
-          fallback={<span className="char-card-inicial">{p.nome.charAt(0).toUpperCase()}</span>}
+          alt={va.nome}
+          fallback={<span className="char-card-inicial">{va.nome.charAt(0).toUpperCase()}</span>}
         />
         <div className="char-card-texto">
-          <div className="char-card-nome">{p.nome}</div>
-          {p.resumo ? <div className="char-card-resumo">{p.resumo}</div> : null}
+          <div className="char-card-nome">{va.nome}</div>
+          {va.resumo ? <div className="char-card-resumo">{va.resumo}</div> : null}
           <ControlesFonte
             escala={fonteEscala}
             onEscala={(v) =>
@@ -292,6 +303,13 @@ function CartaoPersonagem({ shape }: { shape: CharacterCardShapeType }) {
               })
             }
           />
+          {p.versoes.length >= 2 && (
+            <span className="card-versao-ctrl" onPointerDown={(e) => e.stopPropagation()}>
+              <button title="Forma anterior" onClick={() => definirVersaoAtivaPersonagem(personagemId, versaoVizinhaPersonagem(p, -1))}>‹</button>
+              <span className="card-versao-nome">{va.nome}</span>
+              <button title="Próxima forma" onClick={() => definirVersaoAtivaPersonagem(personagemId, versaoVizinhaPersonagem(p, 1))}>›</button>
+            </span>
+          )}
         </div>
       </div>
       {expandido && (
@@ -313,14 +331,14 @@ function CartaoPersonagem({ shape }: { shape: CharacterCardShapeType }) {
                 // pointerdown parado: seleção de texto/duplo clique não vira drag/toggle do shape
                 <div className="char-card-editor" onPointerDown={(e) => e.stopPropagation()}>
                   <EditorInline
-                    value={p.descricao}
+                    value={va.descricao}
                     onChange={(html) => salvarParcial(personagemId, { descricao: html })}
                     onBlur={() => setEditando(null)}
                   />
                 </div>
-              ) : temConteudo(p.descricao) ? (
+              ) : temConteudo(va.descricao) ? (
                 // HTML do próprio TipTap (schema seguro, conteúdo local) — sem fonte externa
-                <div className="char-card-descricao" dangerouslySetInnerHTML={{ __html: p.descricao }} />
+                <div className="char-card-descricao" dangerouslySetInnerHTML={{ __html: va.descricao }} />
               ) : (
                 <div className="char-card-sem-descricao">Sem descrição</div>
               )}
