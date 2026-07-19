@@ -2,7 +2,6 @@ import { useEffect, useRef, useState } from 'react'
 import { open, message } from '@tauri-apps/plugin-dialog'
 import { convertFileSrc } from '@tauri-apps/api/core'
 import { useApp } from '../state/store'
-import type { Cenario } from '../lib/types'
 import { encontrarCenarioNode } from '../lib/cenarioArvore'
 import { desvincularPersonagem, personagensVivos, vincularPersonagem } from '../lib/cenarioVinculo'
 import { EditorTexto } from './EditorTexto'
@@ -14,6 +13,8 @@ import { contextoDeEntidade } from '../lib/contextoIA'
 import { htmlParaTexto, textoParaHtml } from '../lib/htmlTexto'
 import { carregarImagensIA } from '../lib/imagensIA'
 import { promptDescreverImagemTopicos } from '../lib/promptsIA'
+import { BarraVersoes } from './BarraVersoes'
+import { aplicarPatchCenario, versaoAtiva, type PatchCenario } from '../lib/cenarioVersao'
 
 const AUTOSAVE_DEBOUNCE_MS = 800
 
@@ -67,8 +68,9 @@ export function CenarioModal({ cenarioId }: { cenarioId: string }) {
   const [aba, setAba] = useState<Aba>('descricao')
 
   // ?v= força refetch quando o retrato troca mantendo o mesmo nome de arquivo
-  const retratoSrc = c?.retrato && vaultPath
-    ? `${convertFileSrc(`${vaultPath}/${c.retrato}`)}?v=${encodeURIComponent(c.modificadoEm)}`
+  const retratoRel = c ? versaoAtiva(c).retrato : null
+  const retratoSrc = c && retratoRel && vaultPath
+    ? `${convertFileSrc(`${vaultPath}/${retratoRel}`)}?v=${encodeURIComponent(`${c.modificadoEm}:${c.versaoAtivaId}`)}`
     : null
 
   const [erroImg, setErroImg] = useState(false)
@@ -88,8 +90,9 @@ export function CenarioModal({ cenarioId }: { cenarioId: string }) {
   }, [])
 
   if (!c) return null
+  const va = versaoAtiva(c)
 
-  function agendarSalvar(mudancas: Partial<Cenario>) {
+  function agendarSalvar(mudancas: PatchCenario) {
     if (timer.current) clearTimeout(timer.current)
     timer.current = setTimeout(() => {
       timer.current = null
@@ -97,7 +100,7 @@ export function CenarioModal({ cenarioId }: { cenarioId: string }) {
     }, AUTOSAVE_DEBOUNCE_MS)
     // atualização otimista no cache (sidebar e cards refletem na hora)
     useApp.setState((s) => ({
-      cenarios: { ...s.cenarios, [cenarioId]: { ...s.cenarios[cenarioId], ...mudancas } },
+      cenarios: { ...s.cenarios, [cenarioId]: aplicarPatchCenario(s.cenarios[cenarioId], mudancas) },
     }))
   }
 
@@ -129,7 +132,7 @@ export function CenarioModal({ cenarioId }: { cenarioId: string }) {
       const nomeArquivo = arquivo.split(/[\\/]/).pop() ?? ''
       const ext = (nomeArquivo.includes('.') ? nomeArquivo.split('.').pop()! : 'png').toLowerCase()
       // central e estável: mover o cenário não quebra o rel
-      const destinoRel = `imagens-cenarios/retrato-${cenarioId}.${ext}`
+      const destinoRel = `imagens-cenarios/retrato-${cenarioId}-${c.versaoAtivaId}.${ext}`
       await repo.copiarParaCofre(arquivo, destinoRel)
       agendarSalvar({ retrato: destinoRel, modificadoEm: new Date().toISOString() })
     } catch (e) {
@@ -160,7 +163,7 @@ export function CenarioModal({ cenarioId }: { cenarioId: string }) {
             <input className="perfil-nome" value={c.nome}
               onChange={(e) => agendarSalvar({ nome: e.target.value })} />
             <input className="perfil-resumo" placeholder="Resumo curto (aparece no cartão)"
-              value={c.resumo}
+              value={va.resumo}
               onChange={(e) => agendarSalvar({ resumo: e.target.value })} />
           </div>
           <AcoesIA
@@ -172,10 +175,11 @@ export function CenarioModal({ cenarioId }: { cenarioId: string }) {
             snapshot={() => {
               const s = useApp.getState()
               const ent = s.cenarios[cenarioId]
+              const vEnt = ent ? versaoAtiva(ent) : null
               const ehTexto = aba !== 'imagens' && aba !== 'conteudo' && aba !== 'vinculos'
               return {
-                dadosBase: `# Cenário\nNome: ${ent?.nome ?? ''}\nResumo: ${ent?.resumo ?? ''}`,
-                textoAtual: ehTexto && ent ? htmlParaTexto((ent as unknown as Record<string, string>)[aba] ?? '') : '',
+                dadosBase: `# Cenário\nNome: ${ent?.nome ?? ''}\nResumo: ${vEnt?.resumo ?? ''}`,
+                textoAtual: ehTexto && vEnt ? htmlParaTexto((vEnt as unknown as Record<string, string>)[aba] ?? '') : '',
                 contexto: s.tree ? contextoDeEntidade(cenarioId, { ...s, tree: s.tree }) : '',
               }
             }}
@@ -183,25 +187,27 @@ export function CenarioModal({ cenarioId }: { cenarioId: string }) {
               const s = useApp.getState()
               const ent = s.cenarios[cenarioId]
               if (!ent || !s.vaultPath) return []
-              const rels = ent.retrato ? [ent.retrato] : []
-              if (incluirGaleria) for (const img of ent.imagens ?? []) rels.push(img.rel)
+              const vEnt = versaoAtiva(ent)
+              const rels = vEnt.retrato ? [vEnt.retrato] : []
+              if (incluirGaleria) for (const img of vEnt.imagens ?? []) rels.push(img.rel)
               return carregarImagensIA(s.vaultPath, rels)
             }}
             conteudoDoDestino={(dest) => {
               const ent = useApp.getState().cenarios[cenarioId]
-              return ent ? htmlParaTexto((ent as unknown as Record<string, string>)[dest] ?? '') : ''
+              return ent ? htmlParaTexto((versaoAtiva(ent) as unknown as Record<string, string>)[dest] ?? '') : ''
             }}
             onInserir={(abaDestino, textoCru, modo) => {
               const html = textoParaHtml(textoCru)
               const atual = useApp.getState().cenarios[cenarioId]
-              const base = atual ? (atual[abaDestino as AbaTexto] ?? '') : ''
+              const base = atual ? (versaoAtiva(atual) as unknown as Record<string, string>)[abaDestino] ?? '' : ''
               const novo = modo === 'substituir' ? html : base + html
-              agendarSalvar({ [abaDestino]: novo } as Partial<Cenario>)
+              agendarSalvar({ [abaDestino]: novo } as PatchCenario)
               setAba(abaDestino as Aba)
             }}
           />
           <button className="btn-icon perfil-fechar" onClick={() => void fechar()}>✕</button>
         </div>
+        <BarraVersoes cenarioId={cenarioId} />
         <div className="perfil-abas">
           {ABAS.map((a) => (
             <button key={a.id} className={aba === a.id ? 'ativo' : ''} onClick={() => setAba(a.id)}>
@@ -212,7 +218,7 @@ export function CenarioModal({ cenarioId }: { cenarioId: string }) {
         {aba === 'imagens' ? (
           <GaleriaPersonagem
             dirAssets="imagens-cenarios"
-            imagens={c.imagens}
+            imagens={va.imagens}
             onImagensChange={(imagens) => agendarSalvar({ imagens })}
           />
         ) : aba === 'conteudo' ? (
@@ -221,9 +227,9 @@ export function CenarioModal({ cenarioId }: { cenarioId: string }) {
           <AbaVinculos entidadeTipo="cenario" entidadeId={cenarioId} />
         ) : (
           <EditorTexto
-            key={aba}
-            value={c[aba as AbaTexto]}
-            onChange={(html) => agendarSalvar({ [aba]: html } as Partial<Cenario>)}
+            key={`${aba}:${c.versaoAtivaId}`}
+            value={va[aba as AbaTexto]}
+            onChange={(html) => agendarSalvar({ [aba]: html } as PatchCenario)}
           />
         )}
         {salvarErro && (
@@ -237,7 +243,7 @@ export function CenarioModal({ cenarioId }: { cenarioId: string }) {
 /** Sub-cenários (navegação) + personagens vinculados (chips com busca). */
 function AbaConteudo({ cenarioId, agendarSalvar }: {
   cenarioId: string
-  agendarSalvar: (mudancas: Partial<Cenario>) => void
+  agendarSalvar: (mudancas: PatchCenario) => void
 }) {
   const tree = useApp((s) => s.tree)
   const c = useApp((s) => s.cenarios[cenarioId])
