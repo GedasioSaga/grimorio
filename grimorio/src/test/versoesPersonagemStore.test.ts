@@ -42,6 +42,12 @@ describe('ações de versão de personagem no store', () => {
     expect(useApp.getState().personagens.p1.versoes[0].nome).toBe('Robert Bruce')
     expect(useApp.getState().personagens.p1.nome).toBe('Robert Bruce')
   })
+  it('renomearPersonagemAtivo renomeia a forma ativa e espelha (repo null = só cache)', async () => {
+    await useApp.getState().renomearPersonagemAtivo('p1', 'Robertão')
+    const p = useApp.getState().personagens.p1
+    expect(p.versoes[0].nome).toBe('Robertão')
+    expect(p.nome).toBe('Robertão')
+  })
   it('removerVersaoPersonagem guarda a última e re-espelha', () => {
     useApp.getState().removerVersaoPersonagem('p1', 'v1')
     expect(useApp.getState().personagens.p1.versoes).toHaveLength(1)

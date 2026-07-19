@@ -239,9 +239,18 @@ function ItemLinha({ item, tipo, tipoAbertura, aoMudar, aoEtiquetar }: {
 
   async function renomear(e: React.MouseEvent) {
     e.stopPropagation()
-    if (!repo) return
     const nome = await pedirTexto('Novo nome:', item.nome)
     if (!nome) return
+    // personagem (sessões/canvases/escritas não entram no cache `personagens`): renomeia a FORMA ATIVA
+    if (item.id && useApp.getState().personagens[item.id]) {
+      const personagemId = item.id
+      await comAvisoDeErro(async () => {
+        await useApp.getState().renomearPersonagemAtivo(personagemId, nome)
+        await aoMudar()
+      })
+      return
+    }
+    if (!repo) return
     await comAvisoDeErro(async () => {
       await repo.renomearItem(item.caminho, nome)
       await aoMudar()

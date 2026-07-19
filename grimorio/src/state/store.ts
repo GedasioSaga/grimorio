@@ -107,6 +107,8 @@ interface AppState {
   /** Cria uma versão clonando a ativa; a nova vira ativa. */
   adicionarVersaoPersonagem(id: string, nome: string): void
   renomearVersaoPersonagem(id: string, versaoId: string, nome: string): void
+  /** Renomeia a FORMA ativa do personagem e persiste na hora (usado pelo rename da sidebar). */
+  renomearPersonagemAtivo(id: string, nome: string): Promise<void>
   /** Remove a versão (nunca a última); se remover a ativa, recua pra primeira. */
   removerVersaoPersonagem(id: string, versaoId: string): void
   abrirPerfil(id: string): void
@@ -263,6 +265,16 @@ export const useApp = create<AppState>((set, get) => ({
       return { personagens: { ...s.personagens, [id]: comNomeEspelho({ ...a, versoes: a.versoes.map((v) => (v.id === versaoId ? { ...v, nome } : v)) }) } }
     })
     agendarSalvarPersonagem(get, id)
+  },
+
+  async renomearPersonagemAtivo(id, nome) {
+    const p = get().personagens[id]
+    if (!p) return
+    const atualizado = comNomeEspelho({ ...p, versoes: p.versoes.map((v) => (v.id === p.versaoAtivaId ? { ...v, nome } : v)) })
+    set((s) => ({ personagens: { ...s.personagens, [id]: atualizado } }))
+    const { repo, caminhoPorId } = get()
+    const caminho = caminhoPorId[id]
+    if (repo && caminho) await repo.salvarPersonagem(caminho, atualizado)
   },
 
   removerVersaoPersonagem(id, versaoId) {

@@ -155,7 +155,14 @@ function PersonagemLinha({ item, nivel, aoMudar }: { item: ItemRef; nivel: numbe
   async function renomear(e: React.MouseEvent) {
     e.stopPropagation()
     const nome = await pedirTexto('Novo nome:', item.nome)
-    if (!nome || !repo) return
+    if (!nome) return
+    // personagem: renomeia a FORMA ATIVA (nome do topo é espelho, reverteria no próximo load)
+    if (id && useApp.getState().personagens[id]) {
+      const personagemId = id
+      await comAviso(async () => { await useApp.getState().renomearPersonagemAtivo(personagemId, nome); await aoMudar() })
+      return
+    }
+    if (!repo) return
     await comAviso(async () => { await repo.renomearItem(item.caminho, nome); await aoMudar() })
   }
   async function excluir(e: React.MouseEvent) {
