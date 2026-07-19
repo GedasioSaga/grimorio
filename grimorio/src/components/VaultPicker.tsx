@@ -1,5 +1,6 @@
 import { open } from '@tauri-apps/plugin-dialog'
 import { useApp } from '../state/store'
+import grimoireIcon from '../assets/grimoire.png'
 
 export function VaultPicker() {
   const abrirCofre = useApp((s) => s.abrirCofre)
@@ -13,6 +14,7 @@ export function VaultPicker() {
 
   return (
     <div className="vault-picker">
+      <img className="vault-logo" src={grimoireIcon} alt="" draggable={false} />
       <h1>Grimório</h1>
       <p>Escolha uma pasta para guardar suas campanhas. Pode ser uma pasta nova ou um cofre existente (ex.: dentro do OneDrive para usar em dois computadores).</p>
       <button onClick={escolher} disabled={carregando}>

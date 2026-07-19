@@ -10,6 +10,8 @@ import { contarCenarios, contarPersonagens, filtrarArvoreCenarios, filtrarCanvas
 import { associarNaCriacao, editarCampanhas } from './dialogoCampanhas'
 import { PersonagensSoltos } from './PersonagensSoltos'
 import { CenariosSoltos } from './CenariosSoltos'
+import grimoireIcon from '../assets/grimoire.png'
+import { SeletorTema } from './SeletorTema'
 
 async function comAvisoDeErro(acao: () => Promise<void>) {
   try {
@@ -89,8 +91,11 @@ export function Sidebar({ recolhida, onToggle }: { recolhida: boolean; onToggle:
   return (
     <aside className="sidebar">
       <div className="sidebar-header">
-        <span className="sidebar-title">Grimório</span>
-        <button className="btn-icon" title="Recolher barra" onClick={onToggle}>‹</button>
+        <span className="sidebar-title"><img className="sidebar-logo" src={grimoireIcon} alt="" draggable={false} />Grimório</span>
+        <span className="sidebar-header-acoes">
+          <SeletorTema />
+          <button className="btn-icon" title="Recolher barra" onClick={onToggle}>‹</button>
+        </span>
       </div>
 
       <div className="sidebar-filtro">

@@ -13,6 +13,32 @@
   --sans: 'Segoe UI', system-ui, sans-serif;
 }
 
+/* Dark: carvão neutro + destaque prata/gelo */
+:root[data-tema="dark"] {
+  --fundo: #121316;
+  --fundo-painel: #191b1f;
+  --fundo-elevado: #23262c;
+  --borda: #363a42;
+  --dourado: #8aa0b8;
+  --dourado-claro: #c3d2e0;
+  --texto: #d7dbe1;
+  --texto-fraco: #838b97;
+  --erro: #c56b58;
+}
+
+/* Dark Blue: azul-marinho + destaque azul-ciano */
+:root[data-tema="azul"] {
+  --fundo: #0d1524;
+  --fundo-painel: #121d31;
+  --fundo-elevado: #1b2841;
+  --borda: #263a5c;
+  --dourado: #5b8fd6;
+  --dourado-claro: #93bdf0;
+  --texto: #cdd9ea;
+  --texto-fraco: #7488a6;
+  --erro: #d1685a;
+}
+
 * { box-sizing: border-box; }
 
 html, body, #root {
@@ -30,6 +56,7 @@ h1, h2, h3, .sidebar-title, .canvas-titulo, .perfil-nome { font-family: var(--se
 
 /* ---- vault picker ---- */
 .vault-picker { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; gap: 16px; text-align: center; padding: 32px; }
+.vault-logo { width: 104px; height: 104px; margin-bottom: 4px; filter: drop-shadow(0 3px 10px rgba(0, 0, 0, 0.55)); }
 .vault-picker h1 { font-size: 42px; color: var(--dourado-claro); margin: 0; }
 .vault-picker p { max-width: 480px; color: var(--texto-fraco); }
 .vault-picker button { font-size: 16px; padding: 10px 24px; }
@@ -57,7 +84,19 @@ button:hover { border-color: var(--dourado); color: var(--dourado-claro); }
   padding: 8px 4px; display: flex; justify-content: center;
 }
 .sidebar-header { padding: 4px 8px 16px; display: flex; align-items: center; justify-content: space-between; gap: 8px; }
-.sidebar-title { font-size: 24px; color: var(--dourado-claro); }
+.sidebar-header-acoes { display: inline-flex; align-items: center; gap: 6px; flex-shrink: 0; }
+/* seletor de tema: 3 swatches que prévia fundo + destaque de cada tema */
+.seletor-tema { display: inline-flex; align-items: center; gap: 4px; }
+.tema-swatch {
+  width: 18px; height: 18px; padding: 0; border-radius: 50%;
+  border: 1px solid var(--borda); cursor: pointer;
+  display: inline-flex; align-items: center; justify-content: center;
+}
+.tema-swatch:hover { border-color: var(--dourado); }
+.tema-swatch.ativo { border-color: var(--dourado-claro); box-shadow: 0 0 0 2px var(--dourado); }
+.tema-ponto { width: 7px; height: 7px; border-radius: 50%; display: block; }
+.sidebar-title { font-size: 24px; color: var(--dourado-claro); display: inline-flex; align-items: center; gap: 8px; min-width: 0; }
+.sidebar-logo { width: 26px; height: 26px; flex-shrink: 0; }
 .sidebar-filtro { padding: 0 12px 8px; }
 .sidebar-filtro select {
   width: 100%; background: var(--fundo); border: 1px solid var(--borda); border-radius: 6px;
