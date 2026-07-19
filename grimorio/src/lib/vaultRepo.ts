@@ -1,5 +1,5 @@
 import type { FsBridge } from './fsBridge'
-import type { Campanha, CampanhaNode, CanvasDoc, Cenario, CenarioNode, CenarioRef, ItemRef, PastaCenarioNode, PastaNode, Personagem, VaultTree, Vinculo } from './types'
+import type { Campanha, CampanhaNode, CanvasDoc, Cenario, CenarioNode, CenarioRef, ItemRef, PastaCenarioNode, PastaNode, Personagem, VaultTree, VersaoCenario, Vinculo } from './types'
 import { slugify, slugUnico } from './slug'
 import { normalizarVinculos } from './vinculos'
 import { normalizarChat, type MensagemChat } from './chatIA'
@@ -35,23 +35,48 @@ export function normalizarPersonagem(
   }
 }
 
-/** Normaliza um cenário lido do disco (migração lazy: campos faltando ganham defaults). */
-export function normalizarCenario(raw: Partial<Cenario>): Cenario {
+/** Normaliza uma versão de cenário (campos faltando ganham defaults; id só é gerado se ausente). */
+export function normalizarVersaoCenario(raw: Record<string, any>, nomePadrao = 'Base'): VersaoCenario {
   return {
-    id: raw.id ?? novoId(),
-    nome: raw.nome ?? '',
-    retrato: raw.retrato ?? null,
-    resumo: raw.resumo ?? '',
-    descricao: raw.descricao ?? '',
-    informacao: raw.informacao ?? '',
-    historia: raw.historia ?? '',
-    eventos: raw.eventos ?? '',
-    itens: raw.itens ?? '',
-    anotacoes: raw.anotacoes ?? '',
-    imagens: raw.imagens ?? [],
-    personagens: raw.personagens ?? [],
-    criadoEm: raw.criadoEm ?? agora(),
-    modificadoEm: raw.modificadoEm ?? agora(),
+    id: typeof raw?.id === 'string' ? raw.id : novoId(),
+    nome: raw?.nome ?? nomePadrao,
+    retrato: raw?.retrato ?? null,
+    resumo: raw?.resumo ?? '',
+    descricao: raw?.descricao ?? '',
+    informacao: raw?.informacao ?? '',
+    historia: raw?.historia ?? '',
+    eventos: raw?.eventos ?? '',
+    itens: raw?.itens ?? '',
+    anotacoes: raw?.anotacoes ?? '',
+    imagens: Array.isArray(raw?.imagens) ? raw.imagens : [],
+  }
+}
+
+/**
+ * Normaliza um cenário lido do disco. Migração lazy:
+ * cenário plano legado (sem `versoes`) vira uma versão "Base" com o conteúdo antigo.
+ */
+export function normalizarCenario(raw: Record<string, any>): Cenario {
+  const versoesRaw = Array.isArray(raw?.versoes) && raw.versoes.length > 0 ? raw.versoes : null
+  const versoes: VersaoCenario[] = versoesRaw
+    ? versoesRaw.map((v: Record<string, any>) => normalizarVersaoCenario(v))
+    : [normalizarVersaoCenario({
+        // só os campos de conteúdo do formato plano — id/nome do cenário NÃO viram da versão
+        retrato: raw?.retrato, resumo: raw?.resumo, descricao: raw?.descricao,
+        informacao: raw?.informacao, historia: raw?.historia, eventos: raw?.eventos,
+        itens: raw?.itens, anotacoes: raw?.anotacoes, imagens: raw?.imagens,
+      }, 'Base')]
+  const versaoAtivaId = typeof raw?.versaoAtivaId === 'string' && versoes.some((v) => v.id === raw.versaoAtivaId)
+    ? raw.versaoAtivaId
+    : versoes[0].id
+  return {
+    id: typeof raw?.id === 'string' ? raw.id : novoId(),
+    nome: raw?.nome ?? '',
+    personagens: Array.isArray(raw?.personagens) ? raw.personagens : [],
+    versoes,
+    versaoAtivaId,
+    criadoEm: raw?.criadoEm ?? agora(),
+    modificadoEm: raw?.modificadoEm ?? agora(),
   }
 }
 
@@ -267,10 +292,13 @@ export class VaultRepo {
   async criarCenarioEm(dirPai: string, nome: string): Promise<CenarioRef> {
     const slug = slugUnico(slugify(nome), await this.nomesDeDirs(dirPai))
     const dir = `${dirPai}/${slug}`
+    const versaoBase: VersaoCenario = {
+      id: novoId(), nome: 'Base', retrato: null, resumo: '',
+      descricao: '', informacao: '', historia: '', eventos: '', itens: '', anotacoes: '', imagens: [],
+    }
     const c: Cenario = {
-      id: novoId(), nome, retrato: null, resumo: '',
-      descricao: '', informacao: '', historia: '', eventos: '', itens: '', anotacoes: '',
-      imagens: [], personagens: [],
+      id: novoId(), nome, personagens: [],
+      versoes: [versaoBase], versaoAtivaId: versaoBase.id,
       criadoEm: agora(), modificadoEm: agora(),
     }
     await this.fs.mkdirAll(this.abs(dir))

@@ -56,8 +56,11 @@ describe('VaultRepo — cenários CRUD', () => {
     expect(cru.nome).toBe('Cidade Alta')
     expect(cru.id).toBe(ref.id)
     expect(cru.personagens).toEqual([])
-    expect(cru.imagens).toEqual([])
-    expect(cru.eventos).toBe('')
+    expect(cru.versoes).toHaveLength(1)
+    expect(cru.versoes[0].nome).toBe('Base')
+    expect(cru.versoes[0].eventos).toBe('')
+    expect(cru.versoes[0].imagens).toEqual([])
+    expect(cru.versaoAtivaId).toBe(cru.versoes[0].id)
   })
 
   it('nomes duplicados no mesmo nível ganham sufixo', async () => {
@@ -77,9 +80,9 @@ describe('VaultRepo — cenários CRUD', () => {
     const ref = await repo.criarCenarioEm('cenarios', 'Cidade')
     const c = await repo.lerCenario(ref.caminho)
     expect(c.nome).toBe('Cidade')
-    await repo.salvarCenario(ref.caminho, { ...c, resumo: 'capital', modificadoEm: '2000-01-01T00:00:00.000Z' })
+    await repo.salvarCenario(ref.caminho, { ...c, versoes: c.versoes.map((v) => ({ ...v, resumo: 'capital' })), modificadoEm: '2000-01-01T00:00:00.000Z' })
     const relido = await repo.lerCenario(ref.caminho)
-    expect(relido.resumo).toBe('capital')
+    expect(relido.versoes[0].resumo).toBe('capital')
     expect(relido.modificadoEm).not.toBe('2000-01-01T00:00:00.000Z')
   })
 
