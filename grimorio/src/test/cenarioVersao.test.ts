@@ -26,6 +26,9 @@ describe('versaoVizinha', () => {
   it('anterior é cíclica (primeira volta pra última)', () => {
     expect(versaoVizinha(cenario({ versaoAtivaId: 'v1' }), -1)).toBe('v2')
   })
+  it('id inexistente trata como posição 0', () => {
+    expect(versaoVizinha(cenario({ versaoAtivaId: 'sumiu' }), 1)).toBe('v2')
+  })
 })
 
 describe('aplicarPatchCenario', () => {
@@ -52,5 +55,10 @@ describe('resumoAtivo / retratoAtivo', () => {
   it('undefined vira vazio/null', () => {
     expect(resumoAtivo(undefined)).toBe('')
     expect(retratoAtivo(undefined)).toBeNull()
+  })
+  it('cenário definido devolve resumo/retrato da versão ativa', () => {
+    const c = cenario({ versaoAtivaId: 'v2', versoes: [versao('v1', 'Base', { resumo: 'dia', retrato: 'a.png' }), versao('v2', 'Noite', { resumo: 'noite', retrato: 'b.png' })] })
+    expect(resumoAtivo(c)).toBe('noite')
+    expect(retratoAtivo(c)).toBe('b.png')
   })
 })

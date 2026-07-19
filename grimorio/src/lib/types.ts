@@ -24,10 +24,10 @@ export interface VersaoCenario {
   retrato: string | null // rel ao cofre, ex.: "imagens-cenarios/retrato-<cenId>-<verId>.png"
   resumo: string
   descricao: string  // HTML TipTap
-  informacao: string // HTML
+  informacao: string // HTML (caixa "Informações" do card no canvas)
   historia: string   // HTML
-  eventos: string    // HTML
-  itens: string      // HTML
+  eventos: string    // HTML — v1 texto; vira entidade própria no futuro
+  itens: string      // HTML — idem
   anotacoes: string  // HTML
   imagens: ImagemPersonagem[]
 }

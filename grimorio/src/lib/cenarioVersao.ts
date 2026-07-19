@@ -1,6 +1,6 @@
 import type { Cenario, VersaoCenario } from './types'
 
-/** Campos de conteúdo que pertencem à VERSÃO ativa (não ao cenário como um todo). */
+/** Campos de conteúdo que pertencem à VERSÃO ativa (não ao cenário). Mantenha em sincronia com VersaoCenario (todos os campos menos id/nome). */
 export const CHAVES_VERSAO = [
   'retrato', 'resumo', 'descricao', 'informacao',
   'historia', 'eventos', 'itens', 'anotacoes', 'imagens',
@@ -46,6 +46,8 @@ export function aplicarPatchCenario(c: Cenario, patch: PatchCenario): Cenario {
     if (SET_CHAVES_VERSAO.has(k)) versaoPatch[k] = v
     else cenarioPatch[k] = v
   }
+  // Conteúdo é roteado pra versão ativa ANTES deste patch. Não combine `versaoAtivaId`
+  // com chaves de conteúdo na mesma chamada — a troca de ativa só vale pra próxima.
   const idAtiva = c.versoes.some((v) => v.id === c.versaoAtivaId) ? c.versaoAtivaId : c.versoes[0]?.id
   const versoes = Object.keys(versaoPatch).length > 0
     ? c.versoes.map((v) => (v.id === idAtiva ? { ...v, ...versaoPatch } : v))
