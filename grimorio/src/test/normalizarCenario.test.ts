@@ -49,4 +49,15 @@ describe('normalizarCenario', () => {
     }
     expect(normalizarCenario(completo)).toEqual(completo)
   })
+
+  it('versoes vazio ou não-array cai na migração para Base', () => {
+    const vazio = normalizarCenario({ id: 'z', nome: 'X', versoes: [] })
+    expect(vazio.versoes).toHaveLength(1)
+    expect(vazio.versoes[0].nome).toBe('Base')
+    expect(vazio.versaoAtivaId).toBe(vazio.versoes[0].id)
+
+    const naoArray = normalizarCenario({ id: 'z2', nome: 'Y', versoes: 'nope' as any })
+    expect(naoArray.versoes).toHaveLength(1)
+    expect(naoArray.versoes[0].nome).toBe('Base')
+  })
 })
