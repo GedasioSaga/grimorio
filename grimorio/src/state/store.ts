@@ -1,9 +1,10 @@
 import { create } from 'zustand'
-import type { Cenario, ItemRef, PastaNode, Personagem, TipoEntidadeVinculo, VaultTree, Vinculo } from '../lib/types'
+import type { Cenario, ItemRef, PastaNode, Personagem, TipoEntidadeVinculo, VaultTree, VersaoCenario, Vinculo } from '../lib/types'
 import { tauriFs } from '../lib/fsBridge'
 import { VaultRepo } from '../lib/vaultRepo'
 import { coletarCenarioRefs } from '../lib/cenarioArvore'
 import { adicionarVinculo as adicionarVinculoPuro, removerVinculo as removerVinculoPuro, campanhasDe, participacaoDe, TIPO_PARTICIPA } from '../lib/vinculos'
+import { aplicarPatchCenario, versaoAtiva, type PatchCenario } from '../lib/cenarioVersao'
 
 export type TipoAberto = 'sessao' | 'canvas' | 'escrita'
 
@@ -15,6 +16,25 @@ const timersSalvarParcial = new Map<string, ReturnType<typeof setTimeout>>()
 
 // mesmo racional para cenários (cards no canvas desmontam fora da viewport)
 const timersSalvarCenario = new Map<string, ReturnType<typeof setTimeout>>()
+
+/** Agenda a persistência debounced do cenário `id` (reusada por edições e ações de versão). */
+function agendarSalvarCenario(get: () => AppState, id: string) {
+  const pendente = timersSalvarCenario.get(id)
+  if (pendente) clearTimeout(pendente)
+  timersSalvarCenario.set(
+    id,
+    setTimeout(() => {
+      timersSalvarCenario.delete(id)
+      const { repo, caminhoCenarioPorId, cenarios } = get()
+      const caminho = caminhoCenarioPorId[id]
+      const c = cenarios[id]
+      if (!repo || !caminho || !c) return
+      repo.salvarCenario(caminho, { ...c }).catch((e) => {
+        console.error('Falha ao salvar cenário:', e)
+      })
+    }, SALVAR_PARCIAL_DEBOUNCE_MS),
+  )
+}
 
 // um arquivo só (vinculos.json): um timer só
 let timerSalvarVinculos: ReturnType<typeof setTimeout> | null = null
@@ -62,7 +82,14 @@ interface AppState {
   fecharPerfil(): void
   carregarCenarios(): Promise<void>
   /** Merge otimista no cache + gravação debounced (modal e card do canvas). */
-  salvarCenarioParcial(id: string, mudancas: Partial<Cenario>): void
+  salvarCenarioParcial(id: string, mudancas: PatchCenario): void
+  /** Torna `versaoId` a versão ativa/visível do cenário (ignora id inexistente). */
+  definirVersaoAtiva(id: string, versaoId: string): void
+  /** Cria uma versão clonando a ativa; a nova vira ativa. */
+  adicionarVersao(id: string, nome: string): void
+  renomearVersao(id: string, versaoId: string, nome: string): void
+  /** Remove a versão (nunca a última); se remover a ativa, recua pra primeira. */
+  removerVersao(id: string, versaoId: string): void
   abrirCenario(id: string): void
   fecharCenario(): void
   carregarVinculos(): Promise<void>
@@ -226,25 +253,45 @@ export const useApp = create<AppState>((set, get) => ({
     const atual = get().cenarios[id]
     if (!atual) return
     set((s) => ({
-      cenarios: { ...s.cenarios, [id]: { ...s.cenarios[id], ...mudancas } },
+      cenarios: { ...s.cenarios, [id]: aplicarPatchCenario(s.cenarios[id], mudancas) },
     }))
-    const pendente = timersSalvarCenario.get(id)
-    if (pendente) clearTimeout(pendente)
-    timersSalvarCenario.set(
-      id,
-      setTimeout(() => {
-        timersSalvarCenario.delete(id)
-        // caminho re-resolvido no disparo: após mover/excluir não grava no lugar antigo
-        const { repo, caminhoCenarioPorId, cenarios } = get()
-        const caminho = caminhoCenarioPorId[id]
-        const c = cenarios[id]
-        if (!repo || !caminho || !c) return
-        // fire-and-forget: VaultRepo serializa escritas por caminho
-        repo.salvarCenario(caminho, { ...c }).catch((e) => {
-          console.error('Falha ao salvar cenário:', e)
-        })
-      }, SALVAR_PARCIAL_DEBOUNCE_MS),
-    )
+    agendarSalvarCenario(get, id)
+  },
+
+  definirVersaoAtiva(id, versaoId) {
+    const c = get().cenarios[id]
+    if (!c || !c.versoes.some((v) => v.id === versaoId)) return
+    get().salvarCenarioParcial(id, { versaoAtivaId: versaoId })
+  },
+
+  adicionarVersao(id, nome) {
+    const c = get().cenarios[id]
+    if (!c) return
+    const base = versaoAtiva(c)
+    const nova: VersaoCenario = { ...base, id: crypto.randomUUID(), nome, imagens: base.imagens.map((i) => ({ ...i })) }
+    set((s) => {
+      const atual = s.cenarios[id]
+      return { cenarios: { ...s.cenarios, [id]: { ...atual, versoes: [...atual.versoes, nova], versaoAtivaId: nova.id } } }
+    })
+    agendarSalvarCenario(get, id)
+  },
+
+  renomearVersao(id, versaoId, nome) {
+    if (!get().cenarios[id]) return
+    set((s) => {
+      const atual = s.cenarios[id]
+      return { cenarios: { ...s.cenarios, [id]: { ...atual, versoes: atual.versoes.map((v) => (v.id === versaoId ? { ...v, nome } : v)) } } }
+    })
+    agendarSalvarCenario(get, id)
+  },
+
+  removerVersao(id, versaoId) {
+    const c = get().cenarios[id]
+    if (!c || c.versoes.length <= 1) return
+    const versoes = c.versoes.filter((v) => v.id !== versaoId)
+    const versaoAtivaId = c.versaoAtivaId === versaoId ? versoes[0].id : c.versaoAtivaId
+    set((s) => ({ cenarios: { ...s.cenarios, [id]: { ...s.cenarios[id], versoes, versaoAtivaId } } }))
+    agendarSalvarCenario(get, id)
   },
 
   abrirCenario(id) {
