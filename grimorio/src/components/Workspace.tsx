@@ -8,6 +8,7 @@ import { tauriFs } from '../lib/fsBridge'
 import { NotebookRepo } from '../lib/notebookRepo'
 import { flexDosLados, proximoRecolhido, type Recolhido } from '../lib/splitState'
 import { useApp } from '../state/store'
+import { SYSTEM_ESCRITOR } from '../lib/promptsIA'
 
 interface EstadoSplit {
   proporcao: number // fração larg. das Notas (0..1) quando ambos abertos
@@ -105,6 +106,12 @@ export function Workspace({
             {notasRecolhida ? '✎' : notasNaDireita ? '›' : '‹'}
           </button>
         )}
+        {comChatIA && !temMapa && (
+          <button className="btn-icon" title={split.chatAberto ? 'Fechar assistente IA' : 'Abrir assistente IA'}
+            onClick={() => setSplit((s) => ({ ...s, chatAberto: !s.chatAberto }))}>
+            ✨ IA
+          </button>
+        )}
       </div>
       {!notasRecolhida && (
         <div className={`ws-escrita-corpo${split.railRecolhida ? ' rail-recolhida' : ''}`}>
@@ -159,13 +166,19 @@ export function Workspace({
       {notasNaDireita
         ? <>{painelMapa}{divisoria}{painelEscrita}</>
         : <>{painelEscrita}{divisoria}{painelMapa}</>}
-      {comChatIA && split.chatAberto && mapa && (
+      {comChatIA && split.chatAberto && (
         <div className="ws-chat">
           <div className="ws-cabecalho">
             <span className="ws-titulo">Assistente IA</span>
             <button className="btn-icon" title="Fechar" onClick={() => setSplit((s) => ({ ...s, chatAberto: false }))}>✕</button>
           </div>
-          <ChatIA caminhoSessao={mapa.caminho} cadernoDirRel={cadernoDirRel} repoNotas={repo} />
+          <ChatIA
+            caminhoSessao={mapa?.caminho ?? chaveSplit}
+            cadernoDirRel={cadernoDirRel}
+            repoNotas={repo}
+            system={temMapa ? undefined : SYSTEM_ESCRITOR}
+            mostrarAnexoCard={temMapa}
+          />
         </div>
       )}
     </div>

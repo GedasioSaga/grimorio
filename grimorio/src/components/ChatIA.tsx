@@ -29,15 +29,21 @@ interface Anexo {
   imagem: ImagemIA | null
 }
 
-/** Painel de chat com o assistente de mestre (Gemini) — só em sessões. */
+/** Painel de chat com o assistente (Gemini): sessões (mestre) e escrita (escritor). */
 export function ChatIA({
   caminhoSessao,
   cadernoDirRel,
   repoNotas,
+  system = SYSTEM_MESTRE,
+  mostrarAnexoCard = true,
 }: {
   caminhoSessao: string
   cadernoDirRel: string
   repoNotas: NotebookRepo
+  /** Persona do assistente. Sessão = mestre; escrita = escritor. */
+  system?: string
+  /** Botão de anexar card do canvas (só onde há canvas). */
+  mostrarAnexoCard?: boolean
 }) {
   const repo = useApp((s) => s.repo)
   const vaultPath = useApp((s) => s.vaultPath)
@@ -202,10 +208,10 @@ export function ChatIA({
     setPensando(true)
     try {
       const contexto = await montarContexto()
-      const system = contexto ? `${SYSTEM_MESTRE}\n\n# Contexto da campanha\n${contexto}` : SYSTEM_MESTRE
+      const systemComCtx = contexto ? `${system}\n\n# Contexto da campanha\n${contexto}` : system
       const janela = novas.slice(-JANELA_HISTORICO).map((m) => ({ papel: m.papel, texto: m.texto }))
       const resposta = await gerarConteudo({
-        system,
+        system: systemComCtx,
         historico: janela,
         imagens: anexo?.imagem ? [anexo.imagem] : [],
         chaves: await garantirChaves(pedirTexto),
@@ -263,7 +269,9 @@ export function ChatIA({
           }}
         />
         <div className="chat-ia-acoes">
-          <button title="Anexar card selecionado no canvas" onClick={() => void anexarCardSelecionado()}>📎 card</button>
+          {mostrarAnexoCard && (
+            <button title="Anexar card selecionado no canvas" onClick={() => void anexarCardSelecionado()}>📎 card</button>
+          )}
           <button title="Limpar conversa" onClick={limpar}>🗑</button>
           <button disabled={pensando || !texto.trim()} onClick={() => void enviar()}>Enviar</button>
         </div>

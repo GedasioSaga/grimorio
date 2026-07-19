@@ -76,6 +76,7 @@ export default function App() {
             cadernoDirRel={dirNotasDoMapa(aberto.caminho)}
             cadernoDirAbs={`${vaultPath}/${dirNotasDoMapa(aberto.caminho)}`}
             titulo={aberto.nome}
+            comChatIA
           />
         )}
       </main>
