@@ -1,10 +1,11 @@
 import { create } from 'zustand'
-import type { Cenario, ItemRef, PastaNode, Personagem, TipoEntidadeVinculo, VaultTree, VersaoCenario, Vinculo } from '../lib/types'
+import type { Cenario, ItemRef, PastaNode, Personagem, TipoEntidadeVinculo, VaultTree, VersaoCenario, VersaoPersonagem, Vinculo } from '../lib/types'
 import { tauriFs } from '../lib/fsBridge'
 import { VaultRepo } from '../lib/vaultRepo'
 import { coletarCenarioRefs } from '../lib/cenarioArvore'
 import { adicionarVinculo as adicionarVinculoPuro, removerVinculo as removerVinculoPuro, campanhasDe, participacaoDe, TIPO_PARTICIPA } from '../lib/vinculos'
 import { aplicarPatchCenario, versaoAtiva, type PatchCenario } from '../lib/cenarioVersao'
+import { aplicarPatchPersonagem, versaoAtivaPersonagem, comNomeEspelho, type PatchPersonagem } from '../lib/personagemVersao'
 
 export type TipoAberto = 'sessao' | 'canvas' | 'escrita'
 
@@ -33,6 +34,27 @@ function agendarSalvarCenario(get: () => AppState, id: string) {
       // fire-and-forget: VaultRepo serializa escritas por caminho
       repo.salvarCenario(caminho, { ...c }).catch((e) => {
         console.error('Falha ao salvar cenário:', e)
+      })
+    }, SALVAR_PARCIAL_DEBOUNCE_MS),
+  )
+}
+
+/** Agenda a persistência debounced do personagem `id` (reusada por edições e ações de versão). */
+function agendarSalvarPersonagem(get: () => AppState, id: string) {
+  const pendente = timersSalvarParcial.get(id)
+  if (pendente) clearTimeout(pendente)
+  timersSalvarParcial.set(
+    id,
+    setTimeout(() => {
+      timersSalvarParcial.delete(id)
+      // caminho re-resolvido no disparo: após mover/excluir não grava no lugar antigo
+      const { repo, caminhoPorId, personagens } = get()
+      const caminho = caminhoPorId[id]
+      const p = personagens[id]
+      if (!repo || !caminho || !p) return
+      // fire-and-forget: VaultRepo serializa escritas por caminho
+      repo.salvarPersonagem(caminho, { ...p }).catch((e) => {
+        console.error('Falha ao salvar personagem:', e)
       })
     }, SALVAR_PARCIAL_DEBOUNCE_MS),
   )
@@ -79,7 +101,14 @@ interface AppState {
   setPaginaAtiva(cadernoDir: string, slug: string | null): void
   carregarPersonagens(): Promise<void>
   /** Merge otimista no cache + gravação debounced (edição inline no card do canvas). */
-  salvarPersonagemParcial(id: string, mudancas: Partial<Personagem>): void
+  salvarPersonagemParcial(id: string, mudancas: PatchPersonagem): void
+  /** Torna `versaoId` a versão ativa/visível do personagem (ignora id inexistente). */
+  definirVersaoAtivaPersonagem(id: string, versaoId: string): void
+  /** Cria uma versão clonando a ativa; a nova vira ativa. */
+  adicionarVersaoPersonagem(id: string, nome: string): void
+  renomearVersaoPersonagem(id: string, versaoId: string, nome: string): void
+  /** Remove a versão (nunca a última); se remover a ativa, recua pra primeira. */
+  removerVersaoPersonagem(id: string, versaoId: string): void
   abrirPerfil(id: string): void
   fecharPerfil(): void
   carregarCenarios(): Promise<void>
@@ -204,24 +233,45 @@ export const useApp = create<AppState>((set, get) => ({
     const atual = get().personagens[id]
     if (!atual) return
     set((s) => ({
-      personagens: { ...s.personagens, [id]: { ...s.personagens[id], ...mudancas } },
+      personagens: { ...s.personagens, [id]: aplicarPatchPersonagem(s.personagens[id], mudancas) },
     }))
-    const pendente = timersSalvarParcial.get(id)
-    if (pendente) clearTimeout(pendente)
-    timersSalvarParcial.set(
-      id,
-      setTimeout(() => {
-        timersSalvarParcial.delete(id)
-        const { repo, caminhoPorId, personagens } = get()
-        const caminho = caminhoPorId[id]
-        const p = personagens[id]
-        if (!repo || !caminho || !p) return
-        // fire-and-forget: VaultRepo serializa escritas por caminho
-        repo.salvarPersonagem(caminho, { ...p }).catch((e) => {
-          console.error('Falha ao salvar personagem (edição no card):', e)
-        })
-      }, SALVAR_PARCIAL_DEBOUNCE_MS),
-    )
+    agendarSalvarPersonagem(get, id)
+  },
+
+  definirVersaoAtivaPersonagem(id, versaoId) {
+    const p = get().personagens[id]
+    if (!p || !p.versoes.some((v) => v.id === versaoId)) return
+    get().salvarPersonagemParcial(id, { versaoAtivaId: versaoId })
+  },
+
+  adicionarVersaoPersonagem(id, nome) {
+    const p = get().personagens[id]
+    if (!p) return
+    const base = versaoAtivaPersonagem(p)
+    const nova: VersaoPersonagem = { ...base, id: crypto.randomUUID(), nome, imagens: base.imagens.map((i) => ({ ...i })) }
+    set((s) => {
+      const a = s.personagens[id]
+      return { personagens: { ...s.personagens, [id]: comNomeEspelho({ ...a, versoes: [...a.versoes, nova], versaoAtivaId: nova.id }) } }
+    })
+    agendarSalvarPersonagem(get, id)
+  },
+
+  renomearVersaoPersonagem(id, versaoId, nome) {
+    if (!get().personagens[id]) return
+    set((s) => {
+      const a = s.personagens[id]
+      return { personagens: { ...s.personagens, [id]: comNomeEspelho({ ...a, versoes: a.versoes.map((v) => (v.id === versaoId ? { ...v, nome } : v)) }) } }
+    })
+    agendarSalvarPersonagem(get, id)
+  },
+
+  removerVersaoPersonagem(id, versaoId) {
+    const p = get().personagens[id]
+    if (!p || p.versoes.length <= 1) return
+    const versoes = p.versoes.filter((v) => v.id !== versaoId)
+    const versaoAtivaId = p.versaoAtivaId === versaoId ? versoes[0].id : p.versaoAtivaId
+    set((s) => ({ personagens: { ...s.personagens, [id]: comNomeEspelho({ ...s.personagens[id], versoes, versaoAtivaId }) } }))
+    agendarSalvarPersonagem(get, id)
   },
 
   abrirPerfil(id) {
