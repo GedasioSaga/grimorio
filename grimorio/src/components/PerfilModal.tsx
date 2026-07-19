@@ -2,7 +2,6 @@ import { useEffect, useRef, useState } from 'react'
 import { open, message } from '@tauri-apps/plugin-dialog'
 import { convertFileSrc } from '@tauri-apps/api/core'
 import { useApp } from '../state/store'
-import type { Personagem } from '../lib/types'
 import { EditorTexto } from './EditorTexto'
 import { GaleriaPersonagem } from './GaleriaPersonagem'
 import { AbaVinculos } from './AbaVinculos'
@@ -12,6 +11,8 @@ import { contextoDeEntidade } from '../lib/contextoIA'
 import { htmlParaTexto, textoParaHtml } from '../lib/htmlTexto'
 import { promptDescreverImagemTopicos } from '../lib/promptsIA'
 import { carregarImagensIA } from '../lib/imagensIA'
+import { BarraVersoesPersonagem } from './BarraVersoesPersonagem'
+import { aplicarPatchPersonagem, versaoAtivaPersonagem, type PatchPersonagem } from '../lib/personagemVersao'
 
 const AUTOSAVE_DEBOUNCE_MS = 800
 
@@ -56,8 +57,9 @@ export function PerfilModal({ personagemId }: { personagemId: string }) {
   const [aba, setAba] = useState<Aba>('descricao')
 
   // ?v= força refetch quando o retrato é trocado pelo mesmo nome de arquivo (mesma extensão)
-  const retratoSrc = p?.retrato && vaultPath
-    ? `${convertFileSrc(`${vaultPath}/${p.retrato}`)}?v=${encodeURIComponent(p.modificadoEm)}`
+  const retratoRel = p ? versaoAtivaPersonagem(p).retrato : null
+  const retratoSrc = p && retratoRel && vaultPath
+    ? `${convertFileSrc(`${vaultPath}/${retratoRel}`)}?v=${encodeURIComponent(`${p.modificadoEm}:${p.versaoAtivaId}`)}`
     : null
 
   // imagem quebrada → volta pro fallback de inicial; reseta se o retrato mudar
@@ -78,8 +80,9 @@ export function PerfilModal({ personagemId }: { personagemId: string }) {
   }, [])
 
   if (!p) return null
+  const va = versaoAtivaPersonagem(p)
 
-  function agendarSalvar(mudancas: Partial<Personagem>) {
+  function agendarSalvar(mudancas: PatchPersonagem) {
     if (timer.current) clearTimeout(timer.current)
     timer.current = setTimeout(() => {
       timer.current = null
@@ -87,7 +90,7 @@ export function PerfilModal({ personagemId }: { personagemId: string }) {
     }, AUTOSAVE_DEBOUNCE_MS)
     // atualização otimista no cache (cartões refletem na hora)
     useApp.setState((s) => ({
-      personagens: { ...s.personagens, [personagemId]: { ...s.personagens[personagemId], ...mudancas } },
+      personagens: { ...s.personagens, [personagemId]: aplicarPatchPersonagem(s.personagens[personagemId], mudancas) },
     }))
   }
 
@@ -121,7 +124,7 @@ export function PerfilModal({ personagemId }: { personagemId: string }) {
       const ext = (nomeArquivo.includes('.') ? nomeArquivo.split('.').pop()! : 'png').toLowerCase()
       // assets/ da mesma campanha do personagem: campanhas/<slug>/personagens/x.json
       const dirCampanha = caminho.split('/').slice(0, 2).join('/')
-      const destinoRel = `${dirCampanha}/assets/retrato-${personagemId}.${ext}`
+      const destinoRel = `${dirCampanha}/assets/retrato-${personagemId}-${p.versaoAtivaId}.${ext}`
       await repo.copiarParaCofre(arquivo, destinoRel)
       // modificadoEm novo muda o ?v= do retratoSrc na hora (cache-bust otimista)
       agendarSalvar({ retrato: destinoRel, modificadoEm: new Date().toISOString() })
@@ -150,10 +153,10 @@ export function PerfilModal({ personagemId }: { personagemId: string }) {
               : <span>{p.nome.charAt(0).toUpperCase()}</span>}
           </div>
           <div className="perfil-titulos">
-            <input className="perfil-nome" value={p.nome}
+            <input className="perfil-nome" value={va.nome}
               onChange={(e) => agendarSalvar({ nome: e.target.value })} />
             <input className="perfil-resumo" placeholder="Resumo curto (aparece no cartão)"
-              value={p.resumo}
+              value={va.resumo}
               onChange={(e) => agendarSalvar({ resumo: e.target.value })} />
           </div>
           <AcoesIA
@@ -165,10 +168,11 @@ export function PerfilModal({ personagemId }: { personagemId: string }) {
             snapshot={() => {
               const s = useApp.getState()
               const ent = s.personagens[personagemId]
+              const vEnt = ent ? versaoAtivaPersonagem(ent) : null
               const ehTexto = aba !== 'imagens' && aba !== 'vinculos'
               return {
-                dadosBase: `# Personagem\nNome: ${ent?.nome ?? ''}\nResumo: ${ent?.resumo ?? ''}`,
-                textoAtual: ehTexto && ent ? htmlParaTexto((ent as unknown as Record<string, string>)[aba] ?? '') : '',
+                dadosBase: `# Personagem\nNome: ${ent?.nome ?? ''}\nResumo: ${vEnt?.resumo ?? ''}`,
+                textoAtual: ehTexto && vEnt ? htmlParaTexto((vEnt as unknown as Record<string, string>)[aba] ?? '') : '',
                 contexto: s.tree ? contextoDeEntidade(personagemId, { ...s, tree: s.tree }) : '',
               }
             }}
@@ -176,25 +180,27 @@ export function PerfilModal({ personagemId }: { personagemId: string }) {
               const s = useApp.getState()
               const ent = s.personagens[personagemId]
               if (!ent || !s.vaultPath) return []
-              const rels = ent.retrato ? [ent.retrato] : []
-              if (incluirGaleria) for (const img of ent.imagens ?? []) rels.push(img.rel)
+              const vEnt = versaoAtivaPersonagem(ent)
+              const rels = vEnt.retrato ? [vEnt.retrato] : []
+              if (incluirGaleria) for (const img of vEnt.imagens ?? []) rels.push(img.rel)
               return carregarImagensIA(s.vaultPath, rels)
             }}
             conteudoDoDestino={(dest) => {
               const ent = useApp.getState().personagens[personagemId]
-              return ent ? htmlParaTexto((ent as unknown as Record<string, string>)[dest] ?? '') : ''
+              return ent ? htmlParaTexto((versaoAtivaPersonagem(ent) as unknown as Record<string, string>)[dest] ?? '') : ''
             }}
             onInserir={(abaDestino, textoCru, modo) => {
               const html = textoParaHtml(textoCru)
               const atual = useApp.getState().personagens[personagemId]
-              const base = atual ? (atual[abaDestino as AbaTexto] ?? '') : ''
+              const base = atual ? (versaoAtivaPersonagem(atual) as unknown as Record<string, string>)[abaDestino] ?? '' : ''
               const novo = modo === 'substituir' ? html : base + html
-              agendarSalvar({ [abaDestino]: novo } as Partial<Personagem>)
+              agendarSalvar({ [abaDestino]: novo } as PatchPersonagem)
               setAba(abaDestino as Aba)
             }}
           />
           <button className="btn-icon perfil-fechar" onClick={() => void fechar()}>✕</button>
         </div>
+        <BarraVersoesPersonagem personagemId={personagemId} />
         <div className="perfil-abas">
           {ABAS.map((a) => (
             <button key={a.id} className={aba === a.id ? 'ativo' : ''} onClick={() => setAba(a.id)}>
@@ -205,16 +211,16 @@ export function PerfilModal({ personagemId }: { personagemId: string }) {
         {aba === 'imagens' ? (
           <GaleriaPersonagem
             personagemId={personagemId}
-            imagens={p.imagens}
+            imagens={va.imagens}
             onImagensChange={(imagens) => agendarSalvar({ imagens })}
           />
         ) : aba === 'vinculos' ? (
           <AbaVinculos entidadeTipo="personagem" entidadeId={personagemId} />
         ) : (
           <EditorTexto
-            key={aba}
-            value={p[aba as AbaTexto]}
-            onChange={(html) => agendarSalvar({ [aba]: html } as Partial<Personagem>)}
+            key={`${aba}:${p.versaoAtivaId}`}
+            value={va[aba as AbaTexto]}
+            onChange={(html) => agendarSalvar({ [aba]: html } as PatchPersonagem)}
           />
         )}
         {salvarErro && (
