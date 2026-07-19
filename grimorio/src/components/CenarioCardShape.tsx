@@ -17,6 +17,7 @@ import { CARD_ALTURA_PADRAO, CARD_LARGURA_PADRAO } from './CharacterCardShape'
 import { EditorInline } from './EditorInline'
 import { ControlesFonte } from './ControlesFonte'
 import { CardRetrato } from './CardRetrato'
+import { versaoAtiva, versaoVizinha } from '../lib/cenarioVersao'
 
 declare module '@tldraw/tlschema' {
   interface TLGlobalShapePropsMap {
@@ -168,6 +169,7 @@ function CartaoCenario({ shape }: { shape: CenarioCardShapeType }) {
   const c = useApp((s) => s.cenarios[cenarioId])
   const vaultPath = useApp((s) => s.vaultPath)
   const salvarParcial = useApp((s) => s.salvarCenarioParcial)
+  const definirVersaoAtiva = useApp((s) => s.definirVersaoAtiva)
   const editor = useEditor()
 
   // escala uniforme: largura por coluna vs base → multiplica toda fonte (--card-fe),
@@ -177,7 +179,8 @@ function CartaoCenario({ shape }: { shape: CenarioCardShapeType }) {
 
   const [editando, setEditando] = useState<'descricao' | ChaveSecao | null>(null)
 
-  const retratoSrc = c?.retrato && vaultPath ? convertFileSrc(`${vaultPath}/${c.retrato}`) : null
+  const retratoRel = c ? versaoAtiva(c).retrato : null
+  const retratoSrc = retratoRel && vaultPath ? convertFileSrc(`${vaultPath}/${retratoRel}`) : null
 
   // guard de scroll: rolar dentro de um painel não vira zoom/pan do canvas.
   // Um listener no card cobre todos os painéis (o nº deles é dinâmico agora).
@@ -221,6 +224,8 @@ function CartaoCenario({ shape }: { shape: CenarioCardShapeType }) {
       </HTMLContainer>
     )
   }
+
+  const va = versaoAtiva(c)
 
   // conteúdo de uma caixa (Descrição ou seção): editor inline, HTML salvo, ou vazio.
   // Função de render (NÃO componente): devolve a árvore JSX direto, então digitar
@@ -297,7 +302,7 @@ function CartaoCenario({ shape }: { shape: CenarioCardShapeType }) {
         </div>
         {expSec &&
           renderConteudo(
-            c[chave],
+            va[chave],
             editando === chave,
             (h) => salvarParcial(cenarioId, { [chave]: h }),
             semTexto,
@@ -322,7 +327,7 @@ function CartaoCenario({ shape }: { shape: CenarioCardShapeType }) {
           />
           <div className="char-card-texto">
             <div className="char-card-nome">{c.nome}</div>
-            {c.resumo ? <div className="char-card-resumo">{c.resumo}</div> : null}
+            {va.resumo ? <div className="char-card-resumo">{va.resumo}</div> : null}
             <ControlesFonte
               escala={fonteEscala}
               onEscala={(v) =>
@@ -333,6 +338,13 @@ function CartaoCenario({ shape }: { shape: CenarioCardShapeType }) {
                 })
               }
             />
+            {c.versoes.length >= 2 && (
+              <span className="card-versao-ctrl" onPointerDown={(e) => e.stopPropagation()}>
+                <button title="Versão anterior" onClick={() => definirVersaoAtiva(cenarioId, versaoVizinha(c, -1))}>‹</button>
+                <span className="card-versao-nome">{va.nome}</span>
+                <button title="Próxima versão" onClick={() => definirVersaoAtiva(cenarioId, versaoVizinha(c, 1))}>›</button>
+              </span>
+            )}
           </div>
         </div>
         {expandido && (
@@ -351,7 +363,7 @@ function CartaoCenario({ shape }: { shape: CenarioCardShapeType }) {
                   </button>
                 </div>
                 {renderConteudo(
-                  c.descricao,
+                  va.descricao,
                   editando === 'descricao',
                   (h) => salvarParcial(cenarioId, { descricao: h }),
                   'Sem descrição',
