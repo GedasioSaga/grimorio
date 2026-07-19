@@ -182,6 +182,13 @@ function CartaoCenario({ shape }: { shape: CenarioCardShapeType }) {
   const retratoRel = c ? versaoAtiva(c).retrato : null
   const retratoSrc = retratoRel && vaultPath ? convertFileSrc(`${vaultPath}/${retratoRel}`) : null
 
+  // trocar de versão fecha edição inline aberta: o EditorInline (Tiptap) não
+  // ressincroniza `value` depois de montar, então continuar digitando gravaria o
+  // buffer da versão anterior na versão nova.
+  useEffect(() => {
+    setEditando(null)
+  }, [c?.versaoAtivaId])
+
   // guard de scroll: rolar dentro de um painel não vira zoom/pan do canvas.
   // Um listener no card cobre todos os painéis (o nº deles é dinâmico agora).
   const cardRef = useRef<HTMLDivElement | null>(null)
