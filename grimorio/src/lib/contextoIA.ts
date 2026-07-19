@@ -1,7 +1,8 @@
-import type { CampanhaNode, Cenario, CenarioNode, PastaCenarioNode, VaultTree, Vinculo } from './types'
+import type { CampanhaNode, Cenario, CenarioNode, PastaCenarioNode, Personagem, VaultTree, Vinculo } from './types'
 import { campanhasDe, idsDaCampanha } from './vinculos'
 import { filtrarArvoreCenarios } from './filtroCampanha'
 import { resumoAtivo } from './cenarioVersao'
+import { resumoAtivoPersonagem } from './personagemVersao'
 
 export interface EntidadeCtx {
   nome: string
@@ -107,7 +108,7 @@ export function montarContextoCampanha(d: {
 /** Dados do store necessários para montar o contexto (estrutural: aceita Personagem/Cenário reais). */
 export interface DepsContexto {
   tree: VaultTree
-  personagens: Record<string, { id: string; nome: string; resumo: string }>
+  personagens: Record<string, Pick<Personagem, 'id' | 'nome' | 'versoes' | 'versaoAtivaId'>>
   cenarios: Record<string, Pick<Cenario, 'id' | 'nome' | 'versoes' | 'versaoAtivaId'>>
   vinculos: Vinculo[]
 }
@@ -122,7 +123,7 @@ export function montarContextoDaCampanha(camp: CampanhaNode, deps: DepsContexto)
   const ids = idsDaCampanha(vinculos, camp.id)
   const parts = Object.values(personagens)
     .filter((p) => ids.has(p.id))
-    .map((p) => ({ nome: p.nome, resumo: p.resumo }))
+    .map((p) => ({ nome: p.nome, resumo: resumoAtivoPersonagem(p) }))
   const linhasCen = achatarCenarios(filtrarArvoreCenarios(tree.cenarios, ids), (id) => resumoAtivo(cenarios[id]))
   const nomeDe = (id: string) => personagens[id]?.nome ?? cenarios[id]?.nome ?? null
   return montarContextoCampanha({

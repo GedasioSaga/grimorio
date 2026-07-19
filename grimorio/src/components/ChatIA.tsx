@@ -18,6 +18,7 @@ import {
 import { filtrarArvoreCenarios } from '../lib/filtroCampanha'
 import { idsDaCampanha } from '../lib/vinculos'
 import { resumoAtivo, versaoAtiva } from '../lib/cenarioVersao'
+import { resumoAtivoPersonagem, versaoAtivaPersonagem } from '../lib/personagemVersao'
 import { htmlParaTexto } from '../lib/htmlTexto'
 import { editorAtivo } from '../lib/canvasAtivo'
 import { mimeDaImagem, uint8ParaBase64 } from '../lib/bin'
@@ -123,7 +124,7 @@ export function ChatIA({
     const doElenco = new Map<string, { nome: string; resumo: string }>()
     for (const p of Object.values(personagens)) {
       const daCampanha = caminhosDaCampanha.has(caminhoPorId[p.id] ?? '')
-      if (ids.has(p.id) || daCampanha) doElenco.set(p.id, { nome: p.nome, resumo: p.resumo })
+      if (ids.has(p.id) || daCampanha) doElenco.set(p.id, { nome: p.nome, resumo: resumoAtivoPersonagem(p) })
     }
 
     const arvoreCen = ids.size > 0 ? filtrarArvoreCenarios(tree.cenarios, ids) : { ...tree.cenarios, cenarios: [], subpastas: [] }
@@ -169,9 +170,10 @@ export function ChatIA({
     if (shape.type === 'character-card') {
       const p = personagens[(shape as CharacterCardShapeType).props.personagemId]
       if (!p) { setErro('Entidade do card não encontrada.'); return }
+      const vp = versaoAtivaPersonagem(p)
       nome = p.nome
-      retratoRel = p.retrato
-      bloco = `Card anexado — Personagem: ${p.nome}\nResumo: ${p.resumo}\nDescrição: ${htmlParaTexto(p.descricao)}`
+      retratoRel = vp.retrato
+      bloco = `Card anexado — Personagem: ${p.nome}\nResumo: ${vp.resumo}\nDescrição: ${htmlParaTexto(vp.descricao)}`
     } else if (shape.type === 'cenario-card') {
       const c = cenarios[(shape as CenarioCardShapeType).props.cenarioId]
       if (!c) { setErro('Entidade do card não encontrada.'); return }

@@ -1,5 +1,6 @@
 import type { Cenario, Personagem } from './types'
 import { retratoAtivo } from './cenarioVersao'
+import { retratoAtivoPersonagem } from './personagemVersao'
 
 /** Forma mínima de shape inspecionada aqui (evita depender do tipo do tldraw). */
 export interface ShapeMinimo {
@@ -14,12 +15,12 @@ export interface ShapeMinimo {
  */
 export function relRetratoDoCard(
   shape: ShapeMinimo | null,
-  personagens: Record<string, Pick<Personagem, 'retrato'>>,
+  personagens: Record<string, Pick<Personagem, 'versoes' | 'versaoAtivaId'>>,
   cenarios: Record<string, Pick<Cenario, 'versoes' | 'versaoAtivaId'>>,
 ): string | null {
   if (!shape) return null
   if (shape.type === 'character-card') {
-    return personagens[shape.props.personagemId as string]?.retrato ?? null
+    return retratoAtivoPersonagem(personagens[shape.props.personagemId as string])
   }
   if (shape.type === 'cenario-card') {
     return retratoAtivo(cenarios[shape.props.cenarioId as string])
