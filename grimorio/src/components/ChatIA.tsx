@@ -17,6 +17,7 @@ import {
 } from '../lib/contextoIA'
 import { filtrarArvoreCenarios } from '../lib/filtroCampanha'
 import { idsDaCampanha } from '../lib/vinculos'
+import { resumoAtivo, versaoAtiva } from '../lib/cenarioVersao'
 import { htmlParaTexto } from '../lib/htmlTexto'
 import { editorAtivo } from '../lib/canvasAtivo'
 import { mimeDaImagem, uint8ParaBase64 } from '../lib/bin'
@@ -126,7 +127,7 @@ export function ChatIA({
     }
 
     const arvoreCen = ids.size > 0 ? filtrarArvoreCenarios(tree.cenarios, ids) : { ...tree.cenarios, cenarios: [], subpastas: [] }
-    const linhasCen = achatarCenarios(arvoreCen, (id) => cenarios[id]?.resumo ?? '')
+    const linhasCen = achatarCenarios(arvoreCen, (id) => resumoAtivo(cenarios[id]))
 
     // vínculos só do escopo da campanha (participantes + elenco da pasta): sem campanha → nenhum.
     // cenários incluídos só por herança de subárvore (filhos de um cenário participante) ficam
@@ -174,9 +175,10 @@ export function ChatIA({
     } else if (shape.type === 'cenario-card') {
       const c = cenarios[(shape as CenarioCardShapeType).props.cenarioId]
       if (!c) { setErro('Entidade do card não encontrada.'); return }
+      const v = versaoAtiva(c)
       nome = c.nome
-      retratoRel = c.retrato
-      bloco = `Card anexado — Cenário: ${c.nome}\nResumo: ${c.resumo}\nDescrição: ${htmlParaTexto(c.descricao)}`
+      retratoRel = v.retrato
+      bloco = `Card anexado — Cenário: ${c.nome}\nResumo: ${v.resumo}\nDescrição: ${htmlParaTexto(v.descricao)}`
     } else {
       setErro('Selecione um card de personagem ou cenário.')
       return

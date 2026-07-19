@@ -157,7 +157,7 @@ describe('montarContextoDaCampanha / wrappers', () => {
   const deps = {
     tree,
     personagens: { p1: { id: 'p1', nome: 'Alice', resumo: 'maga' } },
-    cenarios: { cen1: { id: 'cen1', nome: 'Oxonia', resumo: 'cidade' } },
+    cenarios: { cen1: { id: 'cen1', nome: 'Oxonia', versoes: [{ id: 'cv1', nome: 'Base', retrato: null, resumo: 'cidade', descricao: '', informacao: '', historia: '', eventos: '', itens: '', anotacoes: '', imagens: [] }], versaoAtivaId: 'cv1' } },
     vinculos: [participa('p1'), participa('cen1')],
   }
 
