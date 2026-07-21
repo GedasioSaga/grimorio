@@ -6,6 +6,7 @@ import { EditorTexto } from './EditorTexto'
 import { GaleriaPersonagem } from './GaleriaPersonagem'
 import { AbaVinculos } from './AbaVinculos'
 import { AcoesIA, type AcaoIA } from './AcoesIA'
+import { ChatEntidade } from './ChatEntidade'
 import { SYSTEM_MESTRE } from '../lib/chatIA'
 import { contextoDeEntidade } from '../lib/contextoIA'
 import { htmlParaTexto, textoParaHtml } from '../lib/htmlTexto'
@@ -55,6 +56,7 @@ export function PerfilModal({ personagemId }: { personagemId: string }) {
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [salvarErro, setSalvarErro] = useState<string | null>(null)
   const [aba, setAba] = useState<Aba>('descricao')
+  const [chatAberto, setChatAberto] = useState(false)
 
   // ?v= força refetch quando o retrato é trocado pelo mesmo nome de arquivo (mesma extensão)
   const retratoRel = p ? versaoAtivaPersonagem(p).retrato : null
@@ -198,6 +200,8 @@ export function PerfilModal({ personagemId }: { personagemId: string }) {
               setAba(abaDestino as Aba)
             }}
           />
+          <button className="btn-icon" title="Conversar com a IA sobre este personagem"
+            onClick={() => setChatAberto((v) => !v)}>💬</button>
           <button className="btn-icon perfil-fechar" onClick={() => void fechar()}>✕</button>
         </div>
         <BarraVersoesPersonagem personagemId={personagemId} />
@@ -227,6 +231,9 @@ export function PerfilModal({ personagemId }: { personagemId: string }) {
           <div className="perfil-salvar-erro">Falha ao salvar: {salvarErro}</div>
         )}
       </div>
+      {chatAberto && (
+        <ChatEntidade tipo="personagem" entidadeId={personagemId} onFechar={() => setChatAberto(false)} />
+      )}
     </div>
   )
 }

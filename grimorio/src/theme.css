@@ -420,6 +420,26 @@ button:hover { border-color: var(--dourado); color: var(--dourado-claro); }
 }
 .chat-ia-acoes { display: flex; gap: 6px; justify-content: flex-end; }
 
+/* ---- chat por entidade (drawer lateral sobre o modal) ---- */
+/* z-index acima do card (dentro do stacking context do .modal-overlay, z:1000) e
+   abaixo do preview da ✨ (.acoes-ia-overlay, z:1100), que continua sobrepondo. */
+.chat-drawer {
+  position: fixed; top: 0; right: 0; height: 100vh; width: min(360px, 92vw);
+  background: var(--fundo-painel); border-left: 1px solid var(--dourado);
+  display: flex; flex-direction: column; z-index: 1050;
+  box-shadow: -4px 0 16px rgba(0, 0, 0, 0.4);
+  animation: chat-drawer-entra 200ms ease;
+}
+@keyframes chat-drawer-entra { from { transform: translateX(100%); } to { transform: translateX(0); } }
+.chat-drawer-header {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  padding: 12px 14px; border-bottom: 1px solid var(--borda);
+}
+.chat-drawer-titulo {
+  font-family: var(--serif); color: var(--dourado-claro); font-size: 15px;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+
 /* ========== Escrita: rail de páginas ========== */
 .rail { width: 200px; min-width: 200px; overflow-y: auto; background: var(--fundo-painel); border-right: 1px solid var(--borda); }
 .rail-header {

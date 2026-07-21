@@ -8,6 +8,7 @@ import { EditorTexto } from './EditorTexto'
 import { GaleriaPersonagem } from './GaleriaPersonagem'
 import { AbaVinculos } from './AbaVinculos'
 import { AcoesIA, type AcaoIA } from './AcoesIA'
+import { ChatEntidade } from './ChatEntidade'
 import { SYSTEM_MESTRE } from '../lib/chatIA'
 import { contextoDeEntidade } from '../lib/contextoIA'
 import { htmlParaTexto, textoParaHtml } from '../lib/htmlTexto'
@@ -66,6 +67,7 @@ export function CenarioModal({ cenarioId }: { cenarioId: string }) {
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [salvarErro, setSalvarErro] = useState<string | null>(null)
   const [aba, setAba] = useState<Aba>('descricao')
+  const [chatAberto, setChatAberto] = useState(false)
 
   // ?v= força refetch quando o retrato troca mantendo o mesmo nome de arquivo
   const retratoRel = c ? versaoAtiva(c).retrato : null
@@ -205,6 +207,8 @@ export function CenarioModal({ cenarioId }: { cenarioId: string }) {
               setAba(abaDestino as Aba)
             }}
           />
+          <button className="btn-icon" title="Conversar com a IA sobre este cenário"
+            onClick={() => setChatAberto((v) => !v)}>💬</button>
           <button className="btn-icon perfil-fechar" onClick={() => void fechar()}>✕</button>
         </div>
         <BarraVersoes cenarioId={cenarioId} />
@@ -236,6 +240,9 @@ export function CenarioModal({ cenarioId }: { cenarioId: string }) {
           <div className="perfil-salvar-erro">Falha ao salvar: {salvarErro}</div>
         )}
       </div>
+      {chatAberto && (
+        <ChatEntidade tipo="cenario" entidadeId={cenarioId} onFechar={() => setChatAberto(false)} />
+      )}
     </div>
   )
 }
