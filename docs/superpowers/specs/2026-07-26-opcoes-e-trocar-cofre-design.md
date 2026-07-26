@@ -144,8 +144,10 @@ export type CofreRegistrado = { caminho: string; nome: string; ultimoAcesso: num
 - No boot, antes de restaurar o cofre: `cofres.migrarDoLegado()` e migração da chave global
   `grimorio.campanhaFiltro` para a chave por-cofre (lê a antiga, grava na nova, apaga a antiga).
 - Montar `<HostOpcoes />` junto dos outros hosts (`App.tsx:85-86`).
-- Quando `abrirCofre` do boot falha (`:31-32`), além de remover a chave, forçar re-render para
-  cair no `VaultPicker` em vez de ficar numa tela morta até o próximo start.
+- Quando `abrirCofre` do boot falha (`:31-32`), além de remover a chave, zerar `vaultPath` e
+  `repo`. Falha **antes** de `store.ts:176` já cai no `VaultPicker` sozinha; falha **depois**
+  (árvore ilegível, disco somindo no meio) deixa `vaultPath` válido com `tree` null, e a sidebar
+  fica presa em "Carregando…" (`Sidebar.tsx:68`) — tela morta, não crash.
 
 **`src/components/Sidebar.tsx`**
 
@@ -178,9 +180,9 @@ Nova função `classificarPasta(caminho, fs)`, usando `path_exists` (`lib.rs:115
 ## Tratamento de erro / borda
 
 - **Troca falhando no meio:** `abrirCofre` re-lança (`store.ts:181-183`). O `trocarCofre` captura,
-  deixa `erroCofre` preenchido e **não** remove o cofre anterior da lista de recentes.
-  Como os caches já foram limpos no passo 4, a UI cai na tela de erro do `VaultPicker`
-  (`VaultPicker.tsx:23`) — estado válido, não tela quebrada.
+  zera `vaultPath` e `repo`, e re-lança. `erroCofre` (setado por `abrirCofre`) sobrevive, a UI cai
+  no `VaultPicker` com a mensagem (`VaultPicker.tsx:23`), e o cofre anterior **continua** na lista
+  de recentes para você voltar em um clique.
 - **Cofre recente cujo caminho sumiu** (pen drive, pasta movida, OneDrive descarregado):
   ao clicar, `classificarPasta` devolve `'vazia'` para caminho inexistente — antes de abrir,
   checar `path_exists`; se falso, `message()` avisa e oferece tirar da lista.
