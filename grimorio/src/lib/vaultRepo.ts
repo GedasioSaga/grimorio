@@ -425,14 +425,17 @@ export class VaultRepo {
       }
     }
     let nome = dir.split('/').pop() ?? dir
+    let id: string | undefined
     try {
-      nome = (JSON.parse(await this.fs.readText(this.abs(`${dir}/pasta.json`))) as { nome: string }).nome
+      const meta = JSON.parse(await this.fs.readText(this.abs(`${dir}/pasta.json`))) as { nome: string; id?: string }
+      nome = meta.nome
+      id = meta.id
     } catch {
       // raiz ou pasta sem metadados
     }
     subpastas.sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'))
     cenarios.sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'))
-    return { slug: dir.split('/').pop() ?? dir, nome, caminho: dir, subpastas, cenarios }
+    return { slug: dir.split('/').pop() ?? dir, nome, id, caminho: dir, subpastas, cenarios }
   }
 
   /** Nó de um cenário: lê id/nome do cenario.json e varre sub-cenários (dirs com cenario.json). */
@@ -563,14 +566,17 @@ export class VaultRepo {
       }
     }
     let nome = dir.split('/').pop() ?? dir
+    let id: string | undefined
     try {
-      nome = (JSON.parse(await this.fs.readText(this.abs(`${dir}/pasta.json`))) as { nome: string }).nome
+      const meta = JSON.parse(await this.fs.readText(this.abs(`${dir}/pasta.json`))) as { nome: string; id?: string }
+      nome = meta.nome
+      id = meta.id
     } catch {
       // raiz ou pasta sem metadados
     }
     subpastas.sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'))
     personagens.sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'))
-    return { slug: dir.split('/').pop() ?? dir, nome, caminho: dir, subpastas, personagens }
+    return { slug: dir.split('/').pop() ?? dir, nome, id, caminho: dir, subpastas, personagens }
   }
 
   private async listarDirs(rel: string): Promise<{ name: string }[]> {

@@ -333,4 +333,35 @@ describe('id de pasta', () => {
     const meta = JSON.parse(fs.arquivos.get('C:/Cofre/personagens-soltos/solta/pasta.json')!)
     expect(meta.nome).toBe('solta')
   })
+
+  it('a árvore de personagens expõe o id da pasta', async () => {
+    const { id } = await repo.criarPasta('personagens-soltos', 'Vilões')
+    const raiz = await repo.montarArvorePastas('personagens-soltos')
+    expect(raiz.subpastas[0].id).toBe(id)
+    expect(raiz.id).toBeUndefined() // a raiz não tem pasta.json
+  })
+
+  it('a árvore de cenários expõe o id da pasta', async () => {
+    const { id } = await repo.criarPasta('cenarios', 'Reinos')
+    const raiz = await repo.montarArvoreCenarios()
+    expect(raiz.subpastas[0].id).toBe(id)
+  })
+
+  it('pasta legada sem id aparece na árvore com id undefined', async () => {
+    await fs.writeTextAtomic('C:/Cofre/personagens-soltos/legada/pasta.json', JSON.stringify({ nome: 'Legada', criadoEm: 'x' }))
+    const raiz = await repo.montarArvorePastas('personagens-soltos')
+    const legada = raiz.subpastas.find((s) => s.nome === 'Legada')
+    expect(legada).toBeDefined()
+    expect(legada!.id).toBeUndefined()
+  })
+
+  it('pasta com pasta.json corrompido (JSON inválido) ainda aparece na árvore, com nome do diretório e sem id', async () => {
+    // truncado por conflito de sync — mesmo cenário de garantirIdDePasta, mas aqui o read deve engolir o erro, não propagar
+    await fs.writeTextAtomic('C:/Cofre/personagens-soltos/corrompida/pasta.json', '{"nome": "Vilões Importantes", "criadoEm": "2020-01-0')
+    const raiz = await repo.montarArvorePastas('personagens-soltos')
+    const corrompida = raiz.subpastas.find((s) => s.slug === 'corrompida')
+    expect(corrompida).toBeDefined()
+    expect(corrompida!.nome).toBe('corrompida') // fallback pro nome do diretório
+    expect(corrompida!.id).toBeUndefined()
+  })
 })
