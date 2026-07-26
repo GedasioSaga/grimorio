@@ -30,6 +30,10 @@ export function chaveDeCofre(prefixo: string, caminho: string): string {
   return `${prefixo}.${normalizarCaminho(caminho)}`
 }
 
+function ehCofreRegistrado(c: any): c is CofreRegistrado {
+  return !!c && typeof c.caminho === 'string' && typeof c.nome === 'string' && typeof c.ultimoAcesso === 'number'
+}
+
 /** Cofres registrados, mais recente primeiro. JSON inválido ou entrada torta → descartado. */
 export function listar(): CofreRegistrado[] {
   try {
@@ -37,12 +41,7 @@ export function listar(): CofreRegistrado[] {
     if (!raw) return []
     const lista: unknown = JSON.parse(raw)
     if (!Array.isArray(lista)) return []
-    return lista
-      .filter((c): c is CofreRegistrado =>
-        !!c && typeof (c as CofreRegistrado).caminho === 'string' &&
-        typeof (c as CofreRegistrado).nome === 'string' &&
-        typeof (c as CofreRegistrado).ultimoAcesso === 'number')
-      .sort((a, b) => b.ultimoAcesso - a.ultimoAcesso)
+    return lista.filter(ehCofreRegistrado).sort((a, b) => b.ultimoAcesso - a.ultimoAcesso)
   } catch {
     return []
   }

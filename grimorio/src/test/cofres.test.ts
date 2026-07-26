@@ -52,6 +52,12 @@ describe('registro', () => {
     localStorage.setItem('grimorio.cofres', JSON.stringify([{ caminho: 'C:/a', nome: 'A', ultimoAcesso: 1 }, { lixo: true }]))
     expect(listar()).toHaveLength(1)
   })
+  it('entrada null não derruba a lista inteira', () => {
+    // sem o guarda de truthiness, c.caminho lançaria dentro do filter, o try/catch
+    // externo engoliria, e listar() devolveria [] — perdendo os cofres válidos junto
+    localStorage.setItem('grimorio.cofres', JSON.stringify([null, { caminho: 'C:/a/Alfa', nome: 'Alfa', ultimoAcesso: 1 }]))
+    expect(listar()).toEqual([{ caminho: 'C:/a/Alfa', nome: 'Alfa', ultimoAcesso: 1 }])
+  })
 })
 
 describe('migrações', () => {
