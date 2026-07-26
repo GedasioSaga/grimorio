@@ -6,7 +6,7 @@ import { coletarCenarioRefs } from '../lib/cenarioArvore'
 import { adicionarVinculo as adicionarVinculoPuro, removerVinculo as removerVinculoPuro, campanhasDe, participacaoDe, TIPO_PARTICIPA } from '../lib/vinculos'
 import { aplicarPatchCenario, versaoAtiva, type PatchCenario } from '../lib/cenarioVersao'
 import { aplicarPatchPersonagem, versaoAtivaPersonagem, comNomeEspelho, type PatchPersonagem } from '../lib/personagemVersao'
-import { CHAVE_FILTRO, chaveDeCofre, normalizarCaminho, registrar as registrarCofre } from '../lib/cofres'
+import { CHAVE_FILTRO, CHAVE_VAULT, chaveDeCofre, normalizarCaminho, registrar as registrarCofre } from '../lib/cofres'
 
 export type TipoAberto = 'sessao' | 'canvas' | 'escrita'
 
@@ -294,7 +294,7 @@ export const useApp = create<AppState>((set, get) => ({
       // guarda NORMALIZADO: o caminho é a identidade do cofre (registro + chaves por cofre).
       // Ambas as gravações vêm ANTES do set: se o localStorage estourar, vaultPath fica
       // null e o VaultPicker mostra o erroCofre — depois do set o app travaria em "Carregando…"
-      localStorage.setItem('grimorio.vault', norm)
+      localStorage.setItem(CHAVE_VAULT, norm)
       registrarCofre(norm)
       set({ vaultPath: norm, repo })
       await get().recarregarArvore()

@@ -5,7 +5,8 @@
  */
 
 const CHAVE_REGISTRO = 'grimorio.cofres'
-const CHAVE_VAULT = 'grimorio.vault'
+/** Chave do último cofre aberto. Exportada para store e App não duplicarem o literal. */
+export const CHAVE_VAULT = 'grimorio.vault'
 /** Prefixo da chave por cofre do filtro de campanha. Exportado para o store não duplicar o literal. */
 export const CHAVE_FILTRO = 'grimorio.campanhaFiltro'
 
