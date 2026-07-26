@@ -6,6 +6,7 @@ import { coletarCenarioRefs } from '../lib/cenarioArvore'
 import { adicionarVinculo as adicionarVinculoPuro, removerVinculo as removerVinculoPuro, campanhasDe, participacaoDe, TIPO_PARTICIPA } from '../lib/vinculos'
 import { aplicarPatchCenario, versaoAtiva, type PatchCenario } from '../lib/cenarioVersao'
 import { aplicarPatchPersonagem, versaoAtivaPersonagem, comNomeEspelho, type PatchPersonagem } from '../lib/personagemVersao'
+import { chaveDeCofre, normalizarCaminho, registrar as registrarCofre } from '../lib/cofres'
 
 export type TipoAberto = 'sessao' | 'canvas' | 'escrita'
 
@@ -169,11 +170,13 @@ export const useApp = create<AppState>((set, get) => ({
     if (get().carregando) return
     set({ carregando: true, erroCofre: null })
     try {
-      const norm = path.replace(/\\/g, '/')
+      const norm = normalizarCaminho(path)
       const repo = new VaultRepo(norm, tauriFs)
       await repo.inicializar()
-      localStorage.setItem('grimorio.vault', path)
+      // guarda NORMALIZADO: o caminho é a identidade do cofre (registro + chaves por cofre)
+      localStorage.setItem('grimorio.vault', norm)
       set({ vaultPath: norm, repo })
+      registrarCofre(norm)
       await get().recarregarArvore()
       await get().carregarPersonagens()
       await get().carregarCenarios()
@@ -367,11 +370,11 @@ export const useApp = create<AppState>((set, get) => ({
   },
 
   async carregarVinculos() {
-    const { repo, tree } = get()
+    const { repo, tree, vaultPath } = get()
     if (!repo) return
     const vinculos = await repo.lerVinculos()
-    // restaura o filtro salvo; campanha apagada → volta a "Todas"
-    const salvo = localStorage.getItem('grimorio.campanhaFiltro')
+    // restaura o filtro salvo DESTE cofre; campanha apagada → volta a "Todas"
+    const salvo = vaultPath ? localStorage.getItem(chaveDeCofre('grimorio.campanhaFiltro', vaultPath)) : null
     const valido = !!salvo && !!tree?.campanhas.some((c) => c.id === salvo)
     set({ vinculos, campanhaFiltro: valido ? salvo : null })
   },
@@ -404,8 +407,12 @@ export const useApp = create<AppState>((set, get) => ({
   },
 
   setCampanhaFiltro(id) {
-    if (id) localStorage.setItem('grimorio.campanhaFiltro', id)
-    else localStorage.removeItem('grimorio.campanhaFiltro')
+    const { vaultPath } = get()
+    if (vaultPath) {
+      const chave = chaveDeCofre('grimorio.campanhaFiltro', vaultPath)
+      if (id) localStorage.setItem(chave, id)
+      else localStorage.removeItem(chave)
+    }
     set({ campanhaFiltro: id })
   },
 
