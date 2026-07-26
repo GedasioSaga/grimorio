@@ -11,7 +11,6 @@ import { associarNaCriacao, editarCampanhas } from './dialogoCampanhas'
 import { PersonagensSoltos } from './PersonagensSoltos'
 import { CenariosSoltos } from './CenariosSoltos'
 import grimoireIcon from '../assets/grimoire.png'
-import { SeletorTema } from './SeletorTema'
 import { useOpcoes } from './Opcoes'
 
 async function comAvisoDeErro(acao: () => Promise<void>) {
@@ -94,7 +93,6 @@ export function Sidebar({ recolhida, onToggle }: { recolhida: boolean; onToggle:
       <div className="sidebar-header">
         <span className="sidebar-title"><img className="sidebar-logo" src={grimoireIcon} alt="" draggable={false} />Grimório</span>
         <span className="sidebar-header-acoes">
-          <SeletorTema />
           <button className="btn-icon" title="Opções" onClick={() => useOpcoes.getState().abrir()}>⚙️</button>
           <button className="btn-icon" title="Recolher barra" onClick={onToggle}>‹</button>
         </span>
