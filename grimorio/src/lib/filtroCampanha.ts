@@ -1,17 +1,31 @@
 import type { CenarioNode, ItemRef, PastaCenarioNode, PastaNode } from './types'
 
 /**
- * Filtra a árvore de personagens soltos: mantém personagens cujo CAMINHO está no
- * conjunto (o chamador converte ids → caminhos via caminhoPorId). Subpastas que
- * ficam sem nenhum personagem da campanha (nem em subpastas) são PODADAS — o filtro
- * só roda sob campanha ativa, e item criado sob filtro já é etiquetado, então sua
- * pasta permanece; some só o que não pertence à campanha.
+ * Filtra a árvore de personagens soltos.
+ *
+ * Pasta com campanha que casa (ou herdada do pai) libera a subárvore INTEIRA, mesmo
+ * vazia — é o que faz "pasta da campanha X" significar algo no filtro. Pasta sem
+ * campanha, ou de campanha que não casa, mantém a regra antiga: fica o que casa por
+ * caminho, e subpasta que esvazia é podada.
  */
-export function filtrarPastaPersonagens(pasta: PastaNode, caminhosPermitidos: Set<string>): PastaNode {
+export function filtrarPastaPersonagens(
+  pasta: PastaNode,
+  caminhosPermitidos: Set<string>,
+  idsPermitidos: Set<string> = new Set(),
+  herdado = false,
+): PastaNode {
+  const permitida = herdado || (!!pasta.id && idsPermitidos.has(pasta.id))
+  if (permitida) {
+    return {
+      ...pasta,
+      subpastas: pasta.subpastas.map((s) => filtrarPastaPersonagens(s, caminhosPermitidos, idsPermitidos, true)),
+    }
+  }
   const personagens = pasta.personagens.filter((p) => caminhosPermitidos.has(p.caminho))
   const subpastas = pasta.subpastas
-    .map((s) => filtrarPastaPersonagens(s, caminhosPermitidos))
-    .filter((s) => s.personagens.length > 0 || s.subpastas.length > 0)
+    .map((s) => filtrarPastaPersonagens(s, caminhosPermitidos, idsPermitidos, false))
+    // a 3ª condição segura a pasta etiquetada que está legitimamente vazia
+    .filter((s) => s.personagens.length > 0 || s.subpastas.length > 0 || (!!s.id && idsPermitidos.has(s.id)))
   return { ...pasta, personagens, subpastas }
 }
 
@@ -30,12 +44,20 @@ function filtrarCenarios(nos: CenarioNode[], ids: Set<string>, herdado: boolean)
   return out
 }
 
-/** Filtra cenários por ids permitidos (subárvore herda); pastas sem cenário da campanha são podadas. */
-export function filtrarArvoreCenarios(raiz: PastaCenarioNode, ids: Set<string>): PastaCenarioNode {
+/** Filtra cenários por ids permitidos (subárvore herda); ver regra de pasta em filtrarPastaPersonagens. */
+export function filtrarArvoreCenarios(
+  raiz: PastaCenarioNode,
+  ids: Set<string>,
+  herdado = false,
+): PastaCenarioNode {
+  const permitida = herdado || (!!raiz.id && ids.has(raiz.id))
+  if (permitida) {
+    return { ...raiz, subpastas: raiz.subpastas.map((s) => filtrarArvoreCenarios(s, ids, true)) }
+  }
   const cenarios = filtrarCenarios(raiz.cenarios, ids, false)
   const subpastas = raiz.subpastas
-    .map((s) => filtrarArvoreCenarios(s, ids))
-    .filter((s) => s.cenarios.length > 0 || s.subpastas.length > 0)
+    .map((s) => filtrarArvoreCenarios(s, ids, false))
+    .filter((s) => s.cenarios.length > 0 || s.subpastas.length > 0 || (!!s.id && ids.has(s.id)))
   return { ...raiz, cenarios, subpastas }
 }
 
