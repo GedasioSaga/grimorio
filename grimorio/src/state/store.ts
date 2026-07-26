@@ -6,7 +6,7 @@ import { coletarCenarioRefs } from '../lib/cenarioArvore'
 import { adicionarVinculo as adicionarVinculoPuro, removerVinculo as removerVinculoPuro, campanhasDe, participacaoDe, TIPO_PARTICIPA } from '../lib/vinculos'
 import { aplicarPatchCenario, versaoAtiva, type PatchCenario } from '../lib/cenarioVersao'
 import { aplicarPatchPersonagem, versaoAtivaPersonagem, comNomeEspelho, type PatchPersonagem } from '../lib/personagemVersao'
-import { chaveDeCofre, normalizarCaminho, registrar as registrarCofre } from '../lib/cofres'
+import { CHAVE_FILTRO, chaveDeCofre, normalizarCaminho, registrar as registrarCofre } from '../lib/cofres'
 
 export type TipoAberto = 'sessao' | 'canvas' | 'escrita'
 
@@ -173,10 +173,12 @@ export const useApp = create<AppState>((set, get) => ({
       const norm = normalizarCaminho(path)
       const repo = new VaultRepo(norm, tauriFs)
       await repo.inicializar()
-      // guarda NORMALIZADO: o caminho é a identidade do cofre (registro + chaves por cofre)
+      // guarda NORMALIZADO: o caminho é a identidade do cofre (registro + chaves por cofre).
+      // Ambas as gravações vêm ANTES do set: se o localStorage estourar, vaultPath fica
+      // null e o VaultPicker mostra o erroCofre — depois do set o app travaria em "Carregando…"
       localStorage.setItem('grimorio.vault', norm)
-      set({ vaultPath: norm, repo })
       registrarCofre(norm)
+      set({ vaultPath: norm, repo })
       await get().recarregarArvore()
       await get().carregarPersonagens()
       await get().carregarCenarios()
@@ -374,7 +376,7 @@ export const useApp = create<AppState>((set, get) => ({
     if (!repo) return
     const vinculos = await repo.lerVinculos()
     // restaura o filtro salvo DESTE cofre; campanha apagada → volta a "Todas"
-    const salvo = vaultPath ? localStorage.getItem(chaveDeCofre('grimorio.campanhaFiltro', vaultPath)) : null
+    const salvo = vaultPath ? localStorage.getItem(chaveDeCofre(CHAVE_FILTRO, vaultPath)) : null
     const valido = !!salvo && !!tree?.campanhas.some((c) => c.id === salvo)
     set({ vinculos, campanhaFiltro: valido ? salvo : null })
   },
@@ -409,7 +411,7 @@ export const useApp = create<AppState>((set, get) => ({
   setCampanhaFiltro(id) {
     const { vaultPath } = get()
     if (vaultPath) {
-      const chave = chaveDeCofre('grimorio.campanhaFiltro', vaultPath)
+      const chave = chaveDeCofre(CHAVE_FILTRO, vaultPath)
       if (id) localStorage.setItem(chave, id)
       else localStorage.removeItem(chave)
     }

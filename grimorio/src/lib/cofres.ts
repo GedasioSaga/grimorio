@@ -5,8 +5,9 @@
  */
 
 const CHAVE_REGISTRO = 'grimorio.cofres'
-const CHAVE_VAULT_LEGADO = 'grimorio.vault'
-const CHAVE_FILTRO_LEGADO = 'grimorio.campanhaFiltro'
+const CHAVE_VAULT = 'grimorio.vault'
+/** Prefixo da chave por cofre do filtro de campanha. Exportado para o store não duplicar o literal. */
+export const CHAVE_FILTRO = 'grimorio.campanhaFiltro'
 
 export interface CofreRegistrado {
   caminho: string
@@ -75,7 +76,7 @@ export function remover(caminho: string): CofreRegistrado[] {
 /** Semeia o registro a partir da chave antiga de cofre único. Idempotente. */
 export function migrarDoLegado(): void {
   if (localStorage.getItem(CHAVE_REGISTRO)) return
-  const antigo = localStorage.getItem(CHAVE_VAULT_LEGADO)
+  const antigo = localStorage.getItem(CHAVE_VAULT)
   if (antigo) registrar(antigo)
 }
 
@@ -85,9 +86,9 @@ export function migrarDoLegado(): void {
  * por-cofre. Idempotente.
  */
 export function migrarFiltroLegado(): void {
-  const antigo = localStorage.getItem(CHAVE_FILTRO_LEGADO)
+  const antigo = localStorage.getItem(CHAVE_FILTRO)
   if (!antigo) return
-  const vault = localStorage.getItem(CHAVE_VAULT_LEGADO)
-  if (vault) localStorage.setItem(chaveDeCofre(CHAVE_FILTRO_LEGADO, vault), antigo)
-  localStorage.removeItem(CHAVE_FILTRO_LEGADO)
+  const vault = localStorage.getItem(CHAVE_VAULT)
+  if (vault) localStorage.setItem(chaveDeCofre(CHAVE_FILTRO, vault), antigo)
+  localStorage.removeItem(CHAVE_FILTRO)
 }
