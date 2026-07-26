@@ -73,8 +73,10 @@ export function HostDialogos() {
           value={valor}
           onChange={(e) => setValor(e.target.value)}
           onKeyDown={(e) => {
-            if (e.key === 'Enter') { e.preventDefault(); responder(valor) }
-            else if (e.key === 'Escape') { e.preventDefault(); responder(null) }
+            // stopPropagation: sem ele o Escape sobe até a window, onde o HostOpcoes
+            // escuta, e um único toque cancelaria este diálogo E fecharia as Opções
+            if (e.key === 'Enter') { e.preventDefault(); e.stopPropagation(); responder(valor) }
+            else if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); responder(null) }
           }}
         />
         <div className="dialogo-botoes">
