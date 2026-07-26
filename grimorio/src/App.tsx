@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { useApp } from './state/store'
+import { estadoLimpoDeCofre, useApp } from './state/store'
 import { VaultPicker } from './components/VaultPicker'
 import { Sidebar } from './components/Sidebar'
 import { Workspace } from './components/Workspace'
@@ -37,12 +37,18 @@ export default function App() {
     migrarFiltroLegado()
     const salvo = localStorage.getItem(CHAVE_VAULT)
     if (!salvo) return
-    abrirCofre(salvo).catch(() => {
+    abrirCofre(salvo).catch((e) => {
       // falha DEPOIS de vaultPath setado (árvore ilegível, disco sumindo) deixaria a
       // sidebar presa em "Carregando…" com o erro inalcançável, porque erroCofre só é
       // renderizado no VaultPicker. Zerar leva de volta pra lá, com a mensagem.
-      localStorage.removeItem(CHAVE_VAULT)
-      useApp.setState({ vaultPath: null, repo: null })
+      // CHAVE_VAULT fica de propósito: este efeito roda uma vez, não há laço de boot a
+      // quebrar, e esquecer o cofre condenaria falha transitória (OneDrive ainda
+      // sincronizando, drive de rede não montado) a nunca mais ser tentada — o
+      // VaultPicker não lista recentes e as Opções só existem com um cofre aberto.
+      // estadoLimpoDeCofre: setState é merge raso, então tree/personagens/vinculos do
+      // cofre meio-carregado sobreviveriam ao vaultPath que os justificava.
+      const erro = useApp.getState().erroCofre ?? `Não foi possível abrir o cofre: ${e}`
+      useApp.setState({ ...estadoLimpoDeCofre(), vaultPath: null, repo: null, erroCofre: erro })
     })
   }, [abrirCofre])
 
@@ -96,9 +102,14 @@ export default function App() {
       </main>
       {perfilAbertoId && <PerfilModal key={perfilAbertoId} personagemId={perfilAbertoId} />}
       {cenarioAbertoId && <CenarioModal key={cenarioAbertoId} cenarioId={cenarioAbertoId} />}
-      <HostDialogos />
-      <HostDialogoCampanhas />
+      {/* ORDEM IMPORTA: todo host aqui é uma .modal-overlay com o MESMO z-index (1000),
+          então quem vem depois no DOM pinta por cima. HostDialogos fica por último
+          porque qualquer um dos outros abre um pedirTexto em cima de si (Opções →
+          "Renomear rótulo" / "Alterar chaves"); invertido, o prompt some atrás do
+          modal que o chamou, ainda focado — o usuário digita no escuro. */}
       <HostOpcoes />
+      <HostDialogoCampanhas />
+      <HostDialogos />
     </div>
   )
 }
