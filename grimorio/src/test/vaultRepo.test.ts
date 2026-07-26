@@ -10,6 +10,20 @@ beforeEach(() => {
   repo = new VaultRepo('C:/Cofre', fs)
 })
 
+/**
+ * Passa a contar escritas a partir de agora. Contar chamadas (e não comparar bytes)
+ * é o que pega uma regravação com conteúdo idêntico.
+ */
+function contarEscritas(alvo: ReturnType<typeof criarFakeFs>): { total: number } {
+  const contador = { total: 0 }
+  const original = alvo.writeTextAtomic
+  alvo.writeTextAtomic = async (caminho, conteudo) => {
+    contador.total++
+    await original(caminho, conteudo)
+  }
+  return contador
+}
+
 describe('VaultRepo', () => {
   it('inicializa estrutura do cofre', async () => {
     await repo.inicializar()
@@ -282,15 +296,35 @@ describe('id de pasta', () => {
     expect(meta.nome).toBe('Heróis')
   })
 
-  it('garantirIdDePasta gera uma vez e depois devolve o mesmo', async () => {
-    // pasta legada: pasta.json sem id
-    await fs.writeTextAtomic('C:/Cofre/personagens-soltos/antiga/pasta.json', JSON.stringify({ nome: 'Antiga', criadoEm: 'x' }))
+  it('garantirIdDePasta gera uma vez e depois devolve o mesmo, sem regravar', async () => {
+    // pasta legada: pasta.json sem id, com um campo que o app não conhece
+    await fs.writeTextAtomic('C:/Cofre/personagens-soltos/antiga/pasta.json', JSON.stringify({ nome: 'Antiga', criadoEm: 'x', campoLegado: 'preservar-me' }))
     const primeiro = await repo.garantirIdDePasta('personagens-soltos/antiga')
+    // com o id já no disco, a 2ª chamada não pode escrever (é o que mantém a migração lazy)
+    const escritas = contarEscritas(fs)
     const segundo = await repo.garantirIdDePasta('personagens-soltos/antiga')
+    expect(escritas.total).toBe(0)
     expect(primeiro).toBeTruthy()
     expect(segundo).toBe(primeiro)
     const meta = JSON.parse(fs.arquivos.get('C:/Cofre/personagens-soltos/antiga/pasta.json')!)
     expect(meta.nome).toBe('Antiga')
+    expect(meta.campoLegado).toBe('preservar-me')
+  })
+
+  it('garantirIdDePasta não regrava pasta recém-criada (já tem id)', async () => {
+    const { caminho, id } = await repo.criarPasta('personagens-soltos', 'Vilões')
+    const escritas = contarEscritas(fs)
+    expect(await repo.garantirIdDePasta(caminho)).toBe(id)
+    expect(escritas.total).toBe(0)
+  })
+
+  it('garantirIdDePasta não sobrescreve pasta.json ilegível', async () => {
+    // truncado por conflito de sync: o nome ainda é recuperável à mão, não pode ser destruído
+    const arquivo = 'C:/Cofre/personagens-soltos/corrompida/pasta.json'
+    const truncado = '{"nome": "Vilões Importantes", "criadoEm": "2020-01-0'
+    await fs.writeTextAtomic(arquivo, truncado)
+    await expect(repo.garantirIdDePasta('personagens-soltos/corrompida')).rejects.toThrow()
+    expect(fs.arquivos.get(arquivo)).toBe(truncado)
   })
 
   it('garantirIdDePasta funciona em pasta sem pasta.json', async () => {

@@ -177,7 +177,7 @@ export class VaultRepo {
   }
 
   /** Cria uma pasta (com pasta.json guardando nome e id) dentro de dirPai. */
-  async criarPasta(dirPai: string, nome: string): Promise<{ caminho: string; id: string }> {
+  async criarPasta(dirPai: string, nome: string): Promise<ItemRef & { id: string }> {
     let existentes: string[] = []
     try {
       existentes = (await this.fs.listDir(this.abs(dirPai))).filter((e) => e.isDir).map((e) => e.name)
@@ -187,7 +187,7 @@ export class VaultRepo {
     const id = novoId()
     await this.fs.mkdirAll(this.abs(dir))
     await this.fs.writeTextAtomic(this.abs(`${dir}/pasta.json`), JSON.stringify({ nome, id, criadoEm: agora() }, null, 2))
-    return { caminho: dir, id }
+    return { slug, nome, caminho: dir, id }
   }
 
   /**
@@ -198,13 +198,19 @@ export class VaultRepo {
   async garantirIdDePasta(dirDaPasta: string): Promise<string> {
     const caminho = `${dirDaPasta}/pasta.json`
     return this.naFila(caminho, async () => {
-      let obj: Record<string, unknown>
+      let bruto: string | null = null
       try {
-        obj = JSON.parse(await this.fs.readText(this.abs(caminho)))
+        bruto = await this.fs.readText(this.abs(caminho))
       } catch {
-        // pasta sem metadados (criada à mão no disco): nasce agora
-        obj = { nome: dirDaPasta.split('/').pop() ?? dirDaPasta, criadoEm: agora() }
+        // sem pasta.json: pasta criada à mão no disco, metadados nascem agora
       }
+      // pasta.json ilegível NÃO cai aqui de propósito: sobrescrever destruiria um nome
+      // possivelmente recuperável à mão (truncamento por conflito de sync, p.ex.).
+      // Deixar o parse lançar é o comportamento não-destrutivo, alinhado com
+      // montarArvorePastas, que cai no nome do diretório sem regravar nada.
+      const obj: Record<string, unknown> = bruto === null
+        ? { nome: dirDaPasta.split('/').pop() ?? dirDaPasta, criadoEm: agora() }
+        : JSON.parse(bruto)
       if (typeof obj.id === 'string' && obj.id) return obj.id
       const id = novoId()
       obj.id = id
