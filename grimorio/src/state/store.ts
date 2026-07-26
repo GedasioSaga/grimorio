@@ -134,6 +134,8 @@ interface AppState {
   setCampanhaFiltro(id: string | null): void
   /** Ajusta os vínculos 'participa' da entidade para bater EXATAMENTE com a lista (add os novos, remove os que saíram). */
   definirCampanhas(entidadeTipo: TipoEntidadeVinculo, entidadeId: string, campanhaIds: string[]): void
+  /** Executa AGORA as gravações debounced pendentes e cancela os timers. */
+  descarregarFilas(): Promise<void>
 }
 
 const SALVAR_VINCULOS_DEBOUNCE_MS = 800
@@ -147,6 +149,41 @@ function agendarSalvarVinculos(get: () => AppState) {
     // fire-and-forget: VaultRepo serializa escritas por caminho
     repo.salvarVinculos(vinculos).catch((e) => console.error('Falha ao salvar vínculos:', e))
   }, SALVAR_VINCULOS_DEBOUNCE_MS)
+}
+
+/**
+ * Executa AGORA todo debounce pendente e limpa os timers. Existe por causa de
+ * `agendarSalvarPersonagem`/`agendarSalvarCenario`, que re-resolvem o caminho no
+ * disparo: um timer que sobrevive à troca de cofre gravaria o conteúdo do cofre
+ * antigo no caminho do cofre novo.
+ */
+async function descarregarFilasPendentes(get: () => AppState): Promise<void> {
+  const idsPersonagens = [...timersSalvarParcial.keys()]
+  for (const t of timersSalvarParcial.values()) clearTimeout(t)
+  timersSalvarParcial.clear()
+
+  const idsCenarios = [...timersSalvarCenario.keys()]
+  for (const t of timersSalvarCenario.values()) clearTimeout(t)
+  timersSalvarCenario.clear()
+
+  const tinhaVinculos = timerSalvarVinculos !== null
+  if (timerSalvarVinculos) clearTimeout(timerSalvarVinculos)
+  timerSalvarVinculos = null
+
+  const { repo, personagens, caminhoPorId, cenarios, caminhoCenarioPorId, vinculos } = get()
+  if (!repo) return
+
+  for (const id of idsPersonagens) {
+    const caminho = caminhoPorId[id]
+    const p = personagens[id]
+    if (caminho && p) await repo.salvarPersonagem(caminho, { ...p }).catch((e) => console.error('Falha ao salvar personagem:', e))
+  }
+  for (const id of idsCenarios) {
+    const caminho = caminhoCenarioPorId[id]
+    const c = cenarios[id]
+    if (caminho && c) await repo.salvarCenario(caminho, { ...c }).catch((e) => console.error('Falha ao salvar cenário:', e))
+  }
+  if (tinhaVinculos) await repo.salvarVinculos(vinculos).catch((e) => console.error('Falha ao salvar vínculos:', e))
 }
 
 export const useApp = create<AppState>((set, get) => ({
@@ -437,5 +474,9 @@ export const useApp = create<AppState>((set, get) => ({
         tipo: TIPO_PARTICIPA, notas: '',
       })
     }
+  },
+
+  async descarregarFilas() {
+    await descarregarFilasPendentes(get)
   },
 }))
