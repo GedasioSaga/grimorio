@@ -27,4 +27,14 @@ describe('classificarPasta', () => {
     await fs.mkdirAll('C:/cofre/canvases-soltos')
     expect(await classificarPasta('C:\\cofre', fs)).toBe('cofre')
   })
+  it('trata erro do listDir como pasta vazia (caminho inexistente no Tauri real)', async () => {
+    // o fakeFs devolve [] para caminho inexistente, então nunca exercita o catch.
+    // Em produção quem responde é list_dir (src-tauri/src/lib.rs:57-69), que usa
+    // std::fs::read_dir e REJEITA em caminho inexistente — este stub reproduz isso.
+    const fsQueRejeita = {
+      ...criarFakeFs(),
+      listDir: async () => { throw new Error('O sistema não pode encontrar o caminho especificado. (os error 3)') },
+    }
+    expect(await classificarPasta('C:/sumiu', fsQueRejeita)).toBe('vazia')
+  })
 })
