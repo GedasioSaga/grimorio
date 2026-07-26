@@ -598,3 +598,54 @@ button:hover { border-color: var(--dourado); color: var(--dourado-claro); }
 .versao-pill-x:hover { opacity: 1; }
 .versao-add { border: 1px dashed currentColor; border-radius: 999px; background: transparent; cursor: pointer; color: inherit; padding: 3px 10px; font-size: 0.85em; opacity: 0.7; }
 .versao-add:hover { opacity: 1; }
+
+/* ---------- Modal de Opções ---------- */
+.opcoes-modal {
+  display: flex;
+  width: min(720px, 92vw);
+  max-height: 80vh;
+  background: var(--fundo-painel);
+  border: 1px solid var(--borda);
+  border-radius: 8px;
+  overflow: hidden;
+}
+.opcoes-abas {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 12px 8px;
+  min-width: 140px;
+  background: var(--fundo);
+  border-right: 1px solid var(--borda);
+}
+.opcoes-aba {
+  padding: 8px 12px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--texto-fraco);
+  text-align: left;
+  cursor: pointer;
+}
+.opcoes-aba:hover { background: var(--fundo-elevado); color: var(--texto); }
+.opcoes-aba.ativa { background: var(--fundo-elevado); color: var(--dourado); }
+.opcoes-conteudo { position: relative; flex: 1; padding: 16px 20px; overflow-y: auto; }
+.opcoes-fechar { position: absolute; top: 8px; right: 8px; }
+.opcoes-secao h3 { margin: 0 0 6px; font-size: 0.95rem; color: var(--dourado-claro); }
+.opcoes-secao h3 + h3 { margin-top: 20px; }
+.opcoes-caminho { margin: 0 0 4px; font-size: 0.85rem; color: var(--texto-fraco); word-break: break-all; }
+.opcoes-vazio { margin: 0 0 12px; font-size: 0.85rem; color: var(--texto-fraco); }
+.opcoes-lista { display: flex; flex-direction: column; gap: 6px; margin: 0 0 12px; padding: 0; list-style: none; }
+.opcoes-cofre-item {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 2px 8px;
+  padding: 8px 10px;
+  border: 1px solid var(--borda);
+  border-radius: 6px;
+}
+.opcoes-cofre-item.atual { border-color: var(--dourado); }
+.opcoes-cofre-nome { color: var(--texto); }
+.opcoes-cofre-caminho { grid-column: 1; font-size: 0.78rem; color: var(--texto-fraco); word-break: break-all; }
+.opcoes-cofre-acoes { grid-column: 2; grid-row: 1 / span 2; display: flex; align-items: center; gap: 4px; }
+.opcoes-acao { margin-right: 8px; }
