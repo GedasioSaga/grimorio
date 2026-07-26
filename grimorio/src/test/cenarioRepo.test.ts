@@ -111,7 +111,7 @@ describe('VaultRepo — árvore de cenários', () => {
   })
 
   it('monta pastas + cenários aninhados em profundidade', async () => {
-    const pasta = await repo.criarPasta('cenarios', 'Reino do Norte')
+    const { caminho: pasta } = await repo.criarPasta('cenarios', 'Reino do Norte')
     const cidade = await repo.criarCenarioEm(pasta, 'Cidade Alta')
     const bairro = await repo.criarCenarioEm(cidade.caminho, 'Bairro do Porto')
     await repo.criarCenarioEm(bairro.caminho, 'Casa do Ferreiro')
@@ -158,7 +158,7 @@ describe('VaultRepo — árvore de cenários', () => {
 
 describe('VaultRepo — moverCenario', () => {
   it('move cenário para outra pasta levando filhos', async () => {
-    const pasta = await repo.criarPasta('cenarios', 'Reino')
+    const { caminho: pasta } = await repo.criarPasta('cenarios', 'Reino')
     const cidade = await repo.criarCenarioEm('cenarios', 'Cidade')
     await repo.criarCenarioEm(cidade.caminho, 'Bairro')
     await repo.moverCenario(cidade.caminho, pasta)
@@ -192,7 +192,7 @@ describe('VaultRepo — moverCenario', () => {
   })
 
   it('colisão de slug no destino ganha sufixo', async () => {
-    const pasta = await repo.criarPasta('cenarios', 'Reino')
+    const { caminho: pasta } = await repo.criarPasta('cenarios', 'Reino')
     await repo.criarCenarioEm(pasta, 'Cidade')
     const solta = await repo.criarCenarioEm('cenarios', 'Cidade')
     await repo.moverCenario(solta.caminho, pasta)
@@ -203,7 +203,7 @@ describe('VaultRepo — moverCenario', () => {
     const cidade = await repo.criarCenarioEm('cenarios', 'Cidade')
     const c = await repo.lerCenario(cidade.caminho)
     await repo.salvarCenario(cidade.caminho, { ...c, personagens: ['p1'] })
-    const pasta = await repo.criarPasta('cenarios', 'Reino')
+    const { caminho: pasta } = await repo.criarPasta('cenarios', 'Reino')
     await repo.moverCenario(cidade.caminho, pasta)
     const relido = await repo.lerCenario('cenarios/reino/cidade')
     expect(relido.personagens).toEqual(['p1'])

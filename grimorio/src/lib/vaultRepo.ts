@@ -176,17 +176,42 @@ export class VaultRepo {
     return { slug, nome, caminho, id: doc.id }
   }
 
-  /** Cria uma pasta (com pasta.json guardando o nome) dentro de dirPai. Retorna o caminho da nova pasta. */
-  async criarPasta(dirPai: string, nome: string): Promise<string> {
+  /** Cria uma pasta (com pasta.json guardando nome e id) dentro de dirPai. */
+  async criarPasta(dirPai: string, nome: string): Promise<{ caminho: string; id: string }> {
     let existentes: string[] = []
     try {
       existentes = (await this.fs.listDir(this.abs(dirPai))).filter((e) => e.isDir).map((e) => e.name)
     } catch { /* dirPai ainda não existe */ }
     const slug = slugUnico(slugify(nome), existentes)
     const dir = `${dirPai}/${slug}`
+    const id = novoId()
     await this.fs.mkdirAll(this.abs(dir))
-    await this.fs.writeTextAtomic(this.abs(`${dir}/pasta.json`), JSON.stringify({ nome, criadoEm: agora() }, null, 2))
-    return dir
+    await this.fs.writeTextAtomic(this.abs(`${dir}/pasta.json`), JSON.stringify({ nome, id, criadoEm: agora() }, null, 2))
+    return { caminho: dir, id }
+  }
+
+  /**
+   * Id da pasta, gerando e gravando na primeira vez. Pastas criadas antes da
+   * campanha-em-pasta não têm id; em vez de gravar durante a varredura da árvore
+   * (leitura que escreve), o id nasce no primeiro uso — o clique no 🏷️.
+   */
+  async garantirIdDePasta(dirDaPasta: string): Promise<string> {
+    const caminho = `${dirDaPasta}/pasta.json`
+    return this.naFila(caminho, async () => {
+      let obj: Record<string, unknown>
+      try {
+        obj = JSON.parse(await this.fs.readText(this.abs(caminho)))
+      } catch {
+        // pasta sem metadados (criada à mão no disco): nasce agora
+        obj = { nome: dirDaPasta.split('/').pop() ?? dirDaPasta, criadoEm: agora() }
+      }
+      if (typeof obj.id === 'string' && obj.id) return obj.id
+      const id = novoId()
+      obj.id = id
+      obj.modificadoEm = agora()
+      await this.fs.writeTextAtomic(this.abs(caminho), JSON.stringify(obj, null, 2))
+      return id
+    })
   }
 
   /** Move o arquivo .json de um personagem para outro diretório (copiar + remover). No-op se já estiver lá. */

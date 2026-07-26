@@ -202,7 +202,7 @@ describe('VaultRepo', () => {
   // ---- personagens fora da campanha (pastas aninhadas) ----
 
   it('cria pasta com metadados e personagem dentro dela', async () => {
-    const dir = await repo.criarPasta('personagens-soltos', 'Vilões')
+    const { caminho: dir } = await repo.criarPasta('personagens-soltos', 'Vilões')
     expect(dir).toBe('personagens-soltos/viloes')
     expect(await fs.exists('C:/Cofre/personagens-soltos/viloes/pasta.json')).toBe(true)
     const ref = await repo.criarPersonagemEm(dir, 'Strahd')
@@ -211,7 +211,7 @@ describe('VaultRepo', () => {
   })
 
   it('monta a árvore de pastas aninhadas com nome vindo do pasta.json', async () => {
-    const vil = await repo.criarPasta('personagens-soltos', 'Vilões')
+    const { caminho: vil } = await repo.criarPasta('personagens-soltos', 'Vilões')
     await repo.criarPasta(vil, 'Chefes')
     await repo.criarPersonagemEm(vil, 'Strahd')
     await repo.criarPersonagemEm('personagens-soltos', 'Andarilho')
@@ -227,7 +227,7 @@ describe('VaultRepo', () => {
     const camp = await repo.criarCampanha('Teste')
     const ref = await repo.criarPersonagem(camp, 'Baldur')
     const idAntes = (await repo.lerPersonagem(ref.caminho)).id
-    const dir = await repo.criarPasta('personagens-soltos', 'Aliados')
+    const { caminho: dir } = await repo.criarPasta('personagens-soltos', 'Aliados')
     await repo.moverPersonagem(ref.caminho, dir)
     expect(await fs.exists(`C:/Cofre/${ref.caminho}`)).toBe(false)
     const p = await repo.lerPersonagem(`${dir}/baldur.json`)
@@ -261,5 +261,42 @@ describe('VaultRepo', () => {
     const ref = await repo.criarPersonagemEm('personagens-soltos', 'Solo')
     const raiz = await repo.montarArvorePastas('personagens-soltos')
     expect(raiz.personagens[0].id).toBe(ref.id)
+  })
+})
+
+describe('id de pasta', () => {
+  it('criarPasta grava um id e devolve caminho + id', async () => {
+    const { caminho, id } = await repo.criarPasta('personagens-soltos', 'Vilões')
+    expect(caminho).toBe('personagens-soltos/viloes')
+    expect(id).toBeTruthy()
+    const meta = JSON.parse(fs.arquivos.get(`C:/Cofre/${caminho}/pasta.json`)!)
+    expect(meta.id).toBe(id)
+    expect(meta.nome).toBe('Vilões')
+  })
+
+  it('renomearItem preserva o id da pasta', async () => {
+    const { caminho, id } = await repo.criarPasta('personagens-soltos', 'Vilões')
+    await repo.renomearItem(`${caminho}/pasta.json`, 'Heróis')
+    const meta = JSON.parse(fs.arquivos.get(`C:/Cofre/${caminho}/pasta.json`)!)
+    expect(meta.id).toBe(id)
+    expect(meta.nome).toBe('Heróis')
+  })
+
+  it('garantirIdDePasta gera uma vez e depois devolve o mesmo', async () => {
+    // pasta legada: pasta.json sem id
+    await fs.writeTextAtomic('C:/Cofre/personagens-soltos/antiga/pasta.json', JSON.stringify({ nome: 'Antiga', criadoEm: 'x' }))
+    const primeiro = await repo.garantirIdDePasta('personagens-soltos/antiga')
+    const segundo = await repo.garantirIdDePasta('personagens-soltos/antiga')
+    expect(primeiro).toBeTruthy()
+    expect(segundo).toBe(primeiro)
+    const meta = JSON.parse(fs.arquivos.get('C:/Cofre/personagens-soltos/antiga/pasta.json')!)
+    expect(meta.nome).toBe('Antiga')
+  })
+
+  it('garantirIdDePasta funciona em pasta sem pasta.json', async () => {
+    const id = await repo.garantirIdDePasta('personagens-soltos/solta')
+    expect(id).toBeTruthy()
+    const meta = JSON.parse(fs.arquivos.get('C:/Cofre/personagens-soltos/solta/pasta.json')!)
+    expect(meta.nome).toBe('solta')
   })
 })
