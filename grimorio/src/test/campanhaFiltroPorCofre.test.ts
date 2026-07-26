@@ -1,10 +1,12 @@
 // @vitest-environment jsdom
 import { beforeEach, describe, expect, it } from 'vitest'
 import { useApp } from '../state/store'
+import type { VaultRepo } from '../lib/vaultRepo'
+import type { CampanhaNode, VaultTree } from '../lib/types'
 
 beforeEach(() => {
   localStorage.clear()
-  useApp.setState({ vaultPath: null, campanhaFiltro: null })
+  useApp.setState({ vaultPath: null, campanhaFiltro: null, repo: null, tree: null })
 })
 
 describe('filtro de campanha por cofre', () => {
@@ -38,5 +40,44 @@ describe('filtro de campanha por cofre', () => {
     useApp.getState().setCampanhaFiltro('camp-1')
     expect(useApp.getState().campanhaFiltro).toBe('camp-1')
     expect(localStorage.length).toBe(0)
+  })
+})
+
+function campanha(id: string, nome: string): CampanhaNode {
+  return { id, slug: id, nome, sessoes: [], personagens: [], canvases: [], escritas: [] }
+}
+
+function arvore(campanhas: CampanhaNode[]): VaultTree {
+  return {
+    campanhas,
+    canvasesSoltos: [],
+    personagensSoltos: { slug: 'personagens-soltos', nome: 'personagens-soltos', caminho: 'personagens-soltos', subpastas: [], personagens: [] },
+    cenarios: { slug: 'cenarios', nome: 'cenarios', caminho: 'cenarios', subpastas: [], cenarios: [] },
+  }
+}
+
+/** Repo de mentira: carregarVinculos só precisa de lerVinculos. */
+const repoVazio = { lerVinculos: async () => [] } as unknown as VaultRepo
+
+describe('carregarVinculos restaura o filtro do cofre', () => {
+  it('restaura o filtro salvo DESTE cofre', async () => {
+    localStorage.setItem('grimorio.campanhaFiltro.C:/cofreA', 'camp-1')
+    useApp.setState({ repo: repoVazio, vaultPath: 'C:/cofreA', tree: arvore([campanha('camp-1', 'Campanha 1')]) })
+    await useApp.getState().carregarVinculos()
+    expect(useApp.getState().campanhaFiltro).toBe('camp-1')
+  })
+
+  it('descarta filtro cuja campanha não existe mais no cofre', async () => {
+    localStorage.setItem('grimorio.campanhaFiltro.C:/cofreA', 'camp-apagada')
+    useApp.setState({ repo: repoVazio, vaultPath: 'C:/cofreA', tree: arvore([campanha('camp-1', 'Campanha 1')]) })
+    await useApp.getState().carregarVinculos()
+    expect(useApp.getState().campanhaFiltro).toBeNull()
+  })
+
+  it('não lê a chave de outro cofre', async () => {
+    localStorage.setItem('grimorio.campanhaFiltro.C:/cofreB', 'camp-1')
+    useApp.setState({ repo: repoVazio, vaultPath: 'C:/cofreA', tree: arvore([campanha('camp-1', 'Campanha 1')]) })
+    await useApp.getState().carregarVinculos()
+    expect(useApp.getState().campanhaFiltro).toBeNull()
   })
 })
