@@ -71,9 +71,19 @@ export interface ItemAberto {
   nome: string
 }
 
-interface AppState {
-  vaultPath: string | null
-  repo: VaultRepo | null
+/** Gravação pendente que não chegou ao disco. `rotulo` é o nome que o usuário reconhece. */
+export interface FalhaDescarga {
+  caminho: string
+  /** Nome da entidade ('Bruce Wayne', 'Vínculos'); '' quando não dá pra saber. */
+  rotulo: string
+  erro: unknown
+}
+
+/**
+ * Campos que pertencem ao cofre aberto: somem junto com ele (ver `estadoLimpoDeCofre`).
+ * Campo novo aqui sem entrada lá = erro de compilação, que é o ponto de separar.
+ */
+interface EstadoDeCofre {
   tree: VaultTree | null
   aberto: ItemAberto | null
   /** slug da página ativa por caderno (chave = dir do caderno relativo ao cofre) */
@@ -92,8 +102,13 @@ interface AppState {
   vinculos: Vinculo[]
   /** id da campanha selecionada no filtro da sidebar; null = "Todas" */
   campanhaFiltro: string | null
-  carregando: boolean
   erroCofre: string | null
+}
+
+interface AppState extends EstadoDeCofre {
+  vaultPath: string | null
+  repo: VaultRepo | null
+  carregando: boolean
 
   abrirCofre(path: string): Promise<void>
   recarregarArvore(): Promise<void>
@@ -134,10 +149,22 @@ interface AppState {
   setCampanhaFiltro(id: string | null): void
   /** Ajusta os vínculos 'participa' da entidade para bater EXATAMENTE com a lista (add os novos, remove os que saíram). */
   definirCampanhas(entidadeTipo: TipoEntidadeVinculo, entidadeId: string, campanhaIds: string[]): void
-  /** Executa AGORA as gravações debounced pendentes e cancela os timers. Devolve os caminhos que falharam. */
-  descarregarFilas(): Promise<string[]>
-  /** Troca o cofre aberto sem reiniciar o app. `confirmarFalhas` decide se segue quando a descarga falha. */
-  trocarCofre(caminho: string, confirmarFalhas?: (falhas: string[]) => Promise<boolean>): Promise<void>
+  /**
+   * Executa AGORA as gravações debounced pendentes e cancela os timers. Devolve as que falharam.
+   *
+   * Cobre APENAS os timers de nível de módulo (personagens, cenários, vínculos).
+   * NotasEditor (via `NotebookRepo.salvarCorpo`), CanvasView e ChatIA gravam pelas
+   * closures deles e as falhas de lá nunca chegam em `falhas` — ou seja, o diálogo de
+   * confirmação pode dizer "tudo certo" com uma dessas tendo falhado.
+   */
+  descarregarFilas(): Promise<FalhaDescarga[]>
+  /**
+   * Troca o cofre aberto sem reiniciar o app. `confirmarFalhas` decide se segue quando a
+   * descarga falha — e PRECISA bloquear a interação enquanto estiver aberto (diálogo modal):
+   * uma edição feita enquanto ele está na tela entra num cache que já vai ser descartado.
+   * O store não tem como garantir isso, nem o tipo como expressar.
+   */
+  trocarCofre(caminho: string, confirmarFalhas: (falhas: FalhaDescarga[]) => Promise<boolean>): Promise<void>
 }
 
 const SALVAR_VINCULOS_DEBOUNCE_MS = 800
@@ -159,11 +186,13 @@ function agendarSalvarVinculos(get: () => AppState) {
  * disparo: um timer que sobrevive à troca de cofre gravaria o conteúdo do cofre
  * antigo no caminho do cofre novo.
  *
- * Devolve os caminhos que FALHARAM. Aqui a falha não pode ser engolida como no
- * fire-and-forget dos agendadores (lá a próxima edição reagenda): quem chama
- * descarta o cache logo depois, então gravação perdida é perda definitiva.
+ * Devolve o que FALHOU. Aqui a falha não pode ser engolida como no fire-and-forget
+ * dos agendadores (lá a próxima edição reagenda): quem chama descarta o cache logo
+ * depois, então gravação perdida é perda definitiva.
+ *
+ * Enxerga só os timers de nível de módulo — ver a docstring de `descarregarFilas`.
  */
-async function descarregarFilasPendentes(get: () => AppState): Promise<string[]> {
+async function descarregarFilasPendentes(get: () => AppState): Promise<FalhaDescarga[]> {
   const idsPersonagens = [...timersSalvarParcial.keys()]
   for (const t of timersSalvarParcial.values()) clearTimeout(t)
   timersSalvarParcial.clear()
@@ -176,30 +205,32 @@ async function descarregarFilasPendentes(get: () => AppState): Promise<string[]>
   if (timerSalvarVinculos) clearTimeout(timerSalvarVinculos)
   timerSalvarVinculos = null
 
-  const falhas: string[] = []
+  const falhas: FalhaDescarga[] = []
   const { repo, personagens, caminhoPorId, cenarios, caminhoCenarioPorId, vinculos } = get()
   if (!repo) return falhas
 
   for (const id of idsPersonagens) {
     const caminho = caminhoPorId[id]
     const p = personagens[id]
+    // pular NÃO é falha: sem caminho ou sem entidade = foi excluída antes do disparo
     if (!caminho || !p) continue
     try {
       await repo.salvarPersonagem(caminho, { ...p })
     } catch (e) {
       console.error('Falha ao salvar personagem:', e)
-      falhas.push(caminho)
+      falhas.push({ caminho, rotulo: p.nome, erro: e })
     }
   }
   for (const id of idsCenarios) {
     const caminho = caminhoCenarioPorId[id]
     const c = cenarios[id]
+    // pular NÃO é falha: sem caminho ou sem entidade = foi excluído antes do disparo
     if (!caminho || !c) continue
     try {
       await repo.salvarCenario(caminho, { ...c })
     } catch (e) {
       console.error('Falha ao salvar cenário:', e)
-      falhas.push(caminho)
+      falhas.push({ caminho, rotulo: c.nome, erro: e })
     }
   }
   if (tinhaVinculos) {
@@ -207,18 +238,19 @@ async function descarregarFilasPendentes(get: () => AppState): Promise<string[]>
       await repo.salvarVinculos(vinculos)
     } catch (e) {
       console.error('Falha ao salvar vínculos:', e)
-      falhas.push('vinculos.json')
+      falhas.push({ caminho: 'vinculos.json', rotulo: 'Vínculos', erro: e })
     }
   }
   return falhas
 }
 
 /**
- * Campos do state que pertencem ao cofre aberto. Ficam numa função só para que trocar
- * de cofre não deixe resíduo: id de campanha, id de personagem e caminho não têm
- * significado nenhum no cofre seguinte.
+ * Valor zerado de `EstadoDeCofre`: trocar de cofre não pode deixar resíduo, porque id de
+ * campanha, id de personagem e caminho não têm significado nenhum no cofre seguinte.
+ * O tipo de retorno explícito é o que segura a lista: campo novo em `EstadoDeCofre` sem
+ * entrada aqui não compila.
  */
-export function estadoLimpoDeCofre() {
+export function estadoLimpoDeCofre(): EstadoDeCofre {
   return {
     tree: null,
     aberto: null,
@@ -280,7 +312,12 @@ export const useApp = create<AppState>((set, get) => ({
   async recarregarArvore() {
     const { repo } = get()
     if (!repo) return
-    set({ tree: await repo.montarArvore() })
+    const tree = await repo.montarArvore()
+    // trocou de cofre no meio da montagem: esta árvore é de outro cofre. PerfilModal e
+    // CenarioModal chamam isto do flush de unmount sem ninguém dar await, e publicar a
+    // árvore antiga faria os caminhos relativos dela resolverem contra a raiz nova.
+    if (get().repo !== repo) return
+    set({ tree })
   },
 
   abrirItem(tipo, caminho, nome) {
@@ -531,30 +568,43 @@ export const useApp = create<AppState>((set, get) => ({
 
   async trocarCofre(caminho, confirmarFalhas) {
     const norm = normalizarCaminho(caminho)
-    if (norm === get().vaultPath) return
-    // 1) fecha TUDO que tem debounce próprio. descarregarFilas só enxerga os timers
-    //    de nível de módulo; PerfilModal, CenarioModal, NotasEditor e CanvasView
-    //    guardam o seu em timer.current, lendo repo/caminho de uma closure do React.
-    //    Desmontá-los antes é o que faz esses timers gravarem no cofre certo.
-    //    perfilAbertoId/cenarioAbertoId NÃO saem junto com `aberto`.
+    // `carregando` também barra: com uma abertura já em curso (a do boot, em App.tsx),
+    // o abrirCofre lá embaixo desistiria em silêncio DEPOIS de o cache ter sido zerado
+    if (norm === get().vaultPath || get().carregando) return
+    // 1) fecha TUDO que tem debounce próprio. descarregarFilas só enxerga os timers de
+    //    nível de módulo; PerfilModal, CenarioModal, NotasEditor e ChatIA guardam o seu
+    //    em timer.current e CanvasView num `let` do efeito — todos lendo repo/caminho de
+    //    uma closure do React. Desmontá-los antes é o que faz esses timers gravarem no
+    //    cofre certo. perfilAbertoId/cenarioAbertoId NÃO saem junto com `aberto`.
     //    Consequência aceita: se `confirmarFalhas` recusar lá embaixo, o que estava
     //    aberto na tela já foi fechado — só o cache de dados é que fica intacto.
     set({ aberto: null, perfilAbertoId: null, cenarioAbertoId: null })
-    // 2) cede um tick para o React processar os unmounts agendados acima
+    // 2) dá uma volta na fila de tarefas para o React processar os unmounts de cima.
+    //    É best-effort, não garantia: o cleanup de efeito passivo roda numa tarefa de
+    //    MessageChannel do Scheduler do React, e ela vir antes de um setTimeout(0)
+    //    clampeado é comportamento do Chromium/WebView2, não regra de especificação.
+    //    Se o cleanup chegar atrasado, PerfilModal lê a entidade do store na hora de
+    //    gravar, acha `undefined` depois do passo 5 e larga até 800 ms de edição.
     await new Promise((r) => setTimeout(r, 0))
     // 3) descarrega o que ainda aponta pro cofre atual
     const falhas = await get().descarregarFilas()
     // 4) gravação falhada é perda definitiva: o cache vai ser descartado no passo 5
-    if (falhas.length > 0 && confirmarFalhas && !(await confirmarFalhas(falhas))) return
+    if (falhas.length > 0 && !(await confirmarFalhas(falhas))) return
     // 5) zera o cache do cofre antigo
     set(estadoLimpoDeCofre())
     try {
       await get().abrirCofre(norm)
+      // abrirCofre DESISTE EM SILÊNCIO quando `carregando` já era true (guarda de
+      // reentrância). Sem esta checagem o cache fica zerado, nada lança, e a sidebar
+      // trava para sempre sem erro visível.
+      if (get().vaultPath !== norm) throw new Error('Troca cancelada: outra abertura em andamento')
     } catch (e) {
-      // sem isto o app fica com vaultPath válido e tree null: a sidebar trava em
-      // "Carregando…" (Sidebar.tsx:68) e o erroCofre, que só é renderizado no
-      // VaultPicker (VaultPicker.tsx:23), fica inalcançável.
-      set({ vaultPath: null, repo: null })
+      // sem isto o app fica com vaultPath válido e tree null: a Sidebar devolve
+      // "Carregando…" enquanto `tree` for null, e o erroCofre só é renderizado pelo
+      // VaultPicker — que por sua vez só aparece com vaultPath null.
+      // erroCofre pode estar vazio quando a desistência foi silenciosa (ninguém lançou
+      // lá dentro); sem preencher, o VaultPicker apareceria mudo.
+      set({ vaultPath: null, repo: null, erroCofre: get().erroCofre ?? `Não foi possível abrir o cofre: ${e}` })
       throw e
     }
   },

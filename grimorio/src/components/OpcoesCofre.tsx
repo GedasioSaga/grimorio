@@ -1,10 +1,22 @@
 import { useState } from 'react'
 import { ask, message, open } from '@tauri-apps/plugin-dialog'
-import { useApp } from '../state/store'
+import { useApp, type FalhaDescarga } from '../state/store'
 import { pedirTexto } from './dialogos'
 import { tauriFs } from '../lib/fsBridge'
 import { classificarPasta } from '../lib/classificarPasta'
 import { listar, normalizarCaminho, remover, renomear, type CofreRegistrado } from '../lib/cofres'
+
+/**
+ * Motivo legível de qualquer coisa que tenha sido lançada — é o que diz ao usuário se
+ * tentar de novo adianta (disco cheio) ou não (pasta somente leitura). O Tauri rejeita
+ * com string, o resto do app com Error, e nada impede um throw de outra coisa.
+ */
+function motivoDaFalha(erro: unknown): string {
+  if (typeof erro === 'string') return erro
+  if (erro instanceof Error) return erro.message
+  const texto = String(erro)
+  return texto === '[object Object]' ? 'motivo desconhecido' : texto
+}
 
 /** Aba Cofre: cofre atual, recentes e "abrir outro". */
 export function OpcoesCofre({ onFechar }: { onFechar: () => void }) {
@@ -15,11 +27,12 @@ export function OpcoesCofre({ onFechar }: { onFechar: () => void }) {
 
   /**
    * Gravação pendente que falhou é perda definitiva: trocarCofre descarta o cache
-   * logo em seguida. Sem este confirmador ele seguiria em silêncio.
+   * logo em seguida. `ask` é modal, o que também trava a edição enquanto decide.
    */
-  async function confirmarFalhas(falhas: string[]): Promise<boolean> {
+  async function confirmarFalhas(falhas: FalhaDescarga[]): Promise<boolean> {
+    const lista = falhas.map((f) => `• ${f.rotulo || f.caminho} — ${motivoDaFalha(f.erro)}`).join('\n')
     return ask(
-      `Não foi possível salvar ${falhas.length === 1 ? 'este arquivo' : 'estes arquivos'}:\n\n${falhas.join('\n')}\n\nTrocar de cofre agora perde essas alterações. Continuar?`,
+      `Não foi possível salvar ${falhas.length === 1 ? 'este item' : 'estes itens'}:\n\n${lista}\n\nTrocar de cofre agora perde essas alterações. Continuar?`,
       { title: 'Alterações não salvas', kind: 'warning' },
     )
   }

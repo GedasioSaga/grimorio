@@ -1,7 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { estadoLimpoDeCofre, useApp } from '../state/store'
+import { useApp, type FalhaDescarga } from '../state/store'
 import type { VaultRepo } from '../lib/vaultRepo'
 import type { Cenario, Personagem, Vinculo } from '../lib/types'
+
+const CAMINHO_BRUCE = 'personagens-soltos/bruce.json'
+const CAMINHO_CIDADE = 'cenarios/cidade-alta'
 
 function pers(): Personagem {
   return {
@@ -23,11 +26,12 @@ function vinc(id: string): Vinculo {
   return { id, deTipo: 'personagem', deId: 'p1', paraTipo: 'cenario', paraId: 'c1', tipo: 'mora em', notas: '', criadoEm: 'x' }
 }
 
-/** Repo de mentira que só anota onde gravaram. `falharEm` faz a gravação daquele caminho rejeitar. */
-function repoEspiao(falharEm?: string) {
+/** Repo de mentira que só anota onde gravaram. Os caminhos em `falharEm` rejeitam. */
+function repoEspiao(falharEm: string | string[] = []) {
+  const falhando = new Set(typeof falharEm === 'string' ? [falharEm] : falharEm)
   const gravacoes: { caminho: string; descricao: string }[] = []
   const anotar = (caminho: string, descricao: string) => {
-    if (caminho === falharEm) throw new Error(`disco cheio: ${caminho}`)
+    if (falhando.has(caminho)) throw new Error(`disco cheio: ${caminho}`)
     gravacoes.push({ caminho, descricao })
   }
   const repo = {
@@ -44,6 +48,11 @@ function repoEspiao(falharEm?: string) {
   return { repo: repo as unknown as VaultRepo, gravacoes }
 }
 
+/** Silencia o console.error dos caminhos de falha (restaurado no afterEach). */
+function calarConsole() {
+  vi.spyOn(console, 'error').mockImplementation(() => {})
+}
+
 beforeEach(() => {
   vi.useRealTimers()
   useApp.setState({
@@ -53,9 +62,12 @@ beforeEach(() => {
   })
 })
 
-// timer de módulo é global: sem desarmar, um pendente vaza pro teste seguinte
 afterEach(async () => {
   vi.useRealTimers()
+  // restaurado aqui e não no corpo do teste: assert que falha no meio não pode deixar
+  // o console.error mockado para o resto do arquivo
+  vi.restoreAllMocks()
+  // timer de módulo é global: sem desarmar, um pendente vaza pro teste seguinte
   useApp.setState({ repo: null })
   await useApp.getState().descarregarFilas()
 })
@@ -63,17 +75,17 @@ afterEach(async () => {
 describe('descarregarFilas', () => {
   it('grava o pendente no caminho do cofre ATUAL', async () => {
     const { repo, gravacoes } = repoEspiao()
-    useApp.setState({ repo, vaultPath: 'C:/cofreA', personagens: { p1: pers() }, caminhoPorId: { p1: 'personagens-soltos/bruce.json' } })
+    useApp.setState({ repo, vaultPath: 'C:/cofreA', personagens: { p1: pers() }, caminhoPorId: { p1: CAMINHO_BRUCE } })
 
     useApp.getState().salvarPersonagemParcial('p1', { descricao: '<p>rascunho</p>' })
     await useApp.getState().descarregarFilas()
 
-    expect(gravacoes).toEqual([{ caminho: 'personagens-soltos/bruce.json', descricao: '<p>rascunho</p>' }])
+    expect(gravacoes).toEqual([{ caminho: CAMINHO_BRUCE, descricao: '<p>rascunho</p>' }])
   })
 
   it('cancela o timer: nada é gravado de novo depois da descarga', async () => {
     const { repo, gravacoes } = repoEspiao()
-    useApp.setState({ repo, vaultPath: 'C:/cofreA', personagens: { p1: pers() }, caminhoPorId: { p1: 'personagens-soltos/bruce.json' } })
+    useApp.setState({ repo, vaultPath: 'C:/cofreA', personagens: { p1: pers() }, caminhoPorId: { p1: CAMINHO_BRUCE } })
 
     vi.useFakeTimers()
     useApp.getState().salvarPersonagemParcial('p1', { descricao: '<p>rascunho</p>' })
@@ -88,12 +100,12 @@ describe('descarregarFilas', () => {
 
   it('grava o cenário pendente no caminho do cofre ATUAL', async () => {
     const { repo, gravacoes } = repoEspiao()
-    useApp.setState({ repo, vaultPath: 'C:/cofreA', cenarios: { c1: cen() }, caminhoCenarioPorId: { c1: 'cenarios/cidade-alta' } })
+    useApp.setState({ repo, vaultPath: 'C:/cofreA', cenarios: { c1: cen() }, caminhoCenarioPorId: { c1: CAMINHO_CIDADE } })
 
     useApp.getState().salvarCenarioParcial('c1', { descricao: '<p>rascunho do cenário</p>' })
     await useApp.getState().descarregarFilas()
 
-    expect(gravacoes).toEqual([{ caminho: 'cenarios/cidade-alta', descricao: '<p>rascunho do cenário</p>' }])
+    expect(gravacoes).toEqual([{ caminho: CAMINHO_CIDADE, descricao: '<p>rascunho do cenário</p>' }])
   })
 
   it('grava os vínculos pendentes', async () => {
@@ -111,31 +123,60 @@ describe('descarregarFilas', () => {
     const { repo, gravacoes } = repoEspiao()
     useApp.setState({
       repo, vaultPath: 'C:/cofreA', vinculos: [vinc('x1')],
-      personagens: { p1: pers() }, caminhoPorId: { p1: 'personagens-soltos/bruce.json' },
+      personagens: { p1: pers() }, caminhoPorId: { p1: CAMINHO_BRUCE },
     })
 
     // só o personagem está sujo; vínculos vieram do disco e não foram tocados
     useApp.getState().salvarPersonagemParcial('p1', { descricao: '<p>rascunho</p>' })
     await useApp.getState().descarregarFilas()
 
-    expect(gravacoes.map((g) => g.caminho)).toEqual(['personagens-soltos/bruce.json'])
+    expect(gravacoes.map((g) => g.caminho)).toEqual([CAMINHO_BRUCE])
   })
 
-  it('devolve o caminho que falhou na gravação', async () => {
-    const { repo, gravacoes } = repoEspiao('personagens-soltos/bruce.json')
-    useApp.setState({ repo, vaultPath: 'C:/cofreA', personagens: { p1: pers() }, caminhoPorId: { p1: 'personagens-soltos/bruce.json' } })
-    const erro = vi.spyOn(console, 'error').mockImplementation(() => {})
+  it('devolve a falha em vez de engolir, e nada é gravado', async () => {
+    const { repo, gravacoes } = repoEspiao(CAMINHO_BRUCE)
+    useApp.setState({ repo, vaultPath: 'C:/cofreA', personagens: { p1: pers() }, caminhoPorId: { p1: CAMINHO_BRUCE } })
+    calarConsole()
 
     useApp.getState().salvarPersonagemParcial('p1', { descricao: '<p>rascunho</p>' })
-    await expect(useApp.getState().descarregarFilas()).resolves.toEqual(['personagens-soltos/bruce.json'])
+    const falhas = await useApp.getState().descarregarFilas()
 
+    expect(falhas.map((f) => f.caminho)).toEqual([CAMINHO_BRUCE])
     expect(gravacoes).toHaveLength(0)
-    erro.mockRestore()
+  })
+
+  it('cada falha carrega rótulo e erro, não só o caminho', async () => {
+    const { repo } = repoEspiao([CAMINHO_BRUCE, CAMINHO_CIDADE, 'vinculos.json'])
+    useApp.setState({
+      repo, vaultPath: 'C:/cofreA',
+      personagens: { p1: pers() }, caminhoPorId: { p1: CAMINHO_BRUCE },
+      cenarios: { c1: cen() }, caminhoCenarioPorId: { c1: CAMINHO_CIDADE },
+      vinculos: [],
+    })
+    calarConsole()
+
+    useApp.getState().salvarPersonagemParcial('p1', { descricao: '<p>a</p>' })
+    useApp.getState().salvarCenarioParcial('c1', { descricao: '<p>b</p>' })
+    useApp.getState().adicionarVinculo({ deTipo: 'personagem', deId: 'p1', paraTipo: 'cenario', paraId: 'c1', tipo: 'mora em', notas: '' })
+    const falhas = await useApp.getState().descarregarFilas()
+
+    // rótulo é o nome que o usuário reconhece, não o caminho do arquivo
+    expect(falhas.map((f) => [f.caminho, f.rotulo])).toEqual([
+      [CAMINHO_BRUCE, 'Bruce'],
+      [CAMINHO_CIDADE, 'Cidade Alta'],
+      ['vinculos.json', 'Vínculos'],
+    ])
+    // e o motivo chega inteiro, pro diálogo dizer se adianta tentar de novo
+    expect(falhas.map((f) => (f.erro as Error).message)).toEqual([
+      `disco cheio: ${CAMINHO_BRUCE}`,
+      `disco cheio: ${CAMINHO_CIDADE}`,
+      'disco cheio: vinculos.json',
+    ])
   })
 
   it('devolve [] quando tudo grava', async () => {
     const { repo } = repoEspiao()
-    useApp.setState({ repo, vaultPath: 'C:/cofreA', personagens: { p1: pers() }, caminhoPorId: { p1: 'personagens-soltos/bruce.json' } })
+    useApp.setState({ repo, vaultPath: 'C:/cofreA', personagens: { p1: pers() }, caminhoPorId: { p1: CAMINHO_BRUCE } })
 
     useApp.getState().salvarPersonagemParcial('p1', { descricao: '<p>rascunho</p>' })
     await expect(useApp.getState().descarregarFilas()).resolves.toEqual([])
@@ -146,76 +187,119 @@ describe('descarregarFilas', () => {
   })
 })
 
-describe('estadoLimpoDeCofre', () => {
-  it('zera exatamente os campos que pertencem ao cofre aberto', () => {
-    expect(estadoLimpoDeCofre()).toEqual({
-      tree: null,
-      aberto: null,
-      paginaAtivaPorCaderno: {},
-      personagens: {},
-      caminhoPorId: {},
-      perfilAbertoId: null,
-      cenarios: {},
-      caminhoCenarioPorId: {},
-      cenarioAbertoId: null,
-      vinculos: [],
-      campanhaFiltro: null,
-      erroCofre: null,
-    })
+describe('recarregarArvore', () => {
+  it('descarta a árvore quando o repo mudou durante a montagem', async () => {
+    const repoLento = {
+      async montarArvore() {
+        // a troca de cofre acontece enquanto o disco (OneDrive) ainda responde
+        useApp.setState({ repo: {} as VaultRepo })
+        return { campanhas: [], canvasesSoltos: [] }
+      },
+    } as unknown as VaultRepo
+    useApp.setState({ repo: repoLento, vaultPath: 'C:/cofreA' })
+
+    await useApp.getState().recarregarArvore()
+
+    expect(useApp.getState().tree).toBeNull()
   })
 })
 
 describe('trocarCofre', () => {
   it('trocar para o MESMO cofre (grafado com \\) é no-op: não descarrega nem limpa', async () => {
     const { repo, gravacoes } = repoEspiao()
-    useApp.setState({ repo, vaultPath: 'C:/cofreA', personagens: { p1: pers() }, caminhoPorId: { p1: 'personagens-soltos/bruce.json' } })
+    useApp.setState({ repo, vaultPath: 'C:/cofreA', personagens: { p1: pers() }, caminhoPorId: { p1: CAMINHO_BRUCE } })
 
     useApp.getState().salvarPersonagemParcial('p1', { descricao: '<p>rascunho</p>' })
-    await useApp.getState().trocarCofre('C:\\cofreA')
+    await useApp.getState().trocarCofre('C:\\cofreA', async () => true)
 
     expect(gravacoes).toEqual([])
     expect(useApp.getState().vaultPath).toBe('C:/cofreA')
     expect(useApp.getState().personagens.p1).toBeDefined()
-    expect(useApp.getState().caminhoPorId.p1).toBe('personagens-soltos/bruce.json')
+    expect(useApp.getState().caminhoPorId.p1).toBe(CAMINHO_BRUCE)
   })
 
-  it('descarga falhou e confirmarFalhas recusou: não troca de cofre nem descarta o cache', async () => {
-    const { repo } = repoEspiao('personagens-soltos/bruce.json')
-    useApp.setState({ repo, vaultPath: 'C:/cofreA', personagens: { p1: pers() }, caminhoPorId: { p1: 'personagens-soltos/bruce.json' } })
-    const erro = vi.spyOn(console, 'error').mockImplementation(() => {})
+  it('com outra abertura já em curso (carregando) nem começa: não descarrega nem limpa', async () => {
+    const { repo, gravacoes } = repoEspiao()
+    useApp.setState({ repo, vaultPath: 'C:/cofreA', carregando: true, personagens: { p1: pers() }, caminhoPorId: { p1: CAMINHO_BRUCE } })
 
     useApp.getState().salvarPersonagemParcial('p1', { descricao: '<p>rascunho</p>' })
-    const confirmar = vi.fn(async () => false)
-    await useApp.getState().trocarCofre('C:/cofreB', confirmar)
+    await useApp.getState().trocarCofre('C:/cofreB', async () => true)
 
-    expect(confirmar).toHaveBeenCalledWith(['personagens-soltos/bruce.json'])
+    expect(gravacoes).toEqual([])
     expect(useApp.getState().vaultPath).toBe('C:/cofreA')
-    expect(useApp.getState().repo).toBe(repo)
-    // o rascunho não gravado continua em memória, pronto pra nova tentativa
-    expect(useApp.getState().personagens.p1.versoes[0].descricao).toBe('<p>rascunho</p>')
-    expect(useApp.getState().caminhoPorId.p1).toBe('personagens-soltos/bruce.json')
-    erro.mockRestore()
+    expect(useApp.getState().personagens.p1).toBeDefined()
   })
 
-  it('descarga falhou mas confirmarFalhas aceitou: segue e descarta o cache', async () => {
-    const { repo } = repoEspiao('personagens-soltos/bruce.json')
-    useApp.setState({ repo, vaultPath: 'C:/cofreA', personagens: { p1: pers() }, caminhoPorId: { p1: 'personagens-soltos/bruce.json' } })
-    const erro = vi.spyOn(console, 'error').mockImplementation(() => {})
+  it('abertura cancelada em silêncio no meio do caminho: lança em vez de travar a sidebar', async () => {
+    const { repo } = repoEspiao(CAMINHO_BRUCE)
+    useApp.setState({ repo, vaultPath: 'C:/cofreA', personagens: { p1: pers() }, caminhoPorId: { p1: CAMINHO_BRUCE } })
+    calarConsole()
+    useApp.getState().salvarPersonagemParcial('p1', { descricao: '<p>rascunho</p>' })
+
+    // o diálogo de confirmação é modal e demorado: dá tempo de a abertura do boot
+    // (App.tsx) entrar em curso, e aí abrirCofre desiste em silêncio lá embaixo
+    const confirmarEEntrarEmCarga = async () => {
+      useApp.setState({ carregando: true })
+      return true
+    }
+    await expect(useApp.getState().trocarCofre('C:/cofreB', confirmarEEntrarEmCarga))
+      .rejects.toThrow(/outra abertura em andamento/)
+
+    // sem vaultPath a Sidebar não trava em "Carregando…" e o VaultPicker mostra o erro
+    expect(useApp.getState().vaultPath).toBeNull()
+    expect(useApp.getState().repo).toBeNull()
+    expect(useApp.getState().erroCofre).toBeTruthy()
+  })
+
+  it('descarrega o pendente no cofre ANTIGO antes de descartar o cache', async () => {
+    const { repo, gravacoes } = repoEspiao()
+    useApp.setState({ repo, vaultPath: 'C:/cofreA', personagens: { p1: pers() }, caminhoPorId: { p1: CAMINHO_BRUCE } })
 
     useApp.getState().salvarPersonagemParcial('p1', { descricao: '<p>rascunho</p>' })
     // abrirCofre monta um VaultRepo real sobre o tauriFs: fora do Tauri ele rejeita
     await expect(useApp.getState().trocarCofre('C:/cofreB', async () => true)).rejects.toBeDefined()
 
+    expect(gravacoes).toEqual([{ caminho: CAMINHO_BRUCE, descricao: '<p>rascunho</p>' }])
+    expect(useApp.getState().personagens).toEqual({})
+  })
+
+  it('descarga falhou e confirmarFalhas recusou: não troca de cofre nem descarta o cache', async () => {
+    const { repo } = repoEspiao(CAMINHO_BRUCE)
+    useApp.setState({ repo, vaultPath: 'C:/cofreA', personagens: { p1: pers() }, caminhoPorId: { p1: CAMINHO_BRUCE } })
+    calarConsole()
+
+    useApp.getState().salvarPersonagemParcial('p1', { descricao: '<p>rascunho</p>' })
+    let recebidas: FalhaDescarga[] = []
+    await useApp.getState().trocarCofre('C:/cofreB', async (falhas) => {
+      recebidas = falhas
+      return false
+    })
+
+    expect(recebidas.map((f) => f.caminho)).toEqual([CAMINHO_BRUCE])
+    expect(useApp.getState().vaultPath).toBe('C:/cofreA')
+    expect(useApp.getState().repo).toBe(repo)
+    // o rascunho não gravado continua em memória, pronto pra nova tentativa
+    expect(useApp.getState().personagens.p1.versoes[0].descricao).toBe('<p>rascunho</p>')
+    expect(useApp.getState().caminhoPorId.p1).toBe(CAMINHO_BRUCE)
+  })
+
+  it('descarga falhou mas confirmarFalhas aceitou: segue e descarta o cache', async () => {
+    const { repo } = repoEspiao(CAMINHO_BRUCE)
+    useApp.setState({ repo, vaultPath: 'C:/cofreA', personagens: { p1: pers() }, caminhoPorId: { p1: CAMINHO_BRUCE } })
+    calarConsole()
+
+    useApp.getState().salvarPersonagemParcial('p1', { descricao: '<p>rascunho</p>' })
+    await expect(useApp.getState().trocarCofre('C:/cofreB', async () => true)).rejects.toBeDefined()
+
     expect(useApp.getState().personagens).toEqual({})
     expect(useApp.getState().caminhoPorId).toEqual({})
-    erro.mockRestore()
   })
 
   it('abrirCofre falhou: derruba vaultPath/repo para o VaultPicker poder mostrar o erro', async () => {
     const { repo } = repoEspiao()
     useApp.setState({ repo, vaultPath: 'C:/cofreA' })
 
-    await expect(useApp.getState().trocarCofre('C:/cofreInexistente')).rejects.toBeDefined()
+    await expect(useApp.getState().trocarCofre('C:/cofreInexistente', async () => true)).rejects.toBeDefined()
 
     expect(useApp.getState().vaultPath).toBeNull()
     expect(useApp.getState().repo).toBeNull()
