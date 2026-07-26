@@ -237,7 +237,7 @@ export function migrarFiltroLegado(): void {
 - [ ] **Step 4: Rodar o teste e ver passar**
 
 Run: `npm test -- src/test/cofres.test.ts`
-Expected: PASS — 12 testes
+Expected: PASS — 13 testes
 
 - [ ] **Step 5: Commit**
 
@@ -670,10 +670,13 @@ E dentro do objeto do `create`, logo depois de `descarregarFilas`, adicionar:
   async trocarCofre(caminho) {
     const norm = normalizarCaminho(caminho)
     if (norm === get().vaultPath) return
-    // 1) fecha o item aberto: desmonta Workspace/CanvasView/NotasEditor para que os
-    //    autosaves locais deles gravem antes da troca
-    set({ aberto: null })
-    // 2) cede um tick para o React processar o unmount agendado pelo set acima
+    // 1) fecha TUDO que tem debounce próprio. `descarregarFilas` só enxerga os
+    //    timers de nível de módulo; PerfilModal (:87), CenarioModal, NotasEditor e
+    //    CanvasView guardam o seu em `timer.current`, lendo repo/caminho de uma
+    //    closure do React. Desmontá-los antes é o que faz esses timers gravarem
+    //    no cofre certo. perfilAbertoId/cenarioAbertoId NÃO saem com `aberto`.
+    set({ aberto: null, perfilAbertoId: null, cenarioAbertoId: null })
+    // 2) cede um tick para o React processar os unmounts agendados acima
     await new Promise((r) => setTimeout(r, 0))
     // 3) descarrega o que ainda aponta pro cofre atual
     await get().descarregarFilas()
@@ -1114,11 +1117,16 @@ Substituir o `useEffect` das linhas 30-33 por:
   }, [abrirCofre])
 ```
 
-E substituir a linha 86 (`<HostDialogoCampanhas />`) por:
+E montar `<HostOpcoes />` **antes** de `<HostDialogos />`:
 
 ```tsx
-      <HostDialogoCampanhas />
       <HostOpcoes />
+      {/* HostDialogos por último: todo modal chama pedirTexto, e .modal-overlay
+          é z-index 1000 em todos — entre irmãos empatados, quem vem depois
+          no DOM pinta por cima. Montado antes, o diálogo de texto aberto de
+          dentro das Opções fica escondido atrás delas. */}
+      <HostDialogos />
+      <HostDialogoCampanhas />
 ```
 
 - [ ] **Step 3: Verificar tipos e testes**

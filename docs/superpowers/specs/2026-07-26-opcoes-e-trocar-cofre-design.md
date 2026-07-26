@@ -229,6 +229,35 @@ Não há harness de UI automatizado no projeto — verificação do modal é man
 8. Manual — tema continua funcionando pela aba Aparência; chave do Gemini pode ser trocada
    pela aba IA e a IA continua respondendo.
 
+## Limitação conhecida — debounces de componente
+
+`descarregarFilas` só enxerga os timers de **nível de módulo** do `store.ts`. Cinco componentes
+guardam um debounce próprio em `timer.current`, invisível para ela. Eles se dividem em dois
+comportamentos, descobertos na revisão da Task 4:
+
+**Geração misturada (o caso perigoso).** `PerfilModal.tsx:99-102` e `CenarioModal.tsx:109-112`
+tomam `repo` e o mapa de caminhos da **closure de render** (`PerfilModal.tsx:52-53`,
+`CenarioModal.tsx:63-64`) mas leem a entidade **ao vivo** por `useApp.getState()`. Depois de uma
+troca de cofre, ou o id não existe no estado novo e a edição se perde em silêncio, ou — se os ids
+coincidirem, o que acontece em cofre copiado, porque os UUIDs vão junto — grava o conteúdo do
+cofre **novo** no caminho do cofre **antigo**, usando o repo antigo.
+
+**Geração única (tardio, porém correto).** `CanvasView.tsx:246-283`, `NotasEditor.tsx:106-114` e
+`ChatIA.tsx:91-93` capturam repo, caminho e conteúdo da mesma closure pré-troca; um disparo
+atrasado grava conteúdo antigo no cofre antigo. Tarde, não errado. `CanvasView` ainda se
+auto-corrige: as deps `[store, repo, caminho]` derrubam o efeito quando `repo` muda, e a limpeza
+grava.
+
+**Mitigação adotada:** `trocarCofre` fecha os dois modais (`perfilAbertoId`/`cenarioAbertoId`) e
+cede um tick ao React **antes** de descarregar, para que as limpezas de unmount deles
+(`PerfilModal.tsx:75-82`) gravem enquanto closure e store ainda são da mesma geração.
+
+**O que fica em aberto:** essas limpezas são `void salvar()` fire-and-forget, então `trocarCofre`
+não consegue aguardá-las. A correção durável é rotear as gravações dos dois modais por
+`salvarPersonagemParcial`/`salvarCenarioParcial`, para que caiam nos mapas de nível de módulo e
+`descarregarFilas` passe a cobrir tudo de fato. É refatoração fora do escopo desta spec —
+registrada aqui para não se perder.
+
 ## Fora de escopo (v1)
 
 - Abrir dois cofres ao mesmo tempo (janelas múltiplas).
