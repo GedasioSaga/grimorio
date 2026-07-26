@@ -2,6 +2,7 @@ import { create } from 'zustand'
 import { useEffect, useState } from 'react'
 import { useApp } from '../state/store'
 import type { TipoEntidadeVinculo } from '../lib/types'
+import { campanhasHerdadas, idsDePastas } from '../lib/herancaCampanha'
 import { campanhasDe } from '../lib/vinculos'
 
 // Diálogo in-app de multi-seleção de campanhas (checkboxes). Espelha dialogos.tsx: a
@@ -56,15 +57,27 @@ function opcoesDoCofre(): OpcaoCampanha[] {
 }
 
 /**
- * Associa uma entidade recém-criada a campanha(s): sob filtro ativo, etiqueta direto na
- * campanha filtrada (silencioso); em "Todas", abre o multi-seletor (0..N). Sem campanhas no
- * cofre não pergunta nada (nasce órfã).
+ * Associa uma entidade recém-criada a campanha(s). Precedência: filtro ativo ganha
+ * (intenção mais recente), depois a campanha herdada da pasta em que está sendo
+ * criada, e só então o multi-seletor. Sem campanhas no cofre não pergunta nada.
  */
-export async function associarNaCriacao(tipo: TipoEntidadeVinculo, id: string, nome: string): Promise<void> {
-  const { campanhaFiltro, definirCampanhas } = useApp.getState()
+export async function associarNaCriacao(
+  tipo: TipoEntidadeVinculo,
+  id: string,
+  nome: string,
+  dirPai?: string,
+): Promise<void> {
+  const { campanhaFiltro, definirCampanhas, tree, vinculos } = useApp.getState()
   if (campanhaFiltro) {
     definirCampanhas(tipo, id, [campanhaFiltro])
     return
+  }
+  if (dirPai) {
+    const herdadas = campanhasHerdadas(dirPai, idsDePastas(tree), vinculos)
+    if (herdadas.length > 0) {
+      definirCampanhas(tipo, id, herdadas)
+      return
+    }
   }
   const opcoes = opcoesDoCofre()
   if (opcoes.length === 0) return
