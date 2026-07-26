@@ -68,6 +68,9 @@ describe('carregarVinculos restaura o filtro do cofre', () => {
   })
 
   it('descarta filtro cuja campanha não existe mais no cofre', async () => {
+    // isca: 'camp-1' EXISTE na árvore, então uma leitura pela chave global restauraria
+    // o filtro e quebraria o toBeNull — sem a isca este teste passa mesmo com a regressão
+    localStorage.setItem('grimorio.campanhaFiltro', 'camp-1')
     localStorage.setItem('grimorio.campanhaFiltro.C:/cofreA', 'camp-apagada')
     useApp.setState({ repo: repoVazio, vaultPath: 'C:/cofreA', tree: arvore([campanha('camp-1', 'Campanha 1')]) })
     await useApp.getState().carregarVinculos()
@@ -75,6 +78,9 @@ describe('carregarVinculos restaura o filtro do cofre', () => {
   })
 
   it('não lê a chave de outro cofre', async () => {
+    // mesma isca: a chave global (legada) precisa ter valor válido, senão uma leitura
+    // global devolveria null e o teste passaria por engano
+    localStorage.setItem('grimorio.campanhaFiltro', 'camp-1')
     localStorage.setItem('grimorio.campanhaFiltro.C:/cofreB', 'camp-1')
     useApp.setState({ repo: repoVazio, vaultPath: 'C:/cofreA', tree: arvore([campanha('camp-1', 'Campanha 1')]) })
     await useApp.getState().carregarVinculos()
