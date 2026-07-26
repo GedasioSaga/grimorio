@@ -605,7 +605,7 @@ button:hover { border-color: var(--dourado); color: var(--dourado-claro); }
   width: min(720px, 92vw);
   max-height: 80vh;
   background: var(--fundo-painel);
-  border: 1px solid var(--borda);
+  border: 1px solid var(--dourado);
   border-radius: 8px;
   overflow: hidden;
 }
