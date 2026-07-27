@@ -43,6 +43,15 @@ const VENCEDOR_PROVISORIO = 'local' as const
  * Matriz para arquivos COM entrada no manifesto. Duas células parecem arbitrárias e não são:
  * `mudou × apagado` e `apagado × mudou` resolvem a favor da edição, porque recriar um arquivo
  * que o usuário acabou de editar é recuperável e descartar a edição dele em silêncio não é.
+ *
+ * `apagado × apagado` é `'nada'`, e é correto **porque o executor reescreve o manifesto inteiro a
+ * partir do estado pós-ciclo** (ver "Contrato do manifesto" no design), em vez de editá-lo entrada
+ * por entrada: o caminho simplesmente não aparece no manifesto novo. `Acao` não tem — e não
+ * precisa ter — um verbo `esquecer`.
+ *
+ * Se um dia o manifesto passar a ser editado incrementalmente, esta célula vira um bug: a entrada
+ * viveria para sempre e inflaria `total`, que é o denominador do freio. Vinte arquivos reais mais
+ * duzentos fantasmas fariam uma falha sistemática de vinte arquivos medir 9% e nunca frear.
  */
 const MATRIZ_CONHECIDO: Record<Lado, Record<Lado, Celula>> = {
   //         remoto igual        remoto mudou       remoto apagado
@@ -60,7 +69,13 @@ function ladoLocal(entrada: EntradaArquivo, atual: EstadoLocal | undefined): Lad
   return atual.hash === entrada.hash ? 'igual' : 'mudou'
 }
 
-/** Idem para o lado remoto. `removido` cobre deleção E perda de acesso — a API não distingue. */
+/**
+ * Idem para o lado remoto. `removido` cobre deleção E perda de acesso — a API não distingue.
+ *
+ * `fileId` fica fora da comparação de propósito: um arquivo recriado no Drive ganha id novo sem
+ * que o conteúdo tenha mudado, e como o manifesto é reescrito por inteiro a cada ciclo, o id novo
+ * já entra gravado no fim deste — não há nada a reconciliar.
+ */
 function ladoRemoto(entrada: EntradaArquivo, atual: EstadoRemoto | undefined): Lado {
   if (atual === undefined || atual.removido) return 'apagado'
   // `hash` é opcional no Drive. Quando falta, `versaoRemota` é exatamente o que o manifesto
@@ -156,6 +171,20 @@ function acaoSemManifesto(
  *
  * Devolve um plano ou uma recusa. A recusa é valor de retorno e não exceção porque o freio de
  * deleção em massa é decisão de produto (perguntar ao usuário), não erro de programa.
+ *
+ * **Pré-condição das chaves.** Os três conjuntos — manifesto, varredura local e listagem remota —
+ * têm de chegar na MESMA forma canônica de caminho: separador `/`, mesma caixa e mesma normalização
+ * Unicode. Garantir isso é de quem monta os mapas; aqui é comparação de string, e string não sabe
+ * que dois caminhos são o mesmo arquivo.
+ *
+ * Os dois jeitos de errar são concretos. O Windows trata caminho como caso-insensível e o Drive
+ * como caso-sensível, então o mesmo arquivo pode chegar `Gandalf.json` de um lado e `gandalf.json`
+ * do outro. E caminho em pt-BR aparece ora em NFC ora em NFD — `ç` como um code point, ou como `c`
+ * seguido de cedilha combinante.
+ *
+ * Em qualquer um dos dois, um arquivo vira DUAS chaves na união. A chave que o manifesto conhece
+ * não tem lado local e gera `apagarRemoto`; a outra não tem manifesto e gera `subir`. Nada se
+ * perde, mas o cofre troca de arquivo consigo mesmo a cada ciclo, para sempre.
  */
 export function reconciliar(
   manifesto: Manifesto,

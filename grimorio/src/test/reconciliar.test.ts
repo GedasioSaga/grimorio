@@ -189,6 +189,15 @@ describe('matriz B — arquivo SEM entrada no manifesto', () => {
   it('lápide remota de arquivo que este PC nunca teve → nenhuma ação', () => {
     expect(acoesDe(planejar({}, {}, { [N]: rem({ removido: true }) }))).toEqual([])
   })
+
+  it('local presente + lápide remota, sem manifesto → subir', () => {
+    // É a única ressurreição que escapa: o outro PC apagou o arquivo, e este nunca soube que ele
+    // existia (sem entrada no manifesto, não há deleção a reconhecer). `subir` mesmo assim, porque
+    // a alternativa é apagar um arquivo local presente com base numa lápide que não se correlaciona
+    // com nada — destruir dado a partir de ignorância é o pior dos dois erros.
+    expect(acoesDe(planejar({}, { [N]: loc() }, { [N]: rem({ removido: true }) })))
+      .toEqual([{ tipo: 'subir', caminho: N }])
+  })
 })
 
 describe('freio de deleção em massa', () => {
@@ -196,11 +205,18 @@ describe('freio de deleção em massa', () => {
     expect(planoQueApaga(10, 4)).toEqual({ ok: false, motivo: 'delecao-em-massa', apagaria: 6, total: 10 })
   })
 
-  it('a fronteira é > 50%: exatamente metade passa, um a mais recusa', () => {
+  it('a fronteira é > 50%: exatamente metade passa', () => {
     const metade = planoQueApaga(10, 5)
     expect(metade.ok).toBe(true)
     expect(acoesDe(metade)).toEqual(caminhos(10).slice(5).map((caminho) => ({ tipo: 'apagarRemoto', caminho })))
-    expect(planoQueApaga(10, 4).ok).toBe(false)
+  })
+
+  it('a listagem remota voltar vazia com o cofre local intacto dispara o freio', () => {
+    // A direção com perda irreversível: aqui o plano apagaria o cofre LOCAL do usuário. É o
+    // desenho do acidente — a listagem falha ou volta vazia, e o motor conclui que tudo sumiu.
+    const todos = caminhos(10)
+    const plano = planejar(entradasDe(todos), locaisDe(todos), {})
+    expect(plano).toEqual({ ok: false, motivo: 'delecao-em-massa', apagaria: 10, total: 10 })
   })
 
   it('com total ímpar, a metade fracionária também só recusa acima dela', () => {
@@ -220,7 +236,7 @@ describe('freio de deleção em massa', () => {
     expect(plano).toEqual({ ok: false, motivo: 'delecao-em-massa', apagaria: 6, total: 10 })
   })
 
-  it('manifesto vazio com arquivos dos dois lados não trava nem divide por zero', () => {
+  it('manifesto vazio: o primeiro sync roda inteiro, sem o freio olhar para ele', () => {
     const plano = planejar({}, locaisDe(['a.json']), remotosDe(['b.json']))
     expect(acoesDe(plano)).toEqual([
       { tipo: 'subir', caminho: 'a.json' },
@@ -242,6 +258,28 @@ describe('freio de deleção em massa — piso de 10 arquivos', () => {
 })
 
 describe('determinismo', () => {
+  // `á` em NFC é U+00E1, que em unidade de código UTF-16 vale 0xE1 — acima de 'b' (0x62) e de
+  // 'Z' (0x5A). Daí a ordem esperada Zelda < b < ácido. Uma collation pt-BR daria a ordem de
+  // dicionário (ácido < b < Zelda), que depende de ICU, locale e versão do runtime: exatamente o
+  // que este teste existe para proibir.
+  const ACENTUADO = 'ácido.json'
+  const ORDEM_POR_CODE_UNIT = ['Zelda.json', 'b.json', ACENTUADO]
+
+  it('a ordem é por unidade de código, não por collation de idioma', () => {
+    // Se algum editor renormalizar este arquivo para NFD, `á` vira 'a' + U+0301 e a ordem
+    // esperada deixa de valer. Esta linha falha primeiro, apontando a causa real.
+    expect(ACENTUADO.charCodeAt(0)).toBe(0xe1)
+
+    const todos = [ACENTUADO, 'b.json', 'Zelda.json']
+    const mudado = loc({ hash: HASH_LOCAL_NOVO })
+    const plano = planejar(
+      entradasDe(todos),
+      Object.fromEntries(todos.map((c) => [c, mudado])),
+      remotosDe(todos),
+    )
+    expect(acoesDe(plano).map((a) => a.caminho)).toEqual(ORDEM_POR_CODE_UNIT)
+  })
+
   it('mesma entrada → mesmo plano, na mesma ordem, qualquer que seja a ordem dos Maps', () => {
     const m = manifestoCom({ 'b.json': entrada(), 'a.json': entrada() })
     const mudado = loc({ hash: HASH_LOCAL_NOVO })
