@@ -226,13 +226,27 @@ Em `src/lib/vaultRepo.ts`, substituir o método `criarPasta` inteiro (linhas 179
   async garantirIdDePasta(dirDaPasta: string): Promise<string> {
     const caminho = `${dirDaPasta}/pasta.json`
     return this.naFila(caminho, async () => {
-      let obj: Record<string, unknown>
+      // ATENÇÃO: ler e parsear são passos SEPARADOS de propósito. Um try único
+      // em volta dos dois transforma "arquivo ilegível" em "arquivo ausente" e
+      // sobrescreve metadados recuperáveis — foi o bug desta task na v1.
+      let bruto: string | null = null
       try {
-        obj = JSON.parse(await this.fs.readText(this.abs(caminho)))
+        bruto = await this.fs.readText(this.abs(caminho))
       } catch {
-        // pasta sem metadados (criada à mão no disco): nasce agora
-        obj = { nome: dirDaPasta.split('/').pop() ?? dirDaPasta, criadoEm: agora() }
+        // sem pasta.json: pasta criada à mão no disco, metadados nascem agora
       }
+      const cru = bruto?.trim()
+      // ausente OU vazio: não há metadado a preservar. Conteúdo presente porém
+      // ilegível NÃO cai aqui — lança, para não destruir o que não entendeu.
+      const lido: unknown = cru ? JSON.parse(cru) : null
+      if (cru && (typeof lido !== 'object' || lido === null || Array.isArray(lido))) {
+        // array é o caso traiçoeiro: obj.id = x numa array vira propriedade
+        // não-índice, que JSON.stringify descarta — gravaria [] e devolveria
+        // um id que nunca chegou ao disco
+        throw new Error(`pasta.json inválido em ${dirDaPasta}`)
+      }
+      const obj: Record<string, unknown> = (lido as Record<string, unknown> | null)
+        ?? { nome: dirDaPasta.split('/').pop() || dirDaPasta, criadoEm: agora() }
       if (typeof obj.id === 'string' && obj.id) return obj.id
       const id = novoId()
       obj.id = id

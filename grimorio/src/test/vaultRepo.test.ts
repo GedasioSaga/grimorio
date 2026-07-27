@@ -325,7 +325,10 @@ describe('id de pasta', () => {
     const arquivo = 'C:/Cofre/personagens-soltos/corrompida/pasta.json'
     const truncado = '{"nome": "Vilões Importantes", "criadoEm": "2020-01-0'
     await fs.writeTextAtomic(arquivo, truncado)
-    await expect(repo.garantirIdDePasta('personagens-soltos/corrompida')).rejects.toThrow(SyntaxError)
+    // a mensagem precisa nomear o caminho: o SyntaxError do V8 traz posição, nunca o arquivo
+    await expect(repo.garantirIdDePasta('personagens-soltos/corrompida')).rejects.toThrow(
+      /pasta\.json ilegível em personagens-soltos\/corrompida/,
+    )
     expect(fs.arquivos.get(arquivo)).toBe(truncado)
   })
 

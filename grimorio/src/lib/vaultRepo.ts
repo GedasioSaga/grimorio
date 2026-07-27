@@ -216,7 +216,16 @@ export class VaultRepo {
       const cru = bruto?.trim()
       // ausente OU vazio: não há metadado a preservar, nasce agora.
       // Conteúdo presente porém ilegível NÃO cai aqui — ver comentário acima.
-      const lido: unknown = cru ? JSON.parse(cru) : null
+      let lido: unknown = null
+      if (cru) {
+        try {
+          lido = JSON.parse(cru)
+        } catch {
+          // o SyntaxError do V8 traz posição, nunca o arquivo — sem o caminho aqui,
+          // a mensagem que chega ao usuário não diz sequer que há um arquivo envolvido
+          throw new Error(`pasta.json ilegível em ${dirDaPasta}`)
+        }
+      }
       // JSON válido mas não-objeto (array, número, string, null) não tem onde guardar o id:
       // `obj.id = x` num array vira propriedade não-índice, que o stringify descarta —
       // o arquivo ficaria intacto e o id devolvido não existiria em lugar nenhum.

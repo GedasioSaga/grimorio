@@ -237,6 +237,31 @@ como hoje. Nenhuma migração é executada na abertura.
 7. Manual — abrir um cofre antigo e não mexer em nada: sidebar, filtro e podas idênticos ao de antes.
 8. Manual — excluir pasta com campanha: some da sidebar e `vinculos.json` não fica com órfão dela.
 
+## Dívida registrada — vínculos órfãos ao excluir pasta
+
+`removerVinculosDe` limpa apenas os vínculos da **própria pasta excluída**. Mas `excluirItem` faz
+`remove_path` recursivo: somem do disco também os personagens/cenários de dentro **e as subpastas
+aninhadas** — e estas últimas, desde esta spec, são entidades com id próprio. Os vínculos de
+campanha de tudo isso permanecem em `vinculos.json` apontando para ids que não existem mais.
+
+**Por que é tolerável hoje** (rastreado na revisão da B7, consumidor por consumidor):
+- filtro de campanha (`Sidebar.tsx`) usa `idsFiltro` só para filtrar a árvore real; linha vem da
+  árvore, nunca do conjunto de ids — id fantasma não vira linha na tela
+- aba de Vínculos (`AbaVinculos.tsx`) descarta explicitamente vínculo cuja outra ponta não resolve
+  para um nome ("órfãos somem da exibição")
+- contexto da IA (`contextoIA.ts`, `frasesDeVinculos`) faz `if (!de || !para) continue`
+
+**Por que não é seguro, e sim tolerável:** essas três proteções foram escritas de forma
+independente, cada uma resolvendo o problema no seu próprio ponto. Não existe invariante único
+garantindo que um id em `vinculos.json` corresponde a algo vivo. Qualquer consumidor novo — uma
+tela de depuração, um export, uma contagem por campanha — que não repita a mesma guarda faz os
+órfãos reaparecerem. Há também crescimento sem limite do arquivo ao longo do tempo: cosmético
+hoje, real algum dia.
+
+**Correção quando alguém encostar nisso:** ou `excluirItem` passa a devolver os ids de tudo que
+removeu (para o chamador limpar em bloco), ou entra uma varredura de reconciliação que remove
+vínculo cujas duas pontas não existem na árvore carregada.
+
 ## Risco estrutural — etiquetar uma raiz desliga o filtro da seção inteira
 
 `filtrarPastaPersonagens` e `filtrarArvoreCenarios` funcionam assim: pasta permitida devolve
