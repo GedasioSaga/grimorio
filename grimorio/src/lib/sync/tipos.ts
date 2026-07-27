@@ -42,6 +42,14 @@ export interface EstadoRemoto {
   hash?: string
   versao: string
   removido?: boolean
+  /**
+   * De que computador veio esta versão, do `appProperties` que cada upload grava
+   * (`ItemRemoto.deviceNome`). Só serve para ASSINAR a cópia de conflito quando é o lado remoto
+   * que perde — o manifesto conhece o nome desta máquina e de nenhuma outra, então sem isto
+   * metade das cópias ficaria sem dizer de onde veio a edição descartada. Ausente em arquivo
+   * enviado por uma versão do app anterior à propriedade; a reconciliação ignora este campo.
+   */
+  deviceNome?: string
 }
 
 export type Acao =
