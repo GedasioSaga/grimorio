@@ -120,7 +120,7 @@ export function caminhoAbsoluto(raizLocal: string, caminho: string): string {
  * devolveu — não com um `Error` —, então `erro.message` daria `undefined` em todo erro vindo
  * do Drive, que é justamente a categoria que o usuário precisa ler.
  */
-function mensagemDeErro(erro: unknown): string {
+export function mensagemDeErro(erro: unknown): string {
   return erro instanceof Error ? erro.message : String(erro)
 }
 
