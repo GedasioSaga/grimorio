@@ -28,6 +28,11 @@ const URL_USERINFO: &str = "https://www.googleapis.com/oauth2/v3/userinfo";
 /// para distribuir o app publicamente.
 const ESCOPO_DRIVE: &str = "https://www.googleapis.com/auth/drive.file";
 
+/// Sem estes o `URL_USERINFO` responde 401, e não 403 como se esperaria de permissão
+/// faltando — o endpoint é OIDC e trata token sem identidade como token inválido. São
+/// escopos *não sensíveis*: ao contrário do Drive completo, não pedem auditoria.
+const ESCOPOS_IDENTIDADE: [&str; 2] = ["openid", "email"];
+
 const SERVICO_KEYRING: &str = "grimorio";
 const ENTRADA_REFRESH: &str = "google-refresh";
 const ENTRADA_EMAIL: &str = "google-email";
@@ -314,6 +319,7 @@ async fn concluir_login(
     let (url_autorizacao, csrf) = cliente
         .authorize_url(CsrfToken::new_random)
         .add_scope(Scope::new(ESCOPO_DRIVE.to_string()))
+        .add_scopes(ESCOPOS_IDENTIDADE.map(|e| Scope::new(e.to_string())))
         // `offline` + `consent` juntos são o que garante um refresh token: sem `consent`,
         // um usuário que já autorizou antes recebe só o access token.
         .add_extra_param("access_type", "offline")
@@ -346,12 +352,15 @@ async fn concluir_login(
          Conta Google e tente entrar de novo"
             .to_string()
     })?;
-    gravar_segredo(ENTRADA_REFRESH, refresh.secret())?;
-
     let access_token = resposta.access_token().secret().clone();
     guardar_em_memoria(estado, &access_token, resposta.expires_in());
 
+    // O e-mail é buscado antes de qualquer gravação de propósito. Gravando o refresh
+    // primeiro, uma falha aqui — que é uma chamada de rede, a parte mais frágil do fluxo —
+    // deixava um token órfão no Gerenciador de Credenciais: a aba dizia "desconectado"
+    // porque lê o e-mail, enquanto o token continuava guardado sem conta correspondente.
     let email = buscar_email(&http, &access_token).await?;
+    gravar_segredo(ENTRADA_REFRESH, refresh.secret())?;
     gravar_segredo(ENTRADA_EMAIL, &email)?;
     Ok(email)
 }
