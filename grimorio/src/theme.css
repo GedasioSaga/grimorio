@@ -635,6 +635,7 @@ button:hover { border-color: var(--dourado); color: var(--dourado-claro); }
 .opcoes-secao h3 + h3 { margin-top: 20px; }
 .opcoes-caminho { margin: 0 0 4px; font-size: 0.85rem; color: var(--texto-fraco); word-break: break-all; }
 .opcoes-vazio { margin: 0 0 12px; font-size: 0.85rem; color: var(--texto-fraco); }
+.opcoes-erro { margin: 0 0 12px; font-size: 0.85rem; color: var(--erro); }
 .opcoes-lista { display: flex; flex-direction: column; gap: 6px; margin: 0 0 12px; padding: 0; list-style: none; }
 .opcoes-cofre-item {
   display: grid;
