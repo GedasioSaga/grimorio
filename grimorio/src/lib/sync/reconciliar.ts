@@ -21,6 +21,16 @@ type Celula = Acao['tipo'] | 'nada'
 const LIMITE_DELECAO = 0.5
 
 /**
+ * Abaixo deste número de arquivos conhecidos o freio nem engata. Percentual não significa nada
+ * com N pequeno: num cofre de dois arquivos, apagar um já é 50%. E um freio que grita à toa é um
+ * freio que o usuário aprende a confirmar sem ler — o que destrói o valor da única vez em que ele
+ * importa. O freio existe para pegar falha SISTEMÁTICA (uma pasta que não montou, um caminho que
+ * mudou) em que o motor conclui que tudo sumiu: num cofre de 500 arquivos isso é catastrófico e
+ * irrecuperável à mão; num de três, não é nem uma coisa nem outra.
+ */
+const MINIMO_PARA_FREIO = 10
+
+/**
  * Vencedor do conflito. **Provisório e deliberado:** `EstadoRemoto` não carrega nada
  * comparável ao `mtimeLocal` do manifesto, então decidir por data aqui dentro exigiria
  * inventar um dado que a função não recebe. Quem vai comparar tempos de modificação de
@@ -68,6 +78,43 @@ function montarAcao(celula: Celula, caminho: string): Acao | null {
 }
 
 /**
+ * Os dois lados mudaram desde o último sync, mas convergiram para conteúdo IDÊNTICO — a mesma
+ * edição feita nas duas máquinas, ou o mesmo arquivo chegando pelos dois caminhos. Não há nada
+ * a reconciliar, e uma cópia de conflito aqui seria puro lixo no cofre do usuário.
+ *
+ * Isto não fura a regra de ouro: a derivação contra o manifesto já aconteceu, e esta comparação
+ * só consegue REBAIXAR um conflito já detectado — nunca inventar uma mudança.
+ *
+ * Exige os DOIS hashes. Sem o hash remoto não há prova de convergência, e o caso cai no
+ * conflito normal.
+ */
+function convergiram(atualLocal: EstadoLocal | undefined, atualRemoto: EstadoRemoto | undefined): boolean {
+  if (atualLocal === undefined || atualRemoto === undefined || atualRemoto.hash === undefined) return false
+  return atualRemoto.hash === atualLocal.hash
+}
+
+/**
+ * Ação para um arquivo COM entrada no manifesto: deriva cada lado contra o manifesto e consulta
+ * a matriz — com uma única exceção, a convergência.
+ *
+ * `registrar` e não `'nada'` na convergência: sem atualizar o manifesto o hash gravado continua
+ * velho, este mesmo `mudou × mudou` se repetiria a cada ciclo e o cofre nunca assentaria.
+ */
+function acaoComManifesto(
+  caminho: string,
+  entrada: EntradaArquivo,
+  atualLocal: EstadoLocal | undefined,
+  atualRemoto: EstadoRemoto | undefined,
+): Acao | null {
+  const l = ladoLocal(entrada, atualLocal)
+  const r = ladoRemoto(entrada, atualRemoto)
+  if (l === 'mudou' && r === 'mudou' && convergiram(atualLocal, atualRemoto)) {
+    return { tipo: 'registrar', caminho }
+  }
+  return montarAcao(MATRIZ_CONHECIDO[l][r], caminho)
+}
+
+/**
  * Arquivos SEM entrada no manifesto: primeiro sync, ou criados depois do último ciclo.
  *
  * Aqui — e só aqui — os dois lados se comparam diretamente, porque não existe manifesto contra
@@ -89,6 +136,14 @@ function acaoSemManifesto(
   // Sem `hash` do Drive não dá para PROVAR que os dois lados são iguais, e supor que são
   // sobrescreveria uma das versões em silêncio. Conflito é a suposição recuperável.
   if (vivoRemoto.hash === undefined) return { tipo: 'conflito', caminho, vencedor: VENCEDOR_PROVISORIO }
+  // CONTRATO, para quem for escrever o cliente do Drive: `EstadoRemoto.hash` tem de vir de
+  // `sha256Checksum`, NUNCA de `md5Checksum`. O lado local é SHA-256 (`hash_arquivo`, em Rust), e
+  // md5 é o campo que todo mundo conhece — é a escolha errada que a mão vai fazer sozinha. Com
+  // algoritmos diferentes esta igualdade nunca dá verdadeira, o `registrar` abaixo nunca dispara,
+  // e parear um segundo PC que já tem uma cópia idêntica gera conflito em TODOS os arquivos.
+  // (Arquivos nativos do Google Docs não têm checksum nenhum; não é o caso aqui, porque o cofre
+  // só guarda JSON e imagem.)
+  //
   // Hash igual é o caso que impede um cofre inteiro de subir de novo quando o usuário pareia um
   // segundo PC que já tem uma cópia idêntica: só adota no manifesto, sem subir nem baixar.
   return vivoRemoto.hash === atualLocal.hash
@@ -123,7 +178,7 @@ export function reconciliar(
     const atualRemoto = remoto.get(caminho)
     const acao = entrada === undefined
       ? acaoSemManifesto(caminho, atualLocal, atualRemoto)
-      : montarAcao(MATRIZ_CONHECIDO[ladoLocal(entrada, atualLocal)][ladoRemoto(entrada, atualRemoto)], caminho)
+      : acaoComManifesto(caminho, entrada, atualLocal, atualRemoto)
     if (acao !== null) acoes.push(acao)
   }
 
@@ -132,8 +187,8 @@ export function reconciliar(
   // que mudou, e o motor conclui que tudo foi apagado.
   const total = conhecidos.size
   const apagaria = acoes.filter((a) => a.tipo === 'apagarLocal' || a.tipo === 'apagarRemoto').length
-  // Manifesto vazio é primeiro sync: não há base contra a qual medir "metade".
-  if (total > 0 && apagaria > total * LIMITE_DELECAO) {
+  // O piso também cobre o manifesto vazio (primeiro sync): sem base, nada a medir e nada a dividir.
+  if (total >= MINIMO_PARA_FREIO && apagaria > total * LIMITE_DELECAO) {
     return { ok: false, motivo: 'delecao-em-massa', apagaria, total }
   }
   return { ok: true, acoes }
