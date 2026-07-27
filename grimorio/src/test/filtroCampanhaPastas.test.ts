@@ -56,6 +56,19 @@ describe('filtro de personagens com pasta etiquetada', () => {
     const out = filtrarPastaPersonagens(raiz, new Set(), new Set(['pasta-viloes']))
     expect(out.subpastas).toHaveLength(0)
   })
+
+  it('RAIZ etiquetada não desliga o filtro da seção', () => {
+    const raiz = pasta('personagens-soltos', 'pasta-raiz', [
+      item('Frodo', 'personagens-soltos/frodo.json'),
+      item('Sauron', 'personagens-soltos/sauron.json'),
+    ])
+    const out = filtrarPastaPersonagens(
+      raiz,
+      new Set(['personagens-soltos/frodo.json']),
+      new Set(['pasta-raiz']),
+    )
+    expect(out.personagens.map((p) => p.nome)).toEqual(['Frodo'])
+  })
 })
 
 describe('filtro de cenários com pasta etiquetada', () => {
@@ -79,5 +92,14 @@ describe('filtro de cenários com pasta etiquetada', () => {
     ])
     const out = filtrarArvoreCenarios(raiz, new Set(['c1']))
     expect(out.subpastas[0].cenarios.map((c) => c.id)).toEqual(['c1'])
+  })
+
+  it('RAIZ etiquetada não desliga o filtro da seção', () => {
+    const raiz = pastaCen('cenarios', 'pasta-raiz', [
+      cen('c1', 'cenarios/gondor'),
+      cen('c2', 'cenarios/mordor'),
+    ])
+    const out = filtrarArvoreCenarios(raiz, new Set(['pasta-raiz', 'c1']))
+    expect(out.cenarios.map((c) => c.id)).toEqual(['c1'])
   })
 })

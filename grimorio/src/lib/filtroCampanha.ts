@@ -1,6 +1,17 @@
 import type { CenarioNode, ItemRef, PastaCenarioNode, PastaNode } from './types'
 
 /**
+ * As raízes ('personagens-soltos', 'cenarios') nunca podem ser "permitidas": uma raiz
+ * permitida repassa a subárvore inteira com herdado = true, ou seja, a seção pára de
+ * ser filtrada — em silêncio e por completo. Hoje elas não têm pasta.json e portanto
+ * não têm id, mas isso é acidente, não garantia: montarArvorePastas trata raiz e
+ * subpasta pelo mesmo caminho, e um pasta.json na raiz daria id a ela.
+ */
+function ehRaiz(caminho: string): boolean {
+  return !caminho.includes('/')
+}
+
+/**
  * Filtra a árvore de personagens soltos.
  *
  * Pasta com campanha que casa (ou herdada do pai) libera a subárvore INTEIRA, mesmo
@@ -14,7 +25,7 @@ export function filtrarPastaPersonagens(
   idsPermitidos: Set<string> = new Set(),
   herdado = false,
 ): PastaNode {
-  const permitida = herdado || (!!pasta.id && idsPermitidos.has(pasta.id))
+  const permitida = herdado || (!ehRaiz(pasta.caminho) && !!pasta.id && idsPermitidos.has(pasta.id))
   if (permitida) {
     return {
       ...pasta,
@@ -50,7 +61,7 @@ export function filtrarArvoreCenarios(
   ids: Set<string>,
   herdado = false,
 ): PastaCenarioNode {
-  const permitida = herdado || (!!raiz.id && ids.has(raiz.id))
+  const permitida = herdado || (!ehRaiz(raiz.caminho) && !!raiz.id && ids.has(raiz.id))
   if (permitida) {
     return { ...raiz, subpastas: raiz.subpastas.map((s) => filtrarArvoreCenarios(s, ids, true)) }
   }
