@@ -1,6 +1,8 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import { criarFakeFs } from './fakeFs'
 import { VaultRepo } from '../lib/vaultRepo'
+import { campanhasHerdadas, idsDePastas } from '../lib/herancaCampanha'
+import type { VaultTree, Vinculo } from '../lib/types'
 
 let fs: ReturnType<typeof criarFakeFs>
 let repo: VaultRepo
@@ -410,5 +412,44 @@ describe('id de pasta', () => {
     expect(corrompida).toBeDefined()
     expect(corrompida!.nome).toBe('corrompida') // fallback pro nome do diretório
     expect(corrompida!.id).toBeUndefined()
+  })
+})
+
+// ---- idsDePastas / campanhasHerdadas contra a árvore REAL (não montada à mão) ----
+// herancaCampanha.test.ts cobre idsDePastas com árvores montadas à mão (id setado direto
+// no fixture) — isso não pega o builder esquecendo de propagar `id`. Foi exatamente o que
+// aconteceu: montarArvorePastas/montarArvoreCenarios pararam de ler `id` do pasta.json e
+// idsDePastas(árvore real) virava {} silenciosamente, sem nenhum teste vermelho. Estes
+// testes ligam os builders de verdade ao consumidor de verdade.
+describe('idsDePastas + campanhasHerdadas ligados à árvore real do VaultRepo', () => {
+  it('idsDePastas lê os ids que os builders reais escrevem na árvore', async () => {
+    const pastaPersonagens = await repo.criarPasta('personagens-soltos', 'Vilões')
+    const pastaCenarios = await repo.criarPasta('cenarios', 'Reinos')
+
+    const personagensSoltos = await repo.montarArvorePastas('personagens-soltos')
+    const cenarios = await repo.montarArvoreCenarios()
+    const tree: VaultTree = { campanhas: [], canvasesSoltos: [], personagensSoltos, cenarios }
+
+    const mapa = idsDePastas(tree)
+
+    expect(mapa[pastaPersonagens.caminho]).toBe(pastaPersonagens.id)
+    expect(mapa[pastaCenarios.caminho]).toBe(pastaCenarios.id)
+  })
+
+  it('campanhasHerdadas encontra a campanha vinculada a uma pasta real (prova a feature, não só o mapa)', async () => {
+    const { caminho: dirPasta, id: idPasta } = await repo.criarPasta('personagens-soltos', 'Vilões')
+    const item = await repo.criarPersonagemEm(dirPasta, 'Strahd')
+
+    const personagensSoltos = await repo.montarArvorePastas('personagens-soltos')
+    const cenarios = await repo.montarArvoreCenarios()
+    const tree: VaultTree = { campanhas: [], canvasesSoltos: [], personagensSoltos, cenarios }
+    const mapa = idsDePastas(tree)
+
+    const vinculo: Vinculo = {
+      id: 'v-1', deTipo: 'pasta', deId: idPasta, paraTipo: 'campanha', paraId: 'camp-real',
+      tipo: 'participa', notas: '', criadoEm: '',
+    }
+
+    expect(campanhasHerdadas(item.caminho, mapa, [vinculo])).toEqual(['camp-real'])
   })
 })
