@@ -56,11 +56,25 @@ export interface DependenciasDoSync {
   varrerLocal(raiz: string, conhecidos: Record<string, EntradaArquivo>): Promise<Map<string, EstadoLocal>>
   /** Relê do disco o arquivo recém-baixado, para o manifesto guardar o que ficou lá. */
   sondarLocal(caminhoAbsoluto: string): Promise<EstadoLocal>
-  /** Política de conflito por tipo de arquivo. Porta injetada — não é decisão deste ciclo. */
-  preservarPerdedor(acao: AcaoConflito, remoto: EstadoRemoto | undefined): Promise<void>
+  /**
+   * Política de conflito por tipo de arquivo. Porta injetada — não é decisão deste ciclo.
+   *
+   * Recebe o manifesto porque a política depende dele: o `deviceNome` assina a cópia perdedora e
+   * o `pastaRaizId` é para onde o `vinculos.json` mesclado volta. Quem monta o sincronizador não
+   * tem esses dois valores na mão — o manifesto é lido AQUI dentro, e só a partir daqui eles
+   * existem. Fábrica, e não os dois campos soltos, para que a política inteira continue trocável
+   * por uma falsa nos testes.
+   */
+  preservador(manifesto: Manifesto): PreservarPerdedor
   /** Instante do fim do ciclo, em ISO. */
   agora(): string
 }
+
+/** Põe o lado perdedor a salvo antes de o vencedor passar por cima. Ver `preservar.ts`. */
+export type PreservarPerdedor = (
+  acao: AcaoConflito,
+  remoto: EstadoRemoto | undefined,
+) => Promise<void>
 
 export type ResultadoDoCiclo =
   /** O plano rodou. `falhas` vazio = ciclo completo; com falhas o manifesto guarda só o que deu certo. */
@@ -145,7 +159,7 @@ export async function executarCiclo(deps: DependenciasDoSync): Promise<Resultado
       drive: deps.drive,
       fs: deps.fs,
       sondarLocal: deps.sondarLocal,
-      preservarPerdedor: deps.preservarPerdedor,
+      preservarPerdedor: deps.preservador(anterior),
       agora: deps.agora,
     },
   )

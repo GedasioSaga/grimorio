@@ -223,6 +223,29 @@ export function avisosDoSync(estado: EstadoSync): AvisoSync[] {
   return avisos
 }
 
+/**
+ * A pergunta do pareamento — a única decisão destrutiva-por-engano que o usuário pode tomar aqui,
+ * e portanto a que mais precisa ser dita em português de gente.
+ *
+ * São duas histórias diferentes, e confundi-las é o erro caro: no primeiro computador o cofre
+ * apenas sobe; no segundo, dois cofres se encontram. O texto do segundo caso promete exatamente o
+ * que a matriz SEM manifesto entrega — sobe o que só existe aqui, desce o que só existe lá, e o
+ * que divergiu vira duas cópias —, incluindo a garantia de que nada é apagado, que é verdade por
+ * construção: `apagarLocal` e `apagarRemoto` só saem da matriz COM manifesto.
+ */
+export function textoDoPareamento(nomeDoCofre: string, arquivosNaNuvem: number): string {
+  const pasta = `"Grimório/${nomeDoCofre}"`
+  if (arquivosNaNuvem === 0) {
+    return `Ainda não há nada deste cofre no seu Google Drive.\n\n`
+      + `Ao ligar, o Grimório cria a pasta ${pasta} lá e envia para ela tudo o que está neste computador. Nada é apagado daqui.\n\n`
+      + 'Ligar agora?'
+  }
+  const quantos = arquivosNaNuvem === 1 ? '1 arquivo' : `${arquivosNaNuvem} arquivos`
+  return `A pasta ${pasta} já existe no seu Google Drive, com ${quantos} — provavelmente enviados por outro computador seu.\n\n`
+    + 'Ao ligar, os dois são juntados: o que só existe aqui sobe, o que só existe lá desce, e o que estiver diferente nos dois lados fica como duas cópias, lado a lado, para você escolher qual manter. Nada é apagado, nem aqui nem lá.\n\n'
+    + 'Ligar agora?'
+}
+
 export interface CopiaDeConflito {
   tipo: 'personagem' | 'cenario'
   id: string

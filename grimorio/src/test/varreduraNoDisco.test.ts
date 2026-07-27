@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { criarVarreduraNoDisco } from '../lib/sync/disco'
+import { criarSondagemNoDisco, criarVarreduraNoDisco } from '../lib/sync/disco'
 import { varrerCofre } from '../lib/sync/varrer'
 import type { EntradaDeDiretorio, FsBridge } from '../lib/fsBridge'
 import type { EntradaArquivo } from '../lib/sync/tipos'
@@ -72,5 +72,70 @@ describe('a porta ligada em varrerCofre', () => {
 
     expect(hasheados).toEqual([`${RAIZ}/gandalf.json`])
     expect(local.get('gandalf.json')?.hash).toBe(`sha(${RAIZ}/gandalf.json)`)
+  })
+})
+
+describe('criarSondagemNoDisco', () => {
+  function criarSonda(arvore: Record<string, EntradaDeDiretorio[]>, hash = 'HASH') {
+    const hasheados: string[] = []
+    const sondar = criarSondagemNoDisco(fsQueLista(arvore), async (caminho) => {
+      hasheados.push(caminho)
+      if (hash === 'ERRO') throw new Error(`não deu para ler ${caminho}`)
+      return hash
+    })
+    return { sondar, hasheados }
+  }
+
+  it('devolve o que ficou no disco: hash relido, tamanho e mtime da listagem', async () => {
+    const { sondar, hasheados } = criarSonda({ [RAIZ]: [entrada({ size: 42, mtime: 9000 })] })
+
+    expect(await sondar(`${RAIZ}/gandalf.json`)).toEqual({ hash: 'HASH', tamanho: 42, mtime: 9000 })
+    // o hash sai do arquivo, nunca do `sha256Checksum` do Drive: ele é opcional lá, e um
+    // manifesto que descrevesse a promessa em vez do disco baixaria o arquivo a cada ciclo
+    expect(hasheados).toEqual([`${RAIZ}/gandalf.json`])
+  })
+
+  it('caminho do Windows encontra o arquivo do mesmo jeito', async () => {
+    const { sondar } = criarSonda({ [RAIZ]: [entrada({ size: 42, mtime: 9000 })] })
+
+    expect(await sondar('C:\\Cofre\\RPG\\gandalf.json')).toEqual({
+      hash: 'HASH',
+      tamanho: 42,
+      mtime: 9000,
+    })
+  })
+
+  it('caixa diferente ainda é o mesmo arquivo no Windows', async () => {
+    // O Drive distingue `Gandalf.json` de `gandalf.json` e o Windows não: o download grava no
+    // arquivo que já existia, e o disco devolve a caixa ORIGINAL na listagem.
+    const { sondar } = criarSonda({ [RAIZ]: [entrada({ name: 'Gandalf.json', size: 42, mtime: 9000 })] })
+
+    expect(await sondar(`${RAIZ}/gandalf.json`)).toEqual({ hash: 'HASH', tamanho: 42, mtime: 9000 })
+  })
+
+  it('metadado que não aparece vira 0/0, e o hash continua valendo', async () => {
+    // Degradação em custo, não em correção: com 0/0 no manifesto a varredura seguinte não pula o
+    // hash, recalcula, acha o mesmo e conclui "igual".
+    const { sondar } = criarSonda({ [RAIZ]: [] })
+
+    expect(await sondar(`${RAIZ}/gandalf.json`)).toEqual({ hash: 'HASH', tamanho: 0, mtime: 0 })
+  })
+
+  it('pasta que nem lista cai no mesmo 0/0 em vez de derrubar a ação', async () => {
+    const fs: FsBridge = {
+      ...criarFakeFs(),
+      async listDir() { throw new Error('acesso negado') },
+    }
+    const sondar = criarSondagemNoDisco(fs, async () => 'HASH')
+
+    expect(await sondar(`${RAIZ}/gandalf.json`)).toEqual({ hash: 'HASH', tamanho: 0, mtime: 0 })
+  })
+
+  it('hash que falha PROPAGA — é o download que não chegou ao disco', async () => {
+    // A ação tem de constar como falha para o manifesto guardar a entrada anterior e o ciclo
+    // seguinte tentar de novo. Devolver um estado inventado esconderia a divergência para sempre.
+    const { sondar } = criarSonda({ [RAIZ]: [entrada()] }, 'ERRO')
+
+    await expect(sondar(`${RAIZ}/gandalf.json`)).rejects.toThrow('não deu para ler')
   })
 })

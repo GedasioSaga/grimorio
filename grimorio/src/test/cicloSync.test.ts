@@ -128,8 +128,10 @@ function montar(cenario: Cenario = {}) {
       const conteudo = await fs.readText(caminho)
       return { hash: `sha(${conteudo})`, tamanho: conteudo.length, mtime: 7000 }
     },
-    async preservarPerdedor(acao, remoto) {
-      etapas.push('preservarPerdedor')
+    // fábrica, porque a política real precisa do `deviceNome` e do `pastaRaizId` do manifesto —
+    // que só existem depois de o ciclo lê-lo
+    preservador: (manifesto) => async (acao, remoto) => {
+      etapas.push(`preservarPerdedor:${manifesto.deviceNome}`)
       preservados.push({ acao, remoto })
     },
     agora: () => AGORA,
@@ -248,13 +250,16 @@ describe('executarCiclo', () => {
   })
 
   it('conflito entrega ao preservador o deviceNome que assina a cópia perdedora', async () => {
-    const { deps, preservados, chamadas } = montar({
+    const { deps, preservados, chamadas, etapas } = montar({
       local: { 'a.json': loc({ hash: 'H1' }) },
       listagem: { arquivos: [item({ hash: 'H2', deviceNome: 'PC Trabalho' })] },
     })
 
     await executarCiclo(deps)
 
+    // a política é montada COM o manifesto do ciclo: é dele que sai o nome desta máquina, que
+    // assina a cópia quando quem perde é o lado remoto
+    expect(etapas).toContain('preservarPerdedor:PC Casa')
     expect(preservados).toHaveLength(1)
     expect(preservados[0].acao).toEqual({ tipo: 'conflito', caminho: 'a.json', vencedor: 'local' })
     expect(preservados[0].remoto?.deviceNome).toBe('PC Trabalho')

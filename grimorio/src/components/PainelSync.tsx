@@ -8,18 +8,28 @@ import {
   type CopiaDeConflito,
 } from '../lib/painelSync'
 
+interface PainelSyncProps {
+  onFechar: () => void
+  /** Parear: ligar este cofre a uma pasta do Drive. Só aparece enquanto ele não estiver ligado. */
+  onLigar: () => void
+  /** Um ciclo agora, sem esperar o tique de 60 s. */
+  onSincronizar: () => void
+  /** Uma ação da aba está em andamento. Trava os dois botões. */
+  ocupado: boolean
+}
+
 /**
  * O estado do sync com o Google Drive, dentro da aba Nuvem.
  *
- * Só mostra. Quem age é o sincronizador (`lib/sync/sincronizador.ts`), e ele ainda não é criado
- * em lugar nenhum do app — enquanto essa costura não existir, este painel mostra o retrato
- * inicial do store. Nenhum botão de "sincronizar agora" aqui: botão que não chama nada é pior
- * que aviso nenhum.
+ * Não decide nada: quem age é o sincronizador (`state/sync.ts`), e este painel só mostra o
+ * retrato que ele publica e devolve os dois cliques que o usuário pode dar. O botão é UM só de
+ * cada vez, e qual deles depende de `pareado` — oferecer "sincronizar agora" num cofre que nunca
+ * foi ligado seria um botão que não tem o que fazer.
  *
  * `useSync()` sem seletor assina o retrato inteiro de propósito: é o store separado justamente
  * para que assinar tudo custe barato, e este painel usa todos os campos.
  */
-export function PainelSync({ onFechar }: { onFechar: () => void }) {
+export function PainelSync({ onFechar, onLigar, onSincronizar, ocupado }: PainelSyncProps) {
   const estado = useSync()
   const personagens = useApp((s) => s.personagens)
   const cenarios = useApp((s) => s.cenarios)
@@ -44,6 +54,20 @@ export function PainelSync({ onFechar }: { onFechar: () => void }) {
       <h3>Sincronização</h3>
       <p className={`sync-titulo sync-${resumo.tom}`}>{resumo.titulo}</p>
       {resumo.detalhe && <p className="opcoes-vazio">{resumo.detalhe}</p>}
+
+      {estado.pareado ? (
+        <button
+          className="opcoes-acao"
+          disabled={ocupado || estado.fase === 'sincronizando'}
+          onClick={onSincronizar}
+        >
+          {estado.fase === 'sincronizando' ? 'Sincronizando…' : 'Sincronizar agora'}
+        </button>
+      ) : (
+        <button className="opcoes-acao" disabled={ocupado} onClick={onLigar}>
+          {ocupado ? 'Ligando…' : 'Ligar este cofre ao Google Drive'}
+        </button>
+      )}
 
       {avisos.map((aviso) => (
         <Aviso key={aviso.chave} aviso={aviso} />
