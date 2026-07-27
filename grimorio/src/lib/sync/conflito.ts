@@ -43,8 +43,14 @@ const METADADOS = new Set(['campanha.json', 'pasta.json', 'cofre.json'])
  */
 const ARQUIVO_DE_CENARIO = 'cenario.json'
 
-/** Prefixo do nome da entidade copiada, para o usuário reconhecer a cópia dentro do app. */
-const PREFIXO_DE_NOME = '(conflito)'
+/**
+ * Prefixo do nome da entidade copiada, para o usuário reconhecer a cópia dentro do app.
+ *
+ * Exportado porque a aba Nuvem lista as cópias procurando por ele. Enquanto estava privado,
+ * o texto vivia escrito em dois lugares, e mudá-lo aqui faria a lista parar de encontrar as
+ * cópias sem nenhum erro — elas ficariam no disco, invisíveis para quem precisa achá-las.
+ */
+export const PREFIXO_DE_NOME = '(conflito)'
 
 /** Assinatura de quando o Drive não disse de que computador veio a versão que perdeu. */
 export const AUTOR_DESCONHECIDO = 'outro computador'

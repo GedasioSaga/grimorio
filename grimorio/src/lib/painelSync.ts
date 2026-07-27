@@ -1,3 +1,4 @@
+import { PREFIXO_DE_NOME } from './sync/conflito'
 import type { EstadoSync } from './sync/sincronizador'
 import type { FalhaAcao } from './sync/executar'
 import type { FalhaDeGravacao } from './sync/ciclo'
@@ -37,12 +38,8 @@ export interface AvisoSync {
 
 const MS_POR_DIA = 86_400_000
 
-/**
- * Prefixo que `marcarComoCopia` (lib/sync/conflito.ts) põe no nome da cópia de conflito.
- * Repetido aqui porque lá ele é privado ao módulo; é o único acoplamento desta camada com a
- * política de conflito, e se ele mudar lá esta lista silenciosamente para de achar as cópias.
- */
-const PREFIXO_DE_COPIA = '(conflito)'
+/** Prefixo que `marcarComoCopia` põe no nome da cópia de conflito. */
+const PREFIXO_DE_COPIA = PREFIXO_DE_NOME
 
 function dois(n: number): string {
   return String(n).padStart(2, '0')
