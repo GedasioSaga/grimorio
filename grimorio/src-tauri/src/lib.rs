@@ -1,5 +1,7 @@
 use std::path::Path;
 
+mod hash;
+
 const RENAME_RETRY_DELAYS_MS: [u64; 2] = [50, 100];
 
 #[tauri::command]
@@ -134,7 +136,9 @@ pub fn run() {
             remove_path,
             copy_file,
             rename_path,
-            path_exists
+            path_exists,
+            hash::hash_arquivo,
+            hash::hash_texto
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
