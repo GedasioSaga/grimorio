@@ -49,8 +49,8 @@ export interface Cenario {
   modificadoEm: string
 }
 
-/** Ponta de vínculo entre entidades. Canvas só participa de campanha (nunca é alvo de relação). */
-export type TipoEntidadeVinculo = 'personagem' | 'cenario' | 'canvas'
+/** Ponta de vínculo. Canvas e pasta só participam de campanha (nunca são alvo de relação). */
+export type TipoEntidadeVinculo = 'personagem' | 'cenario' | 'canvas' | 'pasta'
 
 /** Relação tipada entre entidades OU participação em campanha (tipo TIPO_PARTICIPA). */
 export interface Vinculo {
@@ -105,6 +105,8 @@ export interface PastaNode {
   slug: string
   nome: string
   caminho: string // dir relativo ao cofre, ex.: "personagens-soltos/vilões"
+  /** id do pasta.json; ausente em pasta criada antes da campanha-em-pasta */
+  id?: string
   subpastas: PastaNode[]
   personagens: ItemRef[]
 }
@@ -127,6 +129,8 @@ export interface PastaCenarioNode {
   slug: string
   nome: string
   caminho: string
+  /** id do pasta.json; ausente em pasta criada antes da campanha-em-pasta */
+  id?: string
   subpastas: PastaCenarioNode[]
   cenarios: CenarioNode[]
 }

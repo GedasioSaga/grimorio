@@ -237,6 +237,75 @@ como hoje. Nenhuma migração é executada na abertura.
 7. Manual — abrir um cofre antigo e não mexer em nada: sidebar, filtro e podas idênticos ao de antes.
 8. Manual — excluir pasta com campanha: some da sidebar e `vinculos.json` não fica com órfão dela.
 
+## Dívida registrada — vínculos órfãos ao excluir pasta
+
+`removerVinculosDe` limpa apenas os vínculos da **própria pasta excluída**. Mas `excluirItem` faz
+`remove_path` recursivo: somem do disco também os personagens/cenários de dentro **e as subpastas
+aninhadas** — e estas últimas, desde esta spec, são entidades com id próprio. Os vínculos de
+campanha de tudo isso permanecem em `vinculos.json` apontando para ids que não existem mais.
+
+**Por que é tolerável hoje** (rastreado na revisão da B7, consumidor por consumidor):
+- filtro de campanha (`Sidebar.tsx`) usa `idsFiltro` só para filtrar a árvore real; linha vem da
+  árvore, nunca do conjunto de ids — id fantasma não vira linha na tela
+- aba de Vínculos (`AbaVinculos.tsx`) descarta explicitamente vínculo cuja outra ponta não resolve
+  para um nome ("órfãos somem da exibição")
+- contexto da IA (`contextoIA.ts`, `frasesDeVinculos`) faz `if (!de || !para) continue`
+
+**Por que não é seguro, e sim tolerável:** essas três proteções foram escritas de forma
+independente, cada uma resolvendo o problema no seu próprio ponto. Não existe invariante único
+garantindo que um id em `vinculos.json` corresponde a algo vivo. Qualquer consumidor novo — uma
+tela de depuração, um export, uma contagem por campanha — que não repita a mesma guarda faz os
+órfãos reaparecerem. Há também crescimento sem limite do arquivo ao longo do tempo: cosmético
+hoje, real algum dia.
+
+**Correção quando alguém encostar nisso:** ou `excluirItem` passa a devolver os ids de tudo que
+removeu (para o chamador limpar em bloco), ou entra uma varredura de reconciliação que remove
+vínculo cujas duas pontas não existem na árvore carregada.
+
+## Risco estrutural — etiquetar uma raiz desliga o filtro da seção inteira
+
+`filtrarPastaPersonagens` e `filtrarArvoreCenarios` funcionam assim: pasta permitida devolve
+`{ ...pasta, subpastas: recursão com herdado = true }`. Se a **raiz** (`personagens-soltos` ou
+`cenarios`) alguma vez for considerada permitida, todos os itens dela passam pelo spread e todos os
+descendentes recursam com `herdado = true` — ou seja, **a seção inteira deixa de ser filtrada**,
+silenciosamente.
+
+Hoje isso não acontece, mas a proteção é **incidental, não estrutural**: as raízes simplesmente não
+têm `pasta.json` próprio, logo não têm `id`, logo `permitida` é sempre falsa nelas. Nada no código
+impede que uma raiz ganhe id.
+
+**Regra a manter:** o botão 🏷️ vive na linha de cada subpasta (`PastaLinha` / `PastaCenarioLinha`),
+**nunca** no cabeçalho de seção de `PersonagensSoltos` / `CenariosSoltos`. Enquanto isso valer, uma
+raiz não tem caminho para ganhar id pela UI.
+
+**Se um dia precisar mudar:** adicionar guarda explícita no filtro em vez de confiar na ausência de
+`pasta.json` — por exemplo, recusar `permitida` quando `pasta.caminho` não contém `/` (as raízes são
+os únicos nós de primeiro nível).
+
+## Dívida registrada — `paraTipo` só é garantido em runtime
+
+`Vinculo.paraTipo` é `TipoEntidadeVinculo | 'campanha'`, então widening a união para incluir
+`'pasta'` também torna `paraTipo: 'pasta'` **legal no tipo**, mesmo sendo descartado por
+`normalizarVinculos`. Isso não é novo: `'canvas'` já vivia assim. Mas com `'pasta'` passam a ser
+dois dos quatro membros nessa situação — a regra de três está a um passo.
+
+**Correção quando alguém encostar nisso:** separar `ParaTipoRelacao = 'personagem' | 'cenario'` e
+declarar `Vinculo.paraTipo: ParaTipoRelacao | 'campanha'`, deixando o compilador garantir o que
+hoje é uma cadeia de `!==` mantida à mão. Toca `types.ts` e provavelmente `AbaVinculos.tsx`, cujo
+`Alvo.tipo` é `TipoEntidadeVinculo` e é repassado como `paraTipo`.
+
+**Por que não foi feito nesta spec:** nenhuma task aqui constrói vínculo com `paraTipo` variável —
+`definirCampanhas` usa o literal `'campanha'`. O buraco existe mas não é alcançável pelo código
+que esta spec escreve, e a correção sairia do escopo dela (`AbaVinculos.tsx` não é tocado por
+nenhuma task).
+
+**Modo de falha relacionado, também registrado:** `normalizarVinculos` descarta entrada inválida
+**sem log nenhum** (`vaultRepo.ts` `lerVinculos`), e `agendarSalvarVinculos` persiste a lista já
+filtrada 800 ms depois de qualquer edição de vínculo. Ou seja: um build antigo do Grimório abrindo
+um cofre com vínculos de pasta apaga a campanha de todas as pastas de forma permanente, na
+primeira edição de vínculo que o usuário fizer — sem aviso e sem recuperação dentro do app. É o
+que torna a ordem de release acima obrigatória, e não apenas recomendada.
+
 ## Fora de escopo (v1)
 
 - Campanha em caderno/página (`Pagina`, `types.ts:143-151`, não tem campo de campanha).

@@ -176,17 +176,71 @@ export class VaultRepo {
     return { slug, nome, caminho, id: doc.id }
   }
 
-  /** Cria uma pasta (com pasta.json guardando o nome) dentro de dirPai. Retorna o caminho da nova pasta. */
-  async criarPasta(dirPai: string, nome: string): Promise<string> {
+  /** Cria uma pasta (com pasta.json guardando nome e id) dentro de dirPai. */
+  async criarPasta(dirPai: string, nome: string): Promise<ItemRef & { id: string }> {
     let existentes: string[] = []
     try {
       existentes = (await this.fs.listDir(this.abs(dirPai))).filter((e) => e.isDir).map((e) => e.name)
     } catch { /* dirPai ainda não existe */ }
     const slug = slugUnico(slugify(nome), existentes)
     const dir = `${dirPai}/${slug}`
-    await this.fs.mkdirAll(this.abs(dir))
-    await this.fs.writeTextAtomic(this.abs(`${dir}/pasta.json`), JSON.stringify({ nome, criadoEm: agora() }, null, 2))
-    return dir
+    const id = novoId()
+    const caminho = `${dir}/pasta.json`
+    // mesma fila do garantirIdDePasta: sem isso, um garantirIdDePasta concorrente
+    // no mesmo caminho poderia ler "sem pasta.json", sintetizar e gravar por cima
+    return this.naFila(caminho, async () => {
+      await this.fs.mkdirAll(this.abs(dir))
+      await this.fs.writeTextAtomic(this.abs(caminho), JSON.stringify({ nome, id, criadoEm: agora() }, null, 2))
+      return { slug, nome, caminho: dir, id }
+    })
+  }
+
+  /**
+   * Id da pasta, gerando e gravando na primeira vez. Pastas criadas antes da
+   * campanha-em-pasta não têm id; em vez de gravar durante a varredura da árvore
+   * (leitura que escreve), o id nasce no primeiro uso — o clique no 🏷️.
+   */
+  async garantirIdDePasta(dirDaPasta: string): Promise<string> {
+    const caminho = `${dirDaPasta}/pasta.json`
+    return this.naFila(caminho, async () => {
+      let bruto: string | null = null
+      try {
+        bruto = await this.fs.readText(this.abs(caminho))
+      } catch {
+        // sem pasta.json: pasta criada à mão no disco, metadados nascem agora
+      }
+      // pasta.json ilegível NÃO cai aqui de propósito: sobrescrever destruiria um nome
+      // possivelmente recuperável à mão (truncamento por conflito de sync, p.ex.).
+      // Deixar o parse lançar é o comportamento não-destrutivo, alinhado com
+      // montarArvorePastas, que cai no nome do diretório sem regravar nada.
+      const cru = bruto?.trim()
+      // ausente OU vazio: não há metadado a preservar, nasce agora.
+      // Conteúdo presente porém ilegível NÃO cai aqui — ver comentário acima.
+      let lido: unknown = null
+      if (cru) {
+        try {
+          lido = JSON.parse(cru)
+        } catch {
+          // o SyntaxError do V8 traz posição, nunca o arquivo — sem o caminho aqui,
+          // a mensagem que chega ao usuário não diz sequer que há um arquivo envolvido
+          throw new Error(`pasta.json ilegível em ${dirDaPasta}`)
+        }
+      }
+      // JSON válido mas não-objeto (array, número, string, null) não tem onde guardar o id:
+      // `obj.id = x` num array vira propriedade não-índice, que o stringify descarta —
+      // o arquivo ficaria intacto e o id devolvido não existiria em lugar nenhum.
+      if (cru && (typeof lido !== 'object' || lido === null || Array.isArray(lido))) {
+        throw new Error(`pasta.json inválido em ${dirDaPasta}`)
+      }
+      const obj: Record<string, unknown> = (lido as Record<string, unknown> | null)
+        ?? { nome: dirDaPasta.split('/').pop() || dirDaPasta, criadoEm: agora() }
+      if (typeof obj.id === 'string' && obj.id) return obj.id
+      const id = novoId()
+      obj.id = id
+      obj.modificadoEm = agora()
+      await this.fs.writeTextAtomic(this.abs(caminho), JSON.stringify(obj, null, 2))
+      return id
+    })
   }
 
   /** Move o arquivo .json de um personagem para outro diretório (copiar + remover). No-op se já estiver lá. */
@@ -394,14 +448,17 @@ export class VaultRepo {
       }
     }
     let nome = dir.split('/').pop() ?? dir
+    let id: string | undefined
     try {
-      nome = (JSON.parse(await this.fs.readText(this.abs(`${dir}/pasta.json`))) as { nome: string }).nome
+      const meta = JSON.parse(await this.fs.readText(this.abs(`${dir}/pasta.json`))) as { nome: string; id?: string }
+      nome = meta.nome
+      id = meta.id
     } catch {
       // raiz ou pasta sem metadados
     }
     subpastas.sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'))
     cenarios.sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'))
-    return { slug: dir.split('/').pop() ?? dir, nome, caminho: dir, subpastas, cenarios }
+    return { slug: dir.split('/').pop() ?? dir, nome, id, caminho: dir, subpastas, cenarios }
   }
 
   /** Nó de um cenário: lê id/nome do cenario.json e varre sub-cenários (dirs com cenario.json). */
@@ -532,14 +589,17 @@ export class VaultRepo {
       }
     }
     let nome = dir.split('/').pop() ?? dir
+    let id: string | undefined
     try {
-      nome = (JSON.parse(await this.fs.readText(this.abs(`${dir}/pasta.json`))) as { nome: string }).nome
+      const meta = JSON.parse(await this.fs.readText(this.abs(`${dir}/pasta.json`))) as { nome: string; id?: string }
+      nome = meta.nome
+      id = meta.id
     } catch {
       // raiz ou pasta sem metadados
     }
     subpastas.sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'))
     personagens.sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'))
-    return { slug: dir.split('/').pop() ?? dir, nome, caminho: dir, subpastas, personagens }
+    return { slug: dir.split('/').pop() ?? dir, nome, id, caminho: dir, subpastas, personagens }
   }
 
   private async listarDirs(rel: string): Promise<{ name: string }[]> {

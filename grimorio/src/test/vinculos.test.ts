@@ -128,3 +128,19 @@ describe('normalizarVinculos', () => {
     expect(r[0].criadoEm).toBe('')
   })
 })
+
+describe('pasta como ponta de vínculo', () => {
+  it('aceita deTipo pasta', () => {
+    const out = normalizarVinculos({
+      vinculos: [{ id: 'v1', deTipo: 'pasta', deId: 'pasta-1', paraTipo: 'campanha', paraId: 'c1', tipo: 'participa', notas: '', criadoEm: '' }],
+    })
+    expect(out).toHaveLength(1)
+    expect(out[0].deTipo).toBe('pasta')
+  })
+  it('rejeita paraTipo pasta (pasta nunca é alvo de relação)', () => {
+    const out = normalizarVinculos({
+      vinculos: [{ id: 'v1', deTipo: 'personagem', deId: 'p1', paraTipo: 'pasta', paraId: 'pasta-1', tipo: 'mora em', notas: '', criadoEm: '' }],
+    })
+    expect(out).toEqual([])
+  })
+})

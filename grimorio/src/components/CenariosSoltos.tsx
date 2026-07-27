@@ -67,15 +67,19 @@ export function CenariosSoltos({ raiz, aoMudar, ocultos = 0, aoMostrarTodos }: {
   async function novaPasta() {
     const nome = await pedirTexto('Nome da pasta:')
     if (!nome || !repo) return
-    await comAviso(async () => { await repo.criarPasta(RAIZ, nome); await aoMudar() })
+    await comAviso(async () => {
+      const { id } = await repo.criarPasta(RAIZ, nome)
+      await associarNaCriacao('pasta', id, nome, RAIZ)
+      await aoMudar()
+    })
   }
   async function novoCenario() {
     const nome = await pedirTexto('Nome do cenário:')
     if (!nome || !repo) return
     await comAviso(async () => {
       const ref = await repo.criarCenarioEm(RAIZ, nome)
-      // filtro ativo → etiqueta na campanha filtrada; "Todas" → pergunta as campanhas (0..N)
-      await associarNaCriacao('cenario', ref.id, nome)
+      // filtro ativo ganha; senão herda da pasta em que nasce; senão pergunta as campanhas (0..N)
+      await associarNaCriacao('cenario', ref.id, nome, RAIZ)
       await aoMudar()
     })
   }
@@ -116,11 +120,22 @@ function PastaCenarioLinha({ pasta, nivel, aoMudar }: { pasta: PastaCenarioNode;
     if (!nome || !repo) return
     await comAviso(async () => {
       if (tipo === 'pasta') {
-        await repo.criarPasta(pasta.caminho, nome)
+        const { id } = await repo.criarPasta(pasta.caminho, nome)
+        await associarNaCriacao('pasta', id, nome, pasta.caminho)
       } else {
         const ref = await repo.criarCenarioEm(pasta.caminho, nome)
-        await associarNaCriacao('cenario', ref.id, nome)
+        await associarNaCriacao('cenario', ref.id, nome, pasta.caminho)
       }
+      await aoMudar()
+    })
+  }
+  async function campanhas(e: React.MouseEvent) {
+    e.stopPropagation()
+    if (!repo) return
+    await comAviso(async () => {
+      // pasta legada não tem id: nasce agora, no primeiro clique
+      const id = pasta.id ?? (await repo.garantirIdDePasta(pasta.caminho))
+      await editarCampanhas('pasta', id, pasta.nome)
       await aoMudar()
     })
   }
@@ -134,7 +149,12 @@ function PastaCenarioLinha({ pasta, nivel, aoMudar }: { pasta: PastaCenarioNode;
     e.stopPropagation()
     if (!repo) return
     if (!(await ask(`Excluir a pasta "${pasta.nome}" e tudo dentro dela?`, { title: 'Grimório', kind: 'warning' }))) return
-    await comAviso(async () => { await repo.excluirItem(pasta.caminho); await aoMudar() })
+    await comAviso(async () => {
+      await repo.excluirItem(pasta.caminho)
+      // sem isto o vínculo de campanha da pasta viraria órfão em vinculos.json
+      if (pasta.id) useApp.getState().removerVinculosDe(pasta.id)
+      await aoMudar()
+    })
   }
 
   return (
@@ -152,6 +172,7 @@ function PastaCenarioLinha({ pasta, nivel, aoMudar }: { pasta: PastaCenarioNode;
         <span className="rail-acoes" onClick={(e) => e.stopPropagation()}>
           <button className="btn-icon" title="Novo cenário" onClick={() => void criar('cenario')}>+</button>
           <button className="btn-icon" title="Nova subpasta" onClick={() => void criar('pasta')}>📁</button>
+          <button className="btn-icon" title="Campanhas" onClick={campanhas}>🏷️</button>
           <button className="btn-icon" title="Renomear" onClick={renomear}>✎</button>
           <button className="btn-icon" title="Excluir" onClick={excluir}>🗑</button>
         </span>
@@ -182,7 +203,8 @@ function CenarioLinha({ node, nivel, aoMudar }: { node: CenarioNode; nivel: numb
     if (!nome || !repo) return
     await comAviso(async () => {
       const ref = await repo.criarCenarioEm(node.caminho, nome)
-      await associarNaCriacao('cenario', ref.id, nome)
+      // dir de cenário não está no mapa de pastas: a herança sobe até a pasta que o contém
+      await associarNaCriacao('cenario', ref.id, nome, node.caminho)
       await aoMudar()
     })
   }

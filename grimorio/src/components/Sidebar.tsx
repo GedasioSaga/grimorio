@@ -76,6 +76,7 @@ export function Sidebar({ recolhida, onToggle }: { recolhida: boolean; onToggle:
     ? filtrarPastaPersonagens(
         tree.personagensSoltos,
         new Set([...idsFiltro].map((id) => caminhoPorId[id]).filter((c): c is string => !!c)),
+        idsFiltro,
       )
     : tree.personagensSoltos
   const raizCenarios = idsFiltro ? filtrarArvoreCenarios(tree.cenarios, idsFiltro) : tree.cenarios
