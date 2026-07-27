@@ -39,9 +39,9 @@ const CAMPOS_ENVIO: &str = "id,name,size,version,sha256Checksum";
 /// Nome da pasta que o app cria no Drive do usuário. É só rótulo — a identidade vem do
 /// marcador em `appProperties`, então renomear ou arrastar a pasta no drive.google.com
 /// não desliga o sync.
-const NOME_RAIZ: &str = "Grimório";
-const MARCA_RAIZ: &str = "grimorioRaiz";
-const MARCA_RAIZ_VALOR: &str = "1";
+pub const NOME_RAIZ: &str = "Grimório";
+pub const MARCA_RAIZ: &str = "grimorioRaiz";
+pub const MARCA_RAIZ_VALOR: &str = "1";
 
 /// Assinatura do dispositivo que enviou a versão. Existe porque, quando é a cópia REMOTA
 /// que perde o conflito, nada mais no Drive diz de qual máquina ela veio: a conta do
@@ -58,7 +58,15 @@ const POR_PAGINA: &str = "1000";
 
 /// Access token de vida curta. Sem `derive(Debug)` de propósito, pelo mesmo motivo dos
 /// tipos de `auth.rs`: nada que carregue segredo pode escorregar para um log por acidente.
-struct Credencial(String);
+pub struct Credencial(String);
+
+impl Credencial {
+    /// Embrulha um access token já obtido. Existe para `examples/verificar_drive.rs`, que
+    /// pega o token pelo refresh guardado no Windows em vez de pelo estado do Tauri.
+    pub fn nova(access_token: String) -> Self {
+        Self(access_token)
+    }
+}
 
 /// Um arquivo (ou pasta) como o Drive o descreve. `size` e `version` chegam como STRING
 /// mesmo sendo inteiros de 64 bits — é como o JSON da API v3 representa `int64`.
@@ -450,7 +458,7 @@ struct DetalheErro {
 
 /// Cliente sem seguir redirecionamento, pelo mesmo motivo de `auth.rs`: um redirect
 /// seguido às cegas levaria o cabeçalho `Authorization` para um host que não é a API.
-fn http() -> Result<reqwest::Client, String> {
+pub fn http() -> Result<reqwest::Client, String> {
     reqwest::Client::builder()
         .redirect(reqwest::redirect::Policy::none())
         .build()
@@ -567,7 +575,7 @@ async fn buscar_pasta(
     Ok(achadas.into_iter().next().map(|p| p.id))
 }
 
-async fn garantir_cadeia(
+pub async fn garantir_cadeia(
     http: &reqwest::Client,
     cred: &Credencial,
     mae: &str,
@@ -652,33 +660,40 @@ async fn enviar_resumavel(
 // Comandos.
 // ---------------------------------------------------------------------------
 
-/// Id da pasta `Grimório` no Drive do usuário, criando-a na primeira vez.
+/// Id da pasta raiz do cofre no Drive, criando-a na primeira vez.
 ///
 /// A identidade é o marcador em `appProperties`, não o nome nem o lugar: assim o usuário
 /// pode renomear a pasta ou arrastá-la para dentro de outra no drive.google.com sem que o
 /// app crie uma segunda na próxima execução. Buscar pelo nome faria exatamente isso.
-#[tauri::command]
-pub async fn drive_pasta_raiz(estado: tauri::State<'_, EstadoGoogle>) -> Result<String, String> {
-    let cred = credencial(estado).await?;
-    let http = http()?;
-
+///
+/// `nome` e `marca` chegam por parâmetro em vez de sair direto das constantes para que
+/// `examples/verificar_drive.rs` possa exercitar esta função com uma raiz descartável — do
+/// contrário, verificar a idempotência exigiria mexer na pasta de produção do usuário.
+pub async fn pasta_raiz(
+    http: &reqwest::Client,
+    cred: &Credencial,
+    nome: &str,
+    marca: (&str, &str),
+) -> Result<String, String> {
+    let (chave, valor) = marca;
     let q = format!(
-        "appProperties has {{ key = '{MARCA_RAIZ}' and value = '{MARCA_RAIZ_VALOR}' }} \
-         and mimeType = '{MIME_PASTA}' and trashed = false"
+        "appProperties has {{ key = '{}' and value = '{}' }} \
+         and mimeType = '{MIME_PASTA}' and trashed = false",
+        escapar_q(chave),
+        escapar_q(valor)
     );
     // Duas raízes só existem se dois computadores criaram a pasta ao mesmo tempo. A mais
     // antiga vence porque é a escolha para a qual os dois convergem sozinhos.
-    if let Some(raiz) = consultar(&http, &cred, &q, Some("createdTime")).await?.first() {
+    if let Some(raiz) = consultar(http, cred, &q, Some("createdTime")).await?.first() {
         return Ok(raiz.id.clone());
     }
-    criar_pasta(
-        &http,
-        &cred,
-        NOME_RAIZ,
-        None,
-        Some((MARCA_RAIZ, MARCA_RAIZ_VALOR)),
-    )
-    .await
+    criar_pasta(http, cred, nome, None, Some(marca)).await
+}
+
+#[tauri::command]
+pub async fn drive_pasta_raiz(estado: tauri::State<'_, EstadoGoogle>) -> Result<String, String> {
+    let cred = credencial(estado).await?;
+    pasta_raiz(&http()?, &cred, NOME_RAIZ, (MARCA_RAIZ, MARCA_RAIZ_VALOR)).await
 }
 
 /// Garante que a cadeia de pastas de `caminho` existe abaixo de `pasta_mae_id` e devolve o
@@ -698,28 +713,34 @@ pub async fn drive_garantir_pasta(
 /// Uma listagem só para o cofre inteiro, em vez de uma por pasta: o escopo `drive.file` já
 /// devolve apenas o que este app criou, e descer a partir da raiz descarta o que pertence
 /// a outro cofre.
+pub async fn listar(
+    http: &reqwest::Client,
+    cred: &Credencial,
+    pasta_raiz_id: &str,
+) -> Result<ConteudoRemoto, String> {
+    let arquivos = consultar(http, cred, "trashed = false", None).await?;
+    Ok(montar_conteudo(arquivos, pasta_raiz_id))
+}
+
 #[tauri::command]
 pub async fn drive_listar(
     estado: tauri::State<'_, EstadoGoogle>,
     pasta_raiz_id: String,
 ) -> Result<ConteudoRemoto, String> {
     let cred = credencial(estado).await?;
-    let arquivos = consultar(&http()?, &cred, "trashed = false", None).await?;
-    Ok(montar_conteudo(arquivos, &pasta_raiz_id))
+    listar(&http()?, &cred, &pasta_raiz_id).await
 }
 
 /// Sobe um arquivo do disco para o Drive, criando ou substituindo conforme `file_id`.
-#[tauri::command]
-pub async fn drive_enviar(
-    estado: tauri::State<'_, EstadoGoogle>,
-    pedido: PedidoEnvio,
+pub async fn enviar(
+    http: &reqwest::Client,
+    cred: &Credencial,
+    pedido: &PedidoEnvio,
 ) -> Result<ArquivoEnviado, String> {
     validar_nome(&pedido.nome)?;
     let conteudo = std::fs::read(&pedido.caminho_local)
         .map_err(|e| format!("não foi possível ler {} para enviar: {e}", pedido.nome))?;
 
-    let cred = credencial(estado).await?;
-    let http = http()?;
     let metadados = metadados_envio(
         &pedido.nome,
         &pedido.pasta_id,
@@ -729,23 +750,29 @@ pub async fn drive_enviar(
     .to_string();
 
     let enviado = match modo_de_envio(conteudo.len() as u64) {
-        Modo::Multipart => enviar_multipart(&http, &cred, &pedido, &metadados, conteudo).await?,
-        Modo::Resumavel => enviar_resumavel(&http, &cred, &pedido, &metadados, conteudo).await?,
+        Modo::Multipart => enviar_multipart(http, cred, pedido, &metadados, conteudo).await?,
+        Modo::Resumavel => enviar_resumavel(http, cred, pedido, &metadados, conteudo).await?,
     };
     Ok(arquivo_enviado(&enviado))
 }
 
-/// Baixa o conteúdo do arquivo para o disco.
 #[tauri::command]
-pub async fn drive_baixar(
+pub async fn drive_enviar(
     estado: tauri::State<'_, EstadoGoogle>,
-    file_id: String,
-    caminho_local: String,
-) -> Result<(), String> {
+    pedido: PedidoEnvio,
+) -> Result<ArquivoEnviado, String> {
     let cred = credencial(estado).await?;
-    let http = http()?;
+    enviar(&http()?, &cred, &pedido).await
+}
 
-    let resposta = autorizar(http.get(format!("{API}/{file_id}")), &cred)
+/// Baixa o conteúdo do arquivo para o disco.
+pub async fn baixar(
+    http: &reqwest::Client,
+    cred: &Credencial,
+    file_id: &str,
+    caminho_local: &str,
+) -> Result<(), String> {
+    let resposta = autorizar(http.get(format!("{API}/{file_id}")), cred)
         .query(&[("alt", "media")])
         .send()
         .await
@@ -765,7 +792,17 @@ pub async fn drive_baixar(
         .bytes()
         .await
         .map_err(|_| "o download do arquivo foi interrompido".to_string())?;
-    gravar_baixado(Path::new(&caminho_local), &bytes)
+    gravar_baixado(Path::new(caminho_local), &bytes)
+}
+
+#[tauri::command]
+pub async fn drive_baixar(
+    estado: tauri::State<'_, EstadoGoogle>,
+    file_id: String,
+    caminho_local: String,
+) -> Result<(), String> {
+    let cred = credencial(estado).await?;
+    baixar(&http()?, &cred, &file_id, &caminho_local).await
 }
 
 fn destino_do_redirecionamento(resposta: &reqwest::Response) -> Option<String> {
@@ -815,20 +852,27 @@ fn gravar_baixado(destino: &Path, bytes: &[u8]) -> Result<(), String> {
 ///
 /// Deleção definitiva não entra: sync que apaga por engano é a falha que custa caro, e a
 /// lixeira é a única rede de proteção que existe do lado do Drive.
+pub async fn apagar(
+    http: &reqwest::Client,
+    cred: &Credencial,
+    file_id: &str,
+) -> Result<(), String> {
+    let _: ArquivoDrive = ler_json(
+        autorizar(http.patch(format!("{API}/{file_id}")), cred)
+            .query(&[("fields", "id")])
+            .json(&serde_json::json!({ "trashed": true })),
+    )
+    .await?;
+    Ok(())
+}
+
 #[tauri::command]
 pub async fn drive_apagar(
     estado: tauri::State<'_, EstadoGoogle>,
     file_id: String,
 ) -> Result<(), String> {
     let cred = credencial(estado).await?;
-    let http = http()?;
-    let _: ArquivoDrive = ler_json(
-        autorizar(http.patch(format!("{API}/{file_id}")), &cred)
-            .query(&[("fields", "id")])
-            .json(&serde_json::json!({ "trashed": true })),
-    )
-    .await?;
-    Ok(())
+    apagar(&http()?, &cred, &file_id).await
 }
 
 #[cfg(test)]

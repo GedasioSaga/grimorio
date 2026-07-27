@@ -1,7 +1,9 @@
 use std::path::Path;
 
-mod auth;
-mod drive;
+// `auth` e `drive` são públicos para que `examples/verificar_drive.rs` possa exercitar o
+// cliente do Drive contra a API real sem subir a janela do Tauri.
+pub mod auth;
+pub mod drive;
 mod hash;
 
 const RENAME_RETRY_DELAYS_MS: [u64; 2] = [50, 100];
