@@ -1,6 +1,7 @@
 use std::path::Path;
 
 mod auth;
+mod drive;
 mod hash;
 
 const RENAME_RETRY_DELAYS_MS: [u64; 2] = [50, 100];
@@ -145,7 +146,13 @@ pub fn run() {
             auth::google_iniciar_login,
             auth::google_access_token,
             auth::google_conta,
-            auth::google_desconectar
+            auth::google_desconectar,
+            drive::drive_pasta_raiz,
+            drive::drive_garantir_pasta,
+            drive::drive_listar,
+            drive::drive_enviar,
+            drive::drive_baixar,
+            drive::drive_apagar
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
