@@ -1,6 +1,6 @@
 import { normalizarCaminho } from '../cofres'
 import type { FsBridge } from '../fsBridge'
-import type { Manifesto } from './tipos'
+import type { EntradaArquivo, Manifesto } from './tipos'
 
 /**
  * Persistência do manifesto. Duas decisões de desenho carregam o arquivo inteiro:
@@ -12,41 +12,65 @@ import type { Manifesto } from './tipos'
  *    deixar o motor sem ideia do último estado bom: sem manifesto, o próximo sync trata o cofre
  *    inteiro como novo.
  *
- * O `FsBridge` entra injetado e o hash entra pronto — nada de Tauri aqui dentro.
+ * O `FsBridge` e a função de hash entram INJETADOS — nada de Tauri aqui dentro.
  */
 
 const ATUAL = 'manifesto.json'
 const ANTERIOR = 'manifesto.anterior.json'
 
 /**
- * Texto que o chamador passa a `hash_texto` para derivar o diretório. Normalizado porque
- * 'C:\x' e 'C:/x' são o MESMO cofre: sem isso ele ganharia dois manifestos, e o segundo veria o
- * cofre inteiro como novo. Mesma identidade que `cofres.ts` usa no registro de cofres abertos.
+ * `<appConfigDir>/cofres/<hash do caminho do cofre>`.
+ *
+ * Recebe a função de hash em vez do hash pronto porque a normalização precisa ser IMPOSSÍVEL de
+ * pular: 'C:\x' e 'C:/x' são o MESMO cofre, e um chamador que hasheasse o caminho cru daria dois
+ * manifestos ao mesmo cofre — o segundo veria o cofre inteiro como novo. Com a função injetada,
+ * normalizar-e-então-hashear acontece aqui dentro e o chamador não tem como contornar, sem que o
+ * módulo precise importar Tauri. Mesma identidade que `cofres.ts` usa no registro de cofres.
  */
-export function chaveDoCofre(caminhoDoCofre: string): string {
-  return normalizarCaminho(caminhoDoCofre)
-}
-
-/**
- * `<appConfigDir>/cofres/<hash>`. Composição pura: quem resolve `appConfigDir()` e `hash_texto()`
- * é o chamador, e é isso que deixa a montagem testável sem Tauri.
- */
-export function diretorioDoManifesto(dirConfig: string, hash: string): string {
+export async function diretorioDoManifesto(
+  dirConfig: string,
+  caminhoDoCofre: string,
+  hashTexto: (texto: string) => Promise<string>,
+): Promise<string> {
+  const hash = await hashTexto(normalizarCaminho(caminhoDoCofre))
   // barra final some antes de juntar: '<dir>/' + '/cofres' viraria '//cofres', que é outro caminho
   return `${normalizarCaminho(dirConfig).replace(/\/+$/, '')}/cofres/${hash}`
 }
 
+/** Uma entrada com todos os campos que `EntradaArquivo` declara. Checagem rasa: é anti-lixo, não schema. */
+function ehEntradaArquivo(valor: unknown): valor is EntradaArquivo {
+  if (typeof valor !== 'object' || valor === null) return false
+  const e = valor as EntradaArquivo
+  return typeof e.fileId === 'string'
+    && typeof e.hash === 'string'
+    && typeof e.tamanho === 'number'
+    && typeof e.mtimeLocal === 'number'
+    && typeof e.versaoRemota === 'string'
+}
+
 /**
- * Descarta o que não é manifesto v1. `arquivos`/`pastas` tortos fariam o motor enxergar zero
- * arquivos conhecidos e tratar o cofre inteiro como novo — exatamente o que a cópia anterior existe
- * para evitar. Melhor cair no backup do que confiar num objeto que só parece manifesto.
+ * `Record<string, T>` de verdade. Array é recusado explicitamente porque passaria no `typeof
+ * === 'object'` e depois daria zero entradas em `Object.entries([])` — o motor concluiria que
+ * não conhece nenhum arquivo e mandaria SUBIR o cofre inteiro.
+ */
+function ehMapa(valor: unknown, ehValorValido: (v: unknown) => boolean): boolean {
+  if (typeof valor !== 'object' || valor === null || Array.isArray(valor)) return false
+  return Object.values(valor).every(ehValorValido)
+}
+
+/**
+ * Descarta o que não é manifesto v1. O manifesto vem do disco, que é entrada NÃO CONFIÁVEL, e os
+ * dois estragos são silenciosos: mapa torto faz o motor tratar o cofre inteiro como novo (e o
+ * freio de deleção em massa não salva — ele exige um mínimo de arquivos conhecidos, e aqui o total
+ * é zero), e entrada nula estoura lá dentro comparando `hash`. Melhor cair na cópia anterior do
+ * que confiar num objeto que só parece manifesto.
  */
 function ehManifesto(valor: unknown): valor is Manifesto {
   if (typeof valor !== 'object' || valor === null) return false
   const m = valor as Manifesto
   return m.versao === 1
-    && typeof m.arquivos === 'object' && m.arquivos !== null
-    && typeof m.pastas === 'object' && m.pastas !== null
+    && ehMapa(m.arquivos, ehEntradaArquivo)
+    && ehMapa(m.pastas, (v) => typeof v === 'string')
 }
 
 async function tentarLer(caminho: string, fs: FsBridge): Promise<Manifesto | null> {

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { criarFakeFs } from './fakeFs'
-import { chaveDoCofre, diretorioDoManifesto, gravarManifesto, lerManifesto, rotacionar } from '../lib/sync/manifesto'
+import { diretorioDoManifesto, gravarManifesto, lerManifesto, rotacionar } from '../lib/sync/manifesto'
 import type { Manifesto } from '../lib/sync/tipos'
 
 const DIR = 'C:/AppData/Roaming/grimorio/cofres/a1b2c3d4e5f60718'
@@ -26,6 +26,9 @@ function manifesto(sobrescreve: Partial<Manifesto> = {}): Manifesto {
   }
 }
 
+/** hash_texto é determinístico e nunca rejeita; o fake só precisa dessas duas propriedades. */
+const hashFake = async (texto: string) => `hash(${texto})`
+
 /**
  * fs que RECUSA escrever em diretório não criado. O fake padrão aceita qualquer caminho e o
  * `write_text_file_atomic` do Rust faz `create_dir_all` sozinho — nos dois casos um `mkdirAll`
@@ -48,6 +51,14 @@ function fsQueExigeDiretorio() {
   }
 }
 
+/** Grava `bruto` como manifesto corrente sobre uma cópia anterior válida e devolve o que a leitura enxergou. */
+async function lerComAtualInvalido(bruto: string, anterior: Manifesto) {
+  const fs = criarFakeFs()
+  await fs.writeTextAtomic(CAMINHO_ANTERIOR, JSON.stringify(anterior))
+  await fs.writeTextAtomic(CAMINHO_ATUAL, bruto)
+  return lerManifesto(DIR, fs)
+}
+
 describe('lerManifesto / gravarManifesto', () => {
   it('ida e volta: o que grava é o que lê', async () => {
     const fs = criarFakeFs()
@@ -61,21 +72,10 @@ describe('lerManifesto / gravarManifesto', () => {
   })
 
   it('manifesto.json truncado cai na cópia anterior', async () => {
-    const fs = criarFakeFs()
     const anterior = manifesto({ startPageToken: '41' })
     const truncado = JSON.stringify(manifesto()).slice(0, 40)
     expect(() => JSON.parse(truncado)).toThrow() // garante que o caso testa corrupção de verdade
-    await fs.writeTextAtomic(CAMINHO_ANTERIOR, JSON.stringify(anterior))
-    await fs.writeTextAtomic(CAMINHO_ATUAL, truncado)
-    expect(await lerManifesto(DIR, fs)).toEqual(anterior)
-  })
-
-  it('json válido que não é manifesto também cai na cópia anterior', async () => {
-    const fs = criarFakeFs()
-    const anterior = manifesto({ startPageToken: '41' })
-    await fs.writeTextAtomic(CAMINHO_ANTERIOR, JSON.stringify(anterior))
-    await fs.writeTextAtomic(CAMINHO_ATUAL, '{"versao":1,"arquivos":"isso não é um mapa"}')
-    expect(await lerManifesto(DIR, fs)).toEqual(anterior)
+    expect(await lerComAtualInvalido(truncado, anterior)).toEqual(anterior)
   })
 
   it('as duas cópias corrompidas viram null, sem lançar', async () => {
@@ -100,6 +100,35 @@ describe('lerManifesto / gravarManifesto', () => {
   })
 })
 
+describe('guarda de forma do manifesto', () => {
+  const anterior = manifesto({ startPageToken: '41' })
+
+  it('json válido que não é manifesto cai na cópia anterior', async () => {
+    expect(await lerComAtualInvalido('{"versao":1,"arquivos":"isso não é um mapa"}', anterior)).toEqual(anterior)
+  })
+
+  it('arquivos/pastas em forma de array cai na cópia anterior', async () => {
+    // Array passa em `typeof === 'object'`, e `Object.entries([])` dá zero arquivos conhecidos: o
+    // motor mandaria SUBIR o cofre inteiro. O freio de deleção em massa não pega isso — ele exige
+    // um mínimo de arquivos conhecidos, e aqui o total é justamente zero.
+    expect(await lerComAtualInvalido('{"versao":1,"arquivos":[],"pastas":[]}', anterior)).toEqual(anterior)
+  })
+
+  it('entrada nula em arquivos cai na cópia anterior', async () => {
+    // null passa na checagem de topo e só estoura lá dentro, comparando `atual.hash === entrada.hash`
+    expect(await lerComAtualInvalido('{"versao":1,"arquivos":{"a.json":null},"pastas":{}}', anterior)).toEqual(anterior)
+  })
+
+  it('entrada sem os campos de EntradaArquivo cai na cópia anterior', async () => {
+    expect(await lerComAtualInvalido('{"versao":1,"arquivos":{"a.json":{"fileId":"f1"}},"pastas":{}}', anterior))
+      .toEqual(anterior)
+  })
+
+  it('pastas com valor que não é string cai na cópia anterior', async () => {
+    expect(await lerComAtualInvalido('{"versao":1,"arquivos":{},"pastas":{"campanhas":7}}', anterior)).toEqual(anterior)
+  })
+})
+
 describe('rotacionar', () => {
   it('copia o corrente por cima da cópia anterior, e ler continua devolvendo o corrente', async () => {
     const fs = criarFakeFs()
@@ -121,20 +150,28 @@ describe('rotacionar', () => {
 })
 
 describe('diretorioDoManifesto', () => {
-  it('monta <appConfigDir>/cofres/<hash>', () => {
-    expect(diretorioDoManifesto('C:/Users/g/AppData/Roaming/grimorio', 'a1b2c3d4e5f60718'))
-      .toBe('C:/Users/g/AppData/Roaming/grimorio/cofres/a1b2c3d4e5f60718')
+  it('monta <appConfigDir>/cofres/<hash>', async () => {
+    const dir = await diretorioDoManifesto('C:/Users/g/AppData/Roaming/grimorio', 'C:/Cofre/RPG', async () => 'a1b2c3d4')
+    expect(dir).toBe('C:/Users/g/AppData/Roaming/grimorio/cofres/a1b2c3d4')
   })
 
-  it('aceita appConfigDir com barra invertida e com barra final', () => {
-    expect(diretorioDoManifesto('C:\\Users\\g\\AppData\\Roaming\\grimorio\\', 'a1b2c3d4e5f60718'))
-      .toBe('C:/Users/g/AppData/Roaming/grimorio/cofres/a1b2c3d4e5f60718')
+  it('aceita appConfigDir com barra invertida e com barra final', async () => {
+    const dir = await diretorioDoManifesto('C:\\Users\\g\\AppData\\Roaming\\grimorio\\', 'C:/Cofre/RPG', async () => 'a1b2c3d4')
+    expect(dir).toBe('C:/Users/g/AppData/Roaming/grimorio/cofres/a1b2c3d4')
   })
 
-  it('o mesmo cofre escrito com \\ ou / cai no mesmo diretório', () => {
-    // hash_texto é determinístico: mesma entrada, mesma saída. Só a normalização decide aqui.
-    const hashFake = (texto: string) => `hash(${texto})`
-    const dirDe = (cofre: string) => diretorioDoManifesto('C:/cfg', hashFake(chaveDoCofre(cofre)))
-    expect(dirDe('C:\\Cofre\\RPG')).toBe(dirDe('C:/Cofre/RPG'))
+  it('o mesmo cofre escrito com \\ ou / cai no mesmo diretório', async () => {
+    expect(await diretorioDoManifesto('C:/cfg', 'C:\\Cofre\\RPG', hashFake))
+      .toBe(await diretorioDoManifesto('C:/cfg', 'C:/Cofre/RPG', hashFake))
+  })
+
+  it('o que chega ao hash é o caminho normalizado, não o cru', async () => {
+    // o chamador entrega o caminho e a função: normalizar antes de hashear não é pulável
+    const vistos: string[] = []
+    await diretorioDoManifesto('C:/cfg', 'C:\\Cofre\\RPG', async (texto) => {
+      vistos.push(texto)
+      return 'h'
+    })
+    expect(vistos).toEqual(['C:/Cofre/RPG'])
   })
 })
