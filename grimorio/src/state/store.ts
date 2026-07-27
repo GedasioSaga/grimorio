@@ -129,6 +129,8 @@ interface AppState {
   /** true quando adicionou; false quando já existia (dedupe por deId/paraId/tipo). */
   adicionarVinculo(v: Omit<Vinculo, 'id' | 'criadoEm'>): boolean
   removerVinculo(id: string): void
+  /** Tira todos os vínculos da entidade (as duas pontas). Usado ao excluir pasta. */
+  removerVinculosDe(entidadeId: string): void
   alternarParticipacao(entidadeTipo: TipoEntidadeVinculo, entidadeId: string, campanhaId: string): void
   setCampanhaFiltro(id: string | null): void
   /** Ajusta os vínculos 'participa' da entidade para bater EXATAMENTE com a lista (add os novos, remove os que saíram). */
@@ -387,6 +389,15 @@ export const useApp = create<AppState>((set, get) => ({
 
   removerVinculo(id) {
     set({ vinculos: removerVinculoPuro(get().vinculos, id) })
+    agendarSalvarVinculos(get)
+  },
+
+  removerVinculosDe(entidadeId) {
+    const atuais = get().vinculos
+    const restantes = atuais.filter((v) => v.deId !== entidadeId && v.paraId !== entidadeId)
+    // nada mudou: não agenda gravação nem troca a referência do array à toa
+    if (restantes.length === atuais.length) return
+    set({ vinculos: restantes })
     agendarSalvarVinculos(get)
   },
 
