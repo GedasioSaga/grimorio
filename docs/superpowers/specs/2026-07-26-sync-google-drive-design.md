@@ -82,14 +82,17 @@ nunca vê o refresh token.**
 O limite de 2560 bytes por credential do Windows cabe um refresh token com folga — guardar
 **só** o refresh token lá, nada de JSON grande.
 
-### Camada 2 — Cliente Drive (TypeScript, `src/lib/drive/api.ts`)
+### Camada 2 — Cliente Drive (Rust, `src-tauri/src/drive.rs`)
 
-Usa o `plugin-http` que já atende o Gemini (`src/lib/gemini.ts:9`). Liberar em
-`src-tauri/capabilities/default.json:10-13`:
-
-```json
-{ "url": "https://www.googleapis.com/*" }
-```
+> **Mudou na implementação (2026-07-27, commit `54d5b70`).** O desenho original punha esta
+> camada em TypeScript sobre o `plugin-http`. Ela saiu em Rust, exposta como comandos Tauri,
+> por um motivo que só ficou visível ao escrever: em TypeScript **cada operação exigiria o
+> access token atravessando a ponte** para o lado do front, desfazendo metade do cuidado do
+> `auth.rs` — que existe justamente para o segredo nunca sair do processo Rust. Em Rust cada
+> comando pede o token a `auth::google_access_token` e o consome no mesmo processo.
+>
+> Consequência: o allowlist `https://www.googleapis.com/*` em `capabilities/default.json`
+> deixou de ser necessário para o Drive. Continua lá, ainda usado pelo Gemini.
 
 `accounts.google.com` **não** entra: abre no navegador do sistema.
 `oauth2.googleapis.com` **não** entra: a troca de token é feita no Rust.
