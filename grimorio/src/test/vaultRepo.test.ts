@@ -323,8 +323,55 @@ describe('id de pasta', () => {
     const arquivo = 'C:/Cofre/personagens-soltos/corrompida/pasta.json'
     const truncado = '{"nome": "Vilões Importantes", "criadoEm": "2020-01-0'
     await fs.writeTextAtomic(arquivo, truncado)
-    await expect(repo.garantirIdDePasta('personagens-soltos/corrompida')).rejects.toThrow()
+    await expect(repo.garantirIdDePasta('personagens-soltos/corrompida')).rejects.toThrow(SyntaxError)
     expect(fs.arquivos.get(arquivo)).toBe(truncado)
+  })
+
+  it('garantirIdDePasta recusa pasta.json que não é objeto', async () => {
+    // array aceita `obj.id = x` calado, mas o stringify descarta: id devolvido não existiria no disco
+    const arquivo = 'C:/Cofre/personagens-soltos/array/pasta.json'
+    await fs.writeTextAtomic(arquivo, '[]')
+    await expect(repo.garantirIdDePasta('personagens-soltos/array')).rejects.toThrow(/pasta\.json inválido/)
+    expect(fs.arquivos.get(arquivo)).toBe('[]')
+  })
+
+  it('garantirIdDePasta sintetiza quando pasta.json está vazio (0 byte)', async () => {
+    // arquivo zerado por sync interrompido: não há nome a preservar, então nasce metadado novo
+    const arquivo = 'C:/Cofre/personagens-soltos/zerada/pasta.json'
+    await fs.writeTextAtomic(arquivo, '')
+    const id = await repo.garantirIdDePasta('personagens-soltos/zerada')
+    expect(id).toBeTruthy()
+    const meta = JSON.parse(fs.arquivos.get(arquivo)!)
+    expect(meta.id).toBe(id)
+    expect(meta.nome).toBe('zerada')
+  })
+
+  it('duas chamadas concorrentes de garantirIdDePasta cunham um id só', async () => {
+    await fs.writeTextAtomic('C:/Cofre/personagens-soltos/antiga/pasta.json', JSON.stringify({ nome: 'Antiga' }))
+    const escritas = contarEscritas(fs)
+    fs.atrasoEscritaMs = 20 // sem a fila, as duas leriam "sem id" antes de qualquer escrita
+    const [a, b] = await Promise.all([
+      repo.garantirIdDePasta('personagens-soltos/antiga'),
+      repo.garantirIdDePasta('personagens-soltos/antiga'),
+    ])
+    fs.atrasoEscritaMs = 0
+    expect(a).toBe(b)
+    expect(escritas.total).toBe(1)
+    expect(JSON.parse(fs.arquivos.get('C:/Cofre/personagens-soltos/antiga/pasta.json')!).id).toBe(a)
+  })
+
+  it('garantirIdDePasta e renomearItem concorrentes na mesma pasta não se sobrescrevem', async () => {
+    const arquivo = 'C:/Cofre/personagens-soltos/antiga/pasta.json'
+    await fs.writeTextAtomic(arquivo, JSON.stringify({ nome: 'Antiga' }))
+    fs.atrasoEscritaMs = 20 // compartilham a chave da fila: um relê o que o outro gravou
+    const [id] = await Promise.all([
+      repo.garantirIdDePasta('personagens-soltos/antiga'),
+      repo.renomearItem('personagens-soltos/antiga/pasta.json', 'Renomeada'),
+    ])
+    fs.atrasoEscritaMs = 0
+    const meta = JSON.parse(fs.arquivos.get(arquivo)!)
+    expect(meta.id).toBe(id)            // o id sobreviveu ao rename
+    expect(meta.nome).toBe('Renomeada') // o rename sobreviveu ao id
   })
 
   it('garantirIdDePasta funciona em pasta sem pasta.json', async () => {

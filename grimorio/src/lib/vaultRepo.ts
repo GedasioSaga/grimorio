@@ -185,9 +185,14 @@ export class VaultRepo {
     const slug = slugUnico(slugify(nome), existentes)
     const dir = `${dirPai}/${slug}`
     const id = novoId()
-    await this.fs.mkdirAll(this.abs(dir))
-    await this.fs.writeTextAtomic(this.abs(`${dir}/pasta.json`), JSON.stringify({ nome, id, criadoEm: agora() }, null, 2))
-    return { slug, nome, caminho: dir, id }
+    const caminho = `${dir}/pasta.json`
+    // mesma fila do garantirIdDePasta: sem isso, um garantirIdDePasta concorrente
+    // no mesmo caminho poderia ler "sem pasta.json", sintetizar e gravar por cima
+    return this.naFila(caminho, async () => {
+      await this.fs.mkdirAll(this.abs(dir))
+      await this.fs.writeTextAtomic(this.abs(caminho), JSON.stringify({ nome, id, criadoEm: agora() }, null, 2))
+      return { slug, nome, caminho: dir, id }
+    })
   }
 
   /**
@@ -208,9 +213,18 @@ export class VaultRepo {
       // possivelmente recuperável à mão (truncamento por conflito de sync, p.ex.).
       // Deixar o parse lançar é o comportamento não-destrutivo, alinhado com
       // montarArvorePastas, que cai no nome do diretório sem regravar nada.
-      const obj: Record<string, unknown> = bruto === null
-        ? { nome: dirDaPasta.split('/').pop() ?? dirDaPasta, criadoEm: agora() }
-        : JSON.parse(bruto)
+      const cru = bruto?.trim()
+      // ausente OU vazio: não há metadado a preservar, nasce agora.
+      // Conteúdo presente porém ilegível NÃO cai aqui — ver comentário acima.
+      const lido: unknown = cru ? JSON.parse(cru) : null
+      // JSON válido mas não-objeto (array, número, string, null) não tem onde guardar o id:
+      // `obj.id = x` num array vira propriedade não-índice, que o stringify descarta —
+      // o arquivo ficaria intacto e o id devolvido não existiria em lugar nenhum.
+      if (cru && (typeof lido !== 'object' || lido === null || Array.isArray(lido))) {
+        throw new Error(`pasta.json inválido em ${dirDaPasta}`)
+      }
+      const obj: Record<string, unknown> = (lido as Record<string, unknown> | null)
+        ?? { nome: dirDaPasta.split('/').pop() || dirDaPasta, criadoEm: agora() }
       if (typeof obj.id === 'string' && obj.id) return obj.id
       const id = novoId()
       obj.id = id
