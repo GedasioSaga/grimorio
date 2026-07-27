@@ -650,3 +650,32 @@ button:hover { border-color: var(--dourado); color: var(--dourado-claro); }
 .opcoes-cofre-caminho { grid-column: 1; font-size: 0.78rem; color: var(--texto-fraco); word-break: break-all; }
 .opcoes-cofre-acoes { grid-column: 2; grid-row: 1 / span 2; display: flex; align-items: center; gap: 4px; }
 .opcoes-acao { margin-right: 8px; }
+
+/* ---- aba Nuvem: retrato do sync com o Google Drive ---- */
+.sync-titulo { margin: 0 0 4px; font-size: 0.9rem; color: var(--texto); }
+.sync-titulo.sync-ok { color: var(--dourado-claro); }
+.sync-titulo.sync-atencao { color: var(--erro); }
+.sync-titulo.sync-ocupado, .sync-titulo.sync-parado { color: var(--texto-fraco); }
+/* barra lateral colorida: o bloco tem de se ler como aviso antes de ser lido como texto */
+.sync-aviso {
+  margin: 0 0 12px;
+  padding: 10px 12px;
+  background: var(--fundo);
+  border: 1px solid var(--borda);
+  border-left: 3px solid var(--erro);
+  border-radius: 6px;
+}
+.sync-aviso-titulo { font-size: 0.85rem; color: var(--texto); }
+.sync-aviso p { margin: 6px 0 0; font-size: 0.85rem; color: var(--texto-fraco); }
+.sync-aviso-itens {
+  margin: 8px 0 0; padding-left: 18px;
+  font-size: 0.8rem; color: var(--texto-fraco); word-break: break-word;
+}
+.sync-copia-item {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 2px 8px;
+  padding: 8px 10px;
+  border: 1px solid var(--borda);
+  border-radius: 6px;
+}

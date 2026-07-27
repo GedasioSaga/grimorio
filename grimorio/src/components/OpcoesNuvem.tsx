@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { googleConta, googleDesconectar, googleIniciarLogin } from '../lib/googleAuth'
+import { PainelSync } from './PainelSync'
 
 /**
  * As mensagens do `auth.rs` já são escritas para o usuário final, em português, e culpam
@@ -10,8 +11,13 @@ function mensagemDoErro(erro: unknown): string {
   return typeof erro === 'string' ? erro : String(erro)
 }
 
-/** Aba Nuvem: conecta e desconecta a conta do Google usada pelo sync com o Drive. */
-export function OpcoesNuvem() {
+/**
+ * Aba Nuvem: a conta do Google e, depois dela, o estado do sync com o Drive.
+ *
+ * `onFechar` existe por causa do painel: abrir uma cópia de conflito significa abrir o
+ * PerfilModal, que fica ATRÁS desta janela se as Opções continuarem de pé.
+ */
+export function OpcoesNuvem({ onFechar }: { onFechar: () => void }) {
   const [conta, setConta] = useState<string | null>(null)
   const [carregando, setCarregando] = useState(true)
   const [entrando, setEntrando] = useState(false)
@@ -90,12 +96,8 @@ export function OpcoesNuvem() {
 
       {erro && <p className="opcoes-erro">{erro}</p>}
 
-      {!carregando && (
-        <p className="opcoes-vazio">
-          A conexão com a conta já funciona, mas a sincronização em si ainda não foi
-          construída — por enquanto nada sobe para o Google Drive nem desce de lá.
-        </p>
-      )}
+      {/* Sem conta não há sync: todo ciclo fala com o Drive na primeira linha. */}
+      {!carregando && conta && <PainelSync onFechar={onFechar} />}
     </div>
   )
 }

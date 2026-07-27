@@ -65,7 +65,7 @@ export function HostOpcoes() {
         <div className="opcoes-conteudo">
           <button className="btn-icon opcoes-fechar" title="Fechar" onClick={fechar}>✕</button>
           {aba === 'cofre' && <OpcoesCofre onFechar={fechar} />}
-          {aba === 'nuvem' && <OpcoesNuvem />}
+          {aba === 'nuvem' && <OpcoesNuvem onFechar={fechar} />}
           {aba === 'aparencia' && (
             <div className="opcoes-secao">
               <h3>Tema</h3>
