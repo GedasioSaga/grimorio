@@ -38,7 +38,15 @@ export function criarFakeFs(): FsBridge & { arquivos: Map<string, string>; atras
         if (!primeiro) continue
         nomes.set(primeiro, resto.includes('/') || dirs.has(base + primeiro))
       }
-      return [...nomes].map(([name, isDir]) => ({ name, isDir }))
+      // O fake não tem relógio: `mtime` sai `null`, que é exatamente o que o `list_dir` devolve
+      // quando não consegue ler o metadado. Teste que depende de tamanho ou data injeta a
+      // listagem direto, como `varrerCofre.test.ts` faz.
+      return [...nomes].map(([name, isDir]) => ({
+        name,
+        isDir,
+        size: isDir ? null : (arquivos.get(base + name)?.length ?? null),
+        mtime: null,
+      }))
     },
     async mkdirAll(path) {
       dirs.add(norm(path))

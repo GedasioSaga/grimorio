@@ -29,7 +29,7 @@ describe('classificarPasta', () => {
   })
   it('trata erro do listDir como pasta vazia (caminho inexistente no Tauri real)', async () => {
     // o fakeFs devolve [] para caminho inexistente, então nunca exercita o catch.
-    // Em produção quem responde é list_dir (src-tauri/src/lib.rs:57-69), que usa
+    // Em produção quem responde é list_dir (src-tauri/src/lib.rs), que usa
     // std::fs::read_dir e REJEITA em caminho inexistente — este stub reproduz isso.
     const fsQueRejeita = {
       ...criarFakeFs(),

@@ -18,11 +18,9 @@ import type { EntradaArquivo, EstadoLocal } from './tipos'
  *    releria dezenas de MB de imagem. O risco aceito é o arquivo que muda mantendo tamanho E mtime
  *    exatos — o que exige uma edição que preserve o tamanho e um utilitário que restaure o mtime.
  *
- * **Depende de um comando Rust que ainda não existe.** `list_dir` (`src-tauri/src/lib.rs`) hoje
- * devolve só `{ name, is_dir }`; `EstadoLocal` precisa de `tamanho` e `mtime`. Por isso a listagem
- * entra INJETADA como `ItemNoDisco[]` em vez de sair do `FsBridge`: a peça fica testável hoje e
- * ligar na produção é acrescentar dois campos no Rust e uma linha na ponte — sem um método
- * quebrado no `FsBridge`, que o app inteiro usa.
+ * A listagem entra INJETADA como `ItemNoDisco[]`, e não sai do `FsBridge` direto, para que este
+ * arquivo continue sem Tauri e testável sem disco. Quem liga a porta no `list_dir` de verdade é
+ * `disco.ts` — e é lá que mora a decisão sobre o metadado que o sistema não deixou ler.
  */
 
 /** Uma entrada de diretório com o que a varredura precisa. */
