@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { estadoLimpoDeCofre, useApp } from './state/store'
+import { observarCofreAberto } from './state/sync'
 import { VaultPicker } from './components/VaultPicker'
 import { Sidebar } from './components/Sidebar'
 import { Workspace } from './components/Workspace'
@@ -56,6 +57,12 @@ export default function App() {
   useEffect(() => {
     checarAtualizacao()
   }, [])
+
+  // Liga a sincronização com o Drive ao cofre aberto, e a religa a cada troca de cofre. Fica
+  // FORA do efeito de boot acima de propósito: o sync não pode atrasar nem derrubar a abertura
+  // do cofre, e ele mesmo espera o `vaultPath` aparecer. Sem conta conectada ou sem pareamento,
+  // não sobe sincronizador nenhum — o app segue exatamente como sempre foi.
+  useEffect(() => observarCofreAberto(), [])
 
   if (!vaultPath) return <VaultPicker />
 

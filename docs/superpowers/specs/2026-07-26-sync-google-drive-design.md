@@ -82,14 +82,17 @@ nunca vê o refresh token.**
 O limite de 2560 bytes por credential do Windows cabe um refresh token com folga — guardar
 **só** o refresh token lá, nada de JSON grande.
 
-### Camada 2 — Cliente Drive (TypeScript, `src/lib/drive/api.ts`)
+### Camada 2 — Cliente Drive (Rust, `src-tauri/src/drive.rs`)
 
-Usa o `plugin-http` que já atende o Gemini (`src/lib/gemini.ts:9`). Liberar em
-`src-tauri/capabilities/default.json:10-13`:
-
-```json
-{ "url": "https://www.googleapis.com/*" }
-```
+> **Mudou na implementação (2026-07-27, commit `54d5b70`).** O desenho original punha esta
+> camada em TypeScript sobre o `plugin-http`. Ela saiu em Rust, exposta como comandos Tauri,
+> por um motivo que só ficou visível ao escrever: em TypeScript **cada operação exigiria o
+> access token atravessando a ponte** para o lado do front, desfazendo metade do cuidado do
+> `auth.rs` — que existe justamente para o segredo nunca sair do processo Rust. Em Rust cada
+> comando pede o token a `auth::google_access_token` e o consome no mesmo processo.
+>
+> Consequência: o allowlist `https://www.googleapis.com/*` em `capabilities/default.json`
+> deixou de ser necessário para o Drive. Continua lá, ainda usado pelo Gemini.
 
 `accounts.google.com` **não** entra: abre no navegador do sistema.
 `oauth2.googleapis.com` **não** entra: a troca de token é feita no Rust.
@@ -157,6 +160,42 @@ gerado na primeira vez e nunca muda. Os dois só servem para nomear cópias de c
 }
 ```
 
+**Forma canônica do caminho — pré-condição, não sugestão.** Toda chave usa `/`, nunca `\`, e passa por
+`normalizarCaminho` (`src/lib/cofres.ts`) antes de entrar no manifesto. As três origens que alimentam
+a reconciliação — manifesto lido do disco, varredura local, listagem do Drive — **têm que concordar na
+forma**, incluindo caixa e normalização Unicode.
+
+Não é preciosismo: `reconciliar` faz a união das três coleções de chaves. Se o manifesto guardar
+`campanhas\x.json` e a varredura emitir `campanhas/x.json`, o mesmo arquivo vira **duas** chaves — uma
+some (`apagarRemoto`) e a outra sobe (`subir`). Em cofre com 10+ arquivos o freio de deleção em massa
+pega e pergunta; abaixo disso, não pega. Nos dois casos o primeiro sync nasce errado.
+
+Casos que exigem atenção de quem montar os mapas: o sistema de arquivos do Windows é
+**case-insensitive** e o Drive é **case-sensitive** (`Gandalf.json` e `gandalf.json` são dois arquivos
+lá e um só aqui); e acentuação pode chegar em NFC ou NFD, o que num cofre em português é a regra, não
+a exceção.
+
+### Contrato do manifesto — reconstrução, não edição incremental
+
+Ao fim de um ciclo bem-sucedido, o executor **reconstrói o manifesto inteiro** a partir do estado
+pós-sync (o que existe localmente e no Drive depois de aplicadas as ações), em vez de aplicar
+alterações entrada por entrada.
+
+Isso resolve, por construção, três problemas que a edição incremental teria:
+
+- **Sem entradas fantasma.** A célula `apagado × apagado` da matriz não emite ação nenhuma — não há
+  verbo para "esquecer" em `Acao`, e não precisa haver: o caminho simplesmente não aparece no
+  manifesto novo. Sob edição incremental, ele ficaria lá para sempre, inflando o `total` que é o
+  denominador do freio de deleção em massa. Um cofre com 20 arquivos reais e 200 fantasmas mediria
+  uma falha sistemática de 20 deleções como 9%, e o freio nunca dispararia.
+- **`fileId` nunca envelhece.** Se um caminho passar a apontar para outro arquivo no Drive com
+  conteúdo idêntico, a reconciliação decide `igual` pelo hash e não emite nada — mas o id é regravado
+  junto com o resto do manifesto.
+- **`versaoRemota` também não deriva**, pelo mesmo motivo.
+
+O custo é que `registrar` vira uma instrução de I/O ("não transfira nada"), não uma instrução de
+manifesto. É o que ela já é na prática.
+
 É o mesmo conceito que o rclone chama de `.lst` e o Unison de *archive*: **o estado conhecido do
 último sync bem-sucedido**. É o que permite responder "isto mudou desde o último sync?" em vez
 de "quem tem a data maior?" — a diferença entre um sync correto e um que ressuscita arquivo
@@ -221,7 +260,22 @@ Baseado na matriz de decisão documentada do `remotely-save` v3.
 ⚠️ **O código do motor daquele plugin está sob PolyForm Strict e não pode ser copiado nem
 derivado.** Só os documentos de design (`docs/`, Apache-2.0) são reutilizáveis, com atribuição.
 
-#### Política de conflito por tipo de arquivo
+#### Quem assina a cópia de conflito
+
+O nome da cópia perdedora é `Gandalf (conflito — PC Casa 26-07 14h32)`, e o nome do dispositivo
+existe para você saber **de onde veio** a edição que perdeu. Mas o manifesto guarda `deviceNome`
+apenas do próprio computador. Quando o local vence e a **remota** vira a cópia de conflito, não há
+nada dizendo qual máquina escreveu aquela versão — metade dos conflitos ficaria sem assinatura.
+
+`lastModifyingUser` do Drive não resolve: é a mesma conta do Google nas duas pontas, então diria o
+seu nome dos dois lados.
+
+**Decisão:** a cada upload, gravar `deviceNome` em `appProperties` do arquivo no Drive. O teto é
+124 bytes por propriedade (chave + valor), o que cabe um nome de máquina com folga, e vem junto no
+`files.get`/`changes.list` sem chamada extra. Quando a remota perde, a cópia é assinada com esse
+valor; se ele faltar (arquivo enviado por uma versão anterior do app), cai em `"outro computador"`.
+
+## Política de conflito por tipo de arquivo
 
 Nem tudo pode virar cópia — e é aqui que mora a armadilha.
 
@@ -289,11 +343,32 @@ exponencial, persiste no manifesto para sobreviver a fechar o app, acumula offli
 | **C4** | Bidirecional: reconciliação, conflitos, guard-rails | editar nos dois offline, reconectar, conferir a cópia |
 | **C5** | Contínuo: fila, polling 60 s, foco, indicador ☁️ | salvar num PC e ver aparecer no outro em ~1 min |
 
-**Spike bloqueador, entre C1 e C2 (~15 min):** com credencial real, confirmar que
-`changes.list` sob `drive.file` reporta os arquivos criados pelo app. A inferência é forte
-(é a definição do escopo, e o rclone se comporta assim), mas **o Google não afirma isso em
-lugar nenhum**. Se falhar, o polling vira `files.list` por pasta — mais caro em quota, mesmo
-desenho de motor. Decidir isso antes de escrever o C4.
+**Spike bloqueador — RESOLVIDO em 2026-07-27, commit `fc9cd17`.** Com credencial real,
+`changes.list` sob `drive.file` **reporta** os arquivos criados pelo app: criação,
+modificação e exclusão, todas confirmadas com chamadas reais. O polling incremental está
+liberado; não é preciso cair para `files.list` + `modifiedTime`. O experimento vive em
+`src-tauri/examples/spike_changes.rs` e pode ser rodado de novo com
+`cargo run --example spike_changes` — ele limpa o que cria.
+
+Quatro achados que o consumidor do feed precisa respeitar:
+
+1. **Na exclusão o objeto `file` some.** Sobram só `changeType`, `fileId`, `removed` e
+   `time`. Ler `mudanca.file.name` sem ramificar em `removed` antes quebra em produção.
+2. **`newStartPageToken` só aparece na última página.** Parar no primeiro `changes.list`
+   sem seguir o `nextPageToken` deixa a rodada seguinte sem token.
+3. **Consistência eventual de ~2 s.** Criação e exclusão só apareceram na segunda tentativa.
+   Feed vazio logo depois de uma escrita **não** significa "nada mudou" — tratar como
+   "ainda não sei" evita que o motor conclua uma exclusão que não houve.
+4. **`removed: true` significa "saiu do seu alcance", não "foi apagado".** Perda de acesso
+   produz o mesmo sinal que exclusão, e o feed não distingue os dois. O desenho já se
+   defende disso por dois caminhos independentes: o motor compara cada lado **contra o
+   manifesto**, nunca um lado contra o outro, e o freio de exclusão em massa
+   (`MINIMO_PARA_FREIO`) corta o caso catastrófico em que o acesso a tudo se perde de uma
+   vez. Nenhuma exclusão local pode ser derivada de `removed: true` isoladamente.
+
+`files.delete` apaga de vez (HTTP 204) e nunca produz `trashed`. Mas o usuário mandando o
+arquivo para a lixeira pela interface do Drive produz um caso **diferente** —
+`removed: false` com `file.trashed: true` — que é um segundo caminho a tratar.
 
 ## Testes
 

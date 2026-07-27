@@ -9,7 +9,10 @@
     "dialog:default",
     {
       "identifier": "http:default",
-      "allow": [{ "url": "https://generativelanguage.googleapis.com/*" }]
+      "allow": [
+        { "url": "https://generativelanguage.googleapis.com/*" },
+        { "url": "https://www.googleapis.com/*" }
+      ]
     }
   ]
 }

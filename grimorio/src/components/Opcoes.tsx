@@ -3,6 +3,7 @@ import { useEffect } from 'react'
 import { SeletorTema } from './SeletorTema'
 import { OpcoesCofre } from './OpcoesCofre'
 import { OpcoesIA } from './OpcoesIA'
+import { OpcoesNuvem } from './OpcoesNuvem'
 
 export type AbaOpcoes = 'cofre' | 'nuvem' | 'aparencia' | 'ia'
 
@@ -64,12 +65,7 @@ export function HostOpcoes() {
         <div className="opcoes-conteudo">
           <button className="btn-icon opcoes-fechar" title="Fechar" onClick={fechar}>✕</button>
           {aba === 'cofre' && <OpcoesCofre onFechar={fechar} />}
-          {aba === 'nuvem' && (
-            <div className="opcoes-secao">
-              <h3>Nuvem</h3>
-              <p className="opcoes-vazio">Sincronização com o Google Drive chega em breve.</p>
-            </div>
-          )}
+          {aba === 'nuvem' && <OpcoesNuvem onFechar={fechar} />}
           {aba === 'aparencia' && (
             <div className="opcoes-secao">
               <h3>Tema</h3>

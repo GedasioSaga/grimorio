@@ -19,8 +19,41 @@ const timersSalvarParcial = new Map<string, ReturnType<typeof setTimeout>>()
 // mesmo racional para cenários (cards no canvas desmontam fora da viewport)
 const timersSalvarCenario = new Map<string, ReturnType<typeof setTimeout>>()
 
+/**
+ * Avisado sempre que uma gravação é AGENDADA. É o gatilho de "o usuário salvou alguma coisa"
+ * que o sincronizador espera (`state/sync.ts`), e chega antes do disco de propósito: o ciclo
+ * começa descarregando esta mesma fila, então avisar no agendamento e não na gravação só
+ * antecipa o debounce dele.
+ *
+ * Callback registrado em vez de import direto porque `state/sync.ts` já depende deste módulo
+ * (é dele que sai `descarregarFilas`), e importar de volta fecharia um ciclo entre os dois.
+ *
+ * NÃO fecha o laço com o próprio sync: as gravações do sync (download pelo Rust, cópia de
+ * conflito pelo `FsBridge`) não passam por agendador nenhum, e `descarregarFilasPendentes`
+ * chama o repo direto em vez de reagendar.
+ */
+let avisarGravacaoAgendada: (() => void) | null = null
+
+/** Registra o ouvinte do gatilho e devolve o cancelador. Um por vez: só o sync escuta. */
+export function aoAgendarGravacao(callback: () => void): () => void {
+  avisarGravacaoAgendada = callback
+  return () => {
+    if (avisarGravacaoAgendada === callback) avisarGravacaoAgendada = null
+  }
+}
+
+/** Aviso é aviso: sync quebrado não pode derrubar a edição que o disparou. */
+function sinalizarGravacao(): void {
+  try {
+    avisarGravacaoAgendada?.()
+  } catch (e) {
+    console.error('Falha ao avisar a sincronização:', e)
+  }
+}
+
 /** Agenda a persistência debounced do cenário `id` (reusada por edições e ações de versão). */
 function agendarSalvarCenario(get: () => AppState, id: string) {
+  sinalizarGravacao()
   const pendente = timersSalvarCenario.get(id)
   if (pendente) clearTimeout(pendente)
   timersSalvarCenario.set(
@@ -42,6 +75,7 @@ function agendarSalvarCenario(get: () => AppState, id: string) {
 
 /** Agenda a persistência debounced do personagem `id` (reusada por edições e ações de versão). */
 function agendarSalvarPersonagem(get: () => AppState, id: string) {
+  sinalizarGravacao()
   const pendente = timersSalvarParcial.get(id)
   if (pendente) clearTimeout(pendente)
   timersSalvarParcial.set(
@@ -172,6 +206,7 @@ interface AppState extends EstadoDeCofre {
 const SALVAR_VINCULOS_DEBOUNCE_MS = 800
 
 function agendarSalvarVinculos(get: () => AppState) {
+  sinalizarGravacao()
   if (timerSalvarVinculos) clearTimeout(timerSalvarVinculos)
   timerSalvarVinculos = setTimeout(() => {
     timerSalvarVinculos = null
@@ -405,6 +440,9 @@ export const useApp = create<AppState>((set, get) => ({
     const { repo, caminhoPorId } = get()
     const caminho = caminhoPorId[id]
     if (repo && caminho) await repo.salvarPersonagem(caminho, atualizado)
+    // grava na hora em vez de agendar, mas o sync precisa saber do mesmo jeito: renomear na
+    // sidebar é das mudanças mais visíveis, e ela não passa por nenhum dos timers acima
+    sinalizarGravacao()
   },
 
   removerVersaoPersonagem(id, versaoId) {
