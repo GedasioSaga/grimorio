@@ -13,6 +13,8 @@ import { htmlParaTexto, textoParaHtml } from '../lib/htmlTexto'
 import { promptDescreverImagemTopicos } from '../lib/promptsIA'
 import { carregarImagensIA } from '../lib/imagensIA'
 import { BarraVersoesPersonagem } from './BarraVersoesPersonagem'
+import { EnquadrarRetrato } from './EnquadrarRetrato'
+import { posicaoCss } from '../lib/focoRetrato'
 import { aplicarPatchPersonagem, versaoAtivaPersonagem, type PatchPersonagem } from '../lib/personagemVersao'
 
 const AUTOSAVE_DEBOUNCE_MS = 800
@@ -57,6 +59,7 @@ export function PerfilModal({ personagemId }: { personagemId: string }) {
   const [salvarErro, setSalvarErro] = useState<string | null>(null)
   const [aba, setAba] = useState<Aba>('descricao')
   const [chatAberto, setChatAberto] = useState(false)
+  const [enquadrando, setEnquadrando] = useState(false)
 
   // ?v= força refetch quando o retrato é trocado pelo mesmo nome de arquivo (mesma extensão)
   const retratoRel = p ? versaoAtivaPersonagem(p).retrato : null
@@ -128,8 +131,10 @@ export function PerfilModal({ personagemId }: { personagemId: string }) {
       const dirCampanha = caminho.split('/').slice(0, 2).join('/')
       const destinoRel = `${dirCampanha}/assets/retrato-${personagemId}-${p.versaoAtivaId}.${ext}`
       await repo.copiarParaCofre(arquivo, destinoRel)
-      // modificadoEm novo muda o ?v= do retratoSrc na hora (cache-bust otimista)
-      agendarSalvar({ retrato: destinoRel, modificadoEm: new Date().toISOString() })
+      // modificadoEm novo muda o ?v= do retratoSrc na hora (cache-bust otimista).
+      // foco volta ao centro: o da imagem antiga não quer dizer nada na nova.
+      agendarSalvar({ retrato: destinoRel, foco: undefined, modificadoEm: new Date().toISOString() })
+      setEnquadrando(true) // hora natural de enquadrar: acabou de escolher
     } catch (e) {
       await message(`Falha ao trocar retrato: ${e}`, { title: 'Grimório', kind: 'error' })
     }
@@ -151,8 +156,14 @@ export function PerfilModal({ personagemId }: { personagemId: string }) {
         <div className="perfil-header">
           <div className="perfil-retrato" onClick={() => void trocarRetrato()} title="Clique para trocar o retrato">
             {retratoSrc && !erroImg
-              ? <img src={retratoSrc} alt={p.nome} onError={() => setErroImg(true)} />
+              ? <img src={retratoSrc} alt={p.nome} style={{ objectPosition: posicaoCss(va.foco) }}
+                  onError={() => setErroImg(true)} />
               : <span>{p.nome.charAt(0).toUpperCase()}</span>}
+            {retratoSrc && !erroImg && (
+              // stopPropagation: sem ele o clique subiria e abriria o seletor de arquivo junto
+              <button className="perfil-retrato-enquadrar" title="Enquadrar retrato"
+                onClick={(e) => { e.stopPropagation(); setEnquadrando(true) }}>🎯</button>
+            )}
           </div>
           <div className="perfil-titulos">
             <input className="perfil-nome" value={va.nome}
@@ -233,6 +244,14 @@ export function PerfilModal({ personagemId }: { personagemId: string }) {
       </div>
       {chatAberto && (
         <ChatEntidade tipo="personagem" entidadeId={personagemId} onFechar={() => setChatAberto(false)} />
+      )}
+      {enquadrando && retratoSrc && (
+        <EnquadrarRetrato
+          src={retratoSrc}
+          focoInicial={va.foco}
+          aoSalvar={(foco) => { agendarSalvar({ foco }); setEnquadrando(false) }}
+          aoFechar={() => setEnquadrando(false)}
+        />
       )}
     </div>
   )

@@ -15,6 +15,8 @@ import { htmlParaTexto, textoParaHtml } from '../lib/htmlTexto'
 import { carregarImagensIA } from '../lib/imagensIA'
 import { promptDescreverImagemTopicos } from '../lib/promptsIA'
 import { BarraVersoes } from './BarraVersoes'
+import { EnquadrarRetrato } from './EnquadrarRetrato'
+import { posicaoCss } from '../lib/focoRetrato'
 import { aplicarPatchCenario, versaoAtiva, type PatchCenario } from '../lib/cenarioVersao'
 
 const AUTOSAVE_DEBOUNCE_MS = 800
@@ -68,6 +70,7 @@ export function CenarioModal({ cenarioId }: { cenarioId: string }) {
   const [salvarErro, setSalvarErro] = useState<string | null>(null)
   const [aba, setAba] = useState<Aba>('descricao')
   const [chatAberto, setChatAberto] = useState(false)
+  const [enquadrando, setEnquadrando] = useState(false)
 
   // ?v= força refetch quando o retrato troca mantendo o mesmo nome de arquivo
   const retratoRel = c ? versaoAtiva(c).retrato : null
@@ -136,7 +139,9 @@ export function CenarioModal({ cenarioId }: { cenarioId: string }) {
       // central e estável: mover o cenário não quebra o rel
       const destinoRel = `imagens-cenarios/retrato-${cenarioId}-${c.versaoAtivaId}.${ext}`
       await repo.copiarParaCofre(arquivo, destinoRel)
-      agendarSalvar({ retrato: destinoRel, modificadoEm: new Date().toISOString() })
+      // foco volta ao centro: o da imagem antiga não quer dizer nada na nova
+      agendarSalvar({ retrato: destinoRel, foco: undefined, modificadoEm: new Date().toISOString() })
+      setEnquadrando(true) // hora natural de enquadrar: acabou de escolher
     } catch (e) {
       await message(`Falha ao trocar retrato: ${e}`, { title: 'Grimório', kind: 'error' })
     }
@@ -158,8 +163,14 @@ export function CenarioModal({ cenarioId }: { cenarioId: string }) {
         <div className="perfil-header">
           <div className="perfil-retrato" onClick={() => void trocarRetrato()} title="Clique para trocar o retrato">
             {retratoSrc && !erroImg
-              ? <img src={retratoSrc} alt={c.nome} onError={() => setErroImg(true)} />
+              ? <img src={retratoSrc} alt={c.nome} style={{ objectPosition: posicaoCss(va.foco) }}
+                  onError={() => setErroImg(true)} />
               : <span>{c.nome.charAt(0).toUpperCase()}</span>}
+            {retratoSrc && !erroImg && (
+              // stopPropagation: sem ele o clique subiria e abriria o seletor de arquivo junto
+              <button className="perfil-retrato-enquadrar" title="Enquadrar retrato"
+                onClick={(e) => { e.stopPropagation(); setEnquadrando(true) }}>🎯</button>
+            )}
           </div>
           <div className="perfil-titulos">
             <input className="perfil-nome" value={c.nome}
@@ -242,6 +253,14 @@ export function CenarioModal({ cenarioId }: { cenarioId: string }) {
       </div>
       {chatAberto && (
         <ChatEntidade tipo="cenario" entidadeId={cenarioId} onFechar={() => setChatAberto(false)} />
+      )}
+      {enquadrando && retratoSrc && (
+        <EnquadrarRetrato
+          src={retratoSrc}
+          focoInicial={va.foco}
+          aoSalvar={(foco) => { agendarSalvar({ foco }); setEnquadrando(false) }}
+          aoFechar={() => setEnquadrando(false)}
+        />
       )}
     </div>
   )
