@@ -109,6 +109,17 @@ button:hover { border-color: var(--dourado); color: var(--dourado-claro); }
   color: var(--dourado); padding: 4px 8px; border-bottom: 1px solid var(--borda);
   margin-bottom: 4px;
 }
+/* busca por seção (Personagens, Cenários) */
+.busca-caixa { display: flex; align-items: center; gap: 4px; padding: 2px 8px 6px; }
+.busca-lupa { font-size: 11px; opacity: 0.6; }
+.busca-input {
+  flex: 1; min-width: 0; background: var(--fundo); border: 1px solid var(--borda);
+  border-radius: 6px; color: var(--texto); font-size: 12px; padding: 4px 8px; outline: none;
+}
+.busca-input:focus { border-color: var(--dourado); }
+/* o ✕ é nosso, ao lado do contador — o nativo do type=search apareceria em dobro */
+.busca-input::-webkit-search-cancel-button { display: none; }
+.busca-contador { font-size: 10px; color: var(--texto-fraco); white-space: nowrap; }
 .campanha-header {
   display: flex; align-items: center; gap: 6px; padding: 6px 8px;
   cursor: pointer; border-radius: 4px; font-family: var(--serif); font-size: 15px;
@@ -277,6 +288,14 @@ button:hover { border-color: var(--dourado); color: var(--dourado-claro); }
   color: var(--texto); padding: 8px 10px; outline: none; font-size: 14px;
 }
 .dialogo-input:focus { border-color: var(--dourado); }
+/* chip clicável que preenche o campo (prefixo do cenário pai) */
+.dialogo-sugestao {
+  align-self: flex-start; max-width: 100%; background: var(--fundo);
+  border: 1px dashed var(--dourado); border-radius: 6px; color: var(--dourado-claro);
+  font-size: 12px; padding: 5px 10px; text-align: left;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.dialogo-sugestao:hover { background: var(--fundo-elevado); }
 .dialogo-botoes { display: flex; justify-content: flex-end; gap: 8px; }
 .dialogo-ok { border-color: var(--dourado); color: var(--dourado-claro); }
 
@@ -452,6 +471,14 @@ button:hover { border-color: var(--dourado); color: var(--dourado-claro); }
 .rail-linha:hover { background: var(--fundo-elevado); }
 .rail-linha.ativa { background: var(--fundo-elevado); color: var(--dourado-claro); }
 .rail-titulo { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* pasta do item na lista plana da busca. `.rail-titulo` é flex:1 com basis 0, ou seja
+   fica só com a sobra — por isso o caminho precisa de teto, e some no hover pra dar
+   o espaço às ações (senão o nome vira "🗺 ..." e a linha não diz mais nada). */
+.rail-caminho {
+  color: var(--texto-fraco); font-size: 11px; max-width: 38%; min-width: 0;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.rail-linha:hover .rail-caminho { display: none; }
 .rail-acoes { display: none; }
 .rail-linha:hover .rail-acoes { display: inline-flex; }
 .chevron, .chevron-vazio { width: 12px; font-size: 10px; color: var(--texto-fraco); }

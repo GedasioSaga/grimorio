@@ -117,6 +117,12 @@ Zero resultado → `<div className="rail-vazio">Nada com "{busca}".</div>`.
 O aviso `N ocultos pelo filtro` continua aparecendo (busca e filtro de campanha compõem:
 campanha poda primeiro, busca acha dentro do que sobrou).
 
+**Criar item limpa a busca da seção.** Sem isso, criar "Masmorra" com "cast" no campo
+pareceria não ter criado nada — a mesma confusão que o filtro de campanha já causou e que o
+aviso "N ocultos" existe pra desarmar. Vale pros criadores do cabeçalho (`novaPasta`,
+`novoPersonagem`/`novoCenario`) e pro `novoSub` disparado a partir de um resultado, que recebe
+`resultado.aoCriar`.
+
 ### Testes — `src/test/buscaArvore.test.ts`
 
 - `normalizar` tira acento e caixa: `"João"` e `"joao"` casam.
@@ -167,10 +173,24 @@ Aninha sozinho: o nome do pai já carrega a cadeia inteira, então filho de
 **Renomear o pai não reescreve os filhos.** Aqui o nome é texto livre, não caminho: propagar
 reescreveria N arquivos e sobrescreveria nome ajustado à mão. Fica fora do escopo.
 
-### Testes — `src/test/dialogos.test.ts` (acrescentar)
+### Testes
 
+`src/test/dialogos.test.ts` (acrescentar) — nível de store:
 - `pedirTexto` com sugestão guarda `sugestao` no `pedido`; sem ela fica `undefined`.
-- Chamada de 3 parâmetros continua funcionando (regressão dos 23 call sites).
+
+`src/test/dialogoSugestao.test.tsx` (novo) — DOM real com jsdom, no molde de `PaginasChips.test.tsx`:
+- clicar no chip preenche o campo, o chip some, e o OK devolve o nome com prefixo;
+- digitar sem clicar faz o chip sumir e devolve o nome solto;
+- sem sugestão o chip não aparece (regressão dos 23 call sites).
+
+### CSS descoberto na verificação visual
+
+`.rail-titulo` é `flex: 1` com basis `0`, então fica só com a **sobra**. Com o caminho de um
+lado e as 4 ações de outro, o nome colapsava pra `🗺 ...` no hover. Duas travas:
+
+- `.rail-caminho { max-width: 38% }`
+- `.rail-linha:hover .rail-caminho { display: none }` — as ações tomam o lugar do caminho,
+  espelhando o `.rail-linha:hover .rail-acoes { display: inline-flex }` que já existia.
 
 ---
 
