@@ -109,6 +109,17 @@ button:hover { border-color: var(--dourado); color: var(--dourado-claro); }
   color: var(--dourado); padding: 4px 8px; border-bottom: 1px solid var(--borda);
   margin-bottom: 4px;
 }
+/* busca por seção (Personagens, Cenários) */
+.busca-caixa { display: flex; align-items: center; gap: 4px; padding: 2px 8px 6px; }
+.busca-lupa { font-size: 11px; opacity: 0.6; }
+.busca-input {
+  flex: 1; min-width: 0; background: var(--fundo); border: 1px solid var(--borda);
+  border-radius: 6px; color: var(--texto); font-size: 12px; padding: 4px 8px; outline: none;
+}
+.busca-input:focus { border-color: var(--dourado); }
+/* o ✕ é nosso, ao lado do contador — o nativo do type=search apareceria em dobro */
+.busca-input::-webkit-search-cancel-button { display: none; }
+.busca-contador { font-size: 10px; color: var(--texto-fraco); white-space: nowrap; }
 .campanha-header {
   display: flex; align-items: center; gap: 6px; padding: 6px 8px;
   cursor: pointer; border-radius: 4px; font-family: var(--serif); font-size: 15px;
@@ -239,12 +250,22 @@ button:hover { border-color: var(--dourado); color: var(--dourado-claro); }
 .perfil-header { display: flex; gap: 16px; padding: 20px; border-bottom: 1px solid var(--borda); align-items: center; }
 .perfil-retrato {
   width: 72px; height: 72px; min-width: 72px; border-radius: 50%; cursor: pointer;
-  border: 2px solid var(--dourado); overflow: hidden;
+  border: 2px solid var(--dourado);
+  /* a máscara redonda mudou de lugar (container → img) pro botão ✥ poder escapar do círculo;
+     com overflow:hidden aqui, ele seria cortado pela borda arredondada */
+  position: relative; overflow: visible;
   display: flex; align-items: center; justify-content: center;
   background: var(--fundo); color: var(--dourado-claro);
   font-family: var(--serif); font-size: 32px;
 }
-.perfil-retrato img { width: 100%; height: 100%; object-fit: cover; }
+/* object-position vem do inline style (o foco escolhido); sem foco, o browser usa 50% 50% */
+.perfil-retrato img { width: 100%; height: 100%; object-fit: cover; border-radius: 50%; }
+.perfil-retrato-enquadrar {
+  position: absolute; right: -6px; bottom: -6px; display: none;
+  padding: 3px 5px; font-size: 11px; line-height: 1; border-radius: 50%;
+  background: var(--fundo-painel); border: 1px solid var(--dourado); color: var(--dourado-claro);
+}
+.perfil-retrato:hover .perfil-retrato-enquadrar { display: block; }
 .perfil-titulos { flex: 1; display: flex; flex-direction: column; gap: 6px; }
 .perfil-nome, .perfil-resumo {
   background: transparent; border: none; border-bottom: 1px solid transparent;
@@ -277,8 +298,43 @@ button:hover { border-color: var(--dourado); color: var(--dourado-claro); }
   color: var(--texto); padding: 8px 10px; outline: none; font-size: 14px;
 }
 .dialogo-input:focus { border-color: var(--dourado); }
+/* chip clicável que preenche o campo (prefixo do cenário pai) */
+.dialogo-sugestao {
+  align-self: flex-start; max-width: 100%; background: var(--fundo);
+  border: 1px dashed var(--dourado); border-radius: 6px; color: var(--dourado-claro);
+  font-size: 12px; padding: 5px 10px; text-align: left;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.dialogo-sugestao:hover { background: var(--fundo-elevado); }
 .dialogo-botoes { display: flex; justify-content: flex-end; gap: 8px; }
 .dialogo-ok { border-color: var(--dourado); color: var(--dourado-claro); }
+
+/* ---- janela de enquadrar o retrato ---- */
+.enquadrar-caixa {
+  width: min(640px, 92vw); background: var(--fundo-painel);
+  border: 1px solid var(--dourado); border-radius: 8px;
+  padding: 20px; display: flex; flex-direction: column; gap: 12px;
+}
+.enquadrar-corpo { display: flex; gap: 16px; align-items: flex-start; justify-content: center; }
+/* encolhe até o tamanho da imagem: o quadro é absoluto e mede a partir daqui, então palco
+   maior que a imagem deslocaria o quadro. overflow:hidden segura a sombra gigante abaixo. */
+.enquadrar-palco { position: relative; overflow: hidden; line-height: 0; }
+.enquadrar-imagem { display: block; max-width: 420px; max-height: 46vh; user-select: none; }
+/* box-shadow de 9999px escurece tudo que está FORA do quadro sem precisar de 4 divs de máscara */
+.enquadrar-quadro {
+  position: absolute; cursor: grab; touch-action: none;
+  border: 2px solid var(--dourado-claro); border-radius: 4px;
+  box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.6);
+}
+.enquadrar-quadro:active { cursor: grabbing; }
+.enquadrar-lado { display: flex; flex-direction: column; gap: 8px; width: 120px; flex-shrink: 0; align-items: center; }
+.enquadrar-lado button { width: 100%; }
+.enquadrar-previa {
+  width: 72px; height: 72px; min-height: 72px; border-radius: 50%; overflow: hidden;
+  border: 2px solid var(--dourado); background: var(--fundo);
+}
+.enquadrar-previa img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.enquadrar-dica { font-size: 11px; color: var(--texto-fraco); text-align: center; margin: 0; }
 
 /* lista de checkboxes do diálogo de multi-seleção de campanhas */
 .dialogo-lista { display: flex; flex-direction: column; gap: 2px; max-height: 40vh; overflow-y: auto; }
@@ -452,6 +508,14 @@ button:hover { border-color: var(--dourado); color: var(--dourado-claro); }
 .rail-linha:hover { background: var(--fundo-elevado); }
 .rail-linha.ativa { background: var(--fundo-elevado); color: var(--dourado-claro); }
 .rail-titulo { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* pasta do item na lista plana da busca. `.rail-titulo` é flex:1 com basis 0, ou seja
+   fica só com a sobra — por isso o caminho precisa de teto, e some no hover pra dar
+   o espaço às ações (senão o nome vira "🗺 ..." e a linha não diz mais nada). */
+.rail-caminho {
+  color: var(--texto-fraco); font-size: 11px; max-width: 38%; min-width: 0;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.rail-linha:hover .rail-caminho { display: none; }
 .rail-acoes { display: none; }
 .rail-linha:hover .rail-acoes { display: inline-flex; }
 .chevron, .chevron-vazio { width: 12px; font-size: 10px; color: var(--texto-fraco); }

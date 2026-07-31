@@ -1,6 +1,7 @@
 import type { FsBridge } from './fsBridge'
 import type { Campanha, CampanhaNode, CanvasDoc, Cenario, CenarioNode, CenarioRef, ItemRef, PastaCenarioNode, PastaNode, Personagem, VaultTree, VersaoCenario, VersaoPersonagem, Vinculo } from './types'
 import { slugify, slugUnico } from './slug'
+import { normalizarFoco } from './focoRetrato'
 import { normalizarVinculos } from './vinculos'
 import { normalizarChat, type MensagemChat } from './chatIA'
 
@@ -18,6 +19,8 @@ export function normalizarVersaoPersonagem(raw: Record<string, any>): VersaoPers
     id: typeof raw?.id === 'string' ? raw.id : novoId(),
     nome: raw?.nome ?? '',
     retrato: raw?.retrato ?? null,
+    // undefined some do JSON.stringify: arquivo sem enquadramento não ganha campo vazio
+    foco: normalizarFoco(raw?.foco),
     resumo: raw?.resumo ?? '',
     descricao: raw?.descricao ?? raw?.corpo ?? '',
     informacao: raw?.informacao ?? '',
@@ -40,7 +43,7 @@ export function normalizarPersonagem(raw: Record<string, any>): Personagem {
     ? versoesRaw.map((v: Record<string, any>) => normalizarVersaoPersonagem(v))
     : [normalizarVersaoPersonagem({
         // migração: a forma base HERDA o nome do personagem + conteúdo plano (corpo->descricao)
-        nome: raw?.nome, retrato: raw?.retrato, resumo: raw?.resumo,
+        nome: raw?.nome, retrato: raw?.retrato, foco: raw?.foco, resumo: raw?.resumo,
         descricao: raw?.descricao, corpo: raw?.corpo, informacao: raw?.informacao,
         historia: raw?.historia, extras: raw?.extras, anotacoes: raw?.anotacoes, imagens: raw?.imagens,
       })]
@@ -64,6 +67,7 @@ export function normalizarVersaoCenario(raw: Record<string, any>, nomePadrao = '
     id: typeof raw?.id === 'string' ? raw.id : novoId(),
     nome: raw?.nome ?? nomePadrao,
     retrato: raw?.retrato ?? null,
+    foco: normalizarFoco(raw?.foco),
     resumo: raw?.resumo ?? '',
     descricao: raw?.descricao ?? '',
     informacao: raw?.informacao ?? '',
@@ -85,7 +89,7 @@ export function normalizarCenario(raw: Record<string, any>): Cenario {
     ? versoesRaw.map((v: Record<string, any>) => normalizarVersaoCenario(v))
     : [normalizarVersaoCenario({
         // só os campos de conteúdo do formato plano — id/nome do cenário NÃO viram da versão
-        retrato: raw?.retrato, resumo: raw?.resumo, descricao: raw?.descricao,
+        retrato: raw?.retrato, foco: raw?.foco, resumo: raw?.resumo, descricao: raw?.descricao,
         informacao: raw?.informacao, historia: raw?.historia, eventos: raw?.eventos,
         itens: raw?.itens, anotacoes: raw?.anotacoes, imagens: raw?.imagens,
       }, 'Base')]

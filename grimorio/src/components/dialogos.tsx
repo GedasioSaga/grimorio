@@ -9,24 +9,26 @@ interface PedidoAberto {
   titulo: string
   valorInicial: string
   confirmar: string
+  /** texto oferecido como chip clicável abaixo do campo (ex.: prefixo do cenário pai) */
+  sugestao?: string
   resolver: (valor: string | null) => void
 }
 
 interface DialogoState {
   pedido: PedidoAberto | null
-  pedir(titulo: string, valorInicial: string, confirmar: string): Promise<string | null>
+  pedir(titulo: string, valorInicial: string, confirmar: string, sugestao?: string): Promise<string | null>
   responder(valor: string | null): void
 }
 
 export const useDialogo = create<DialogoState>((set, get) => ({
   pedido: null,
-  pedir: (titulo, valorInicial, confirmar) =>
+  pedir: (titulo, valorInicial, confirmar, sugestao) =>
     new Promise<string | null>((resolver) => {
       // se já houver um pedido pendente (não deveria: modal bloqueia), resolve como
       // cancelado antes de abrir o novo — evita promise pendurada
       const anterior = get().pedido
       if (anterior) anterior.resolver(null)
-      set({ pedido: { titulo, valorInicial, confirmar, resolver } })
+      set({ pedido: { titulo, valorInicial, confirmar, sugestao, resolver } })
     }),
   responder: (valor) => {
     const pedido = get().pedido
@@ -38,9 +40,14 @@ export const useDialogo = create<DialogoState>((set, get) => ({
   },
 }))
 
-/** Pede um texto ao usuário via modal in-app. Resolve com o texto (trim) ou null se cancelar/vazio. */
-export function pedirTexto(titulo: string, valorInicial = '', confirmar = 'OK'): Promise<string | null> {
-  return useDialogo.getState().pedir(titulo, valorInicial, confirmar)
+/**
+ * Pede um texto ao usuário via modal in-app. Resolve com o texto (trim) ou null se cancelar/vazio.
+ * `sugestao` vira um chip clicável que preenche o campo — usado pelo prefixo do sub-cenário.
+ */
+export function pedirTexto(
+  titulo: string, valorInicial = '', confirmar = 'OK', sugestao?: string,
+): Promise<string | null> {
+  return useDialogo.getState().pedir(titulo, valorInicial, confirmar, sugestao)
 }
 
 /** Montado uma vez perto da raiz. Renderiza o modal quando há um pedido aberto. */
@@ -61,7 +68,20 @@ export function HostDialogos() {
     return () => cancelAnimationFrame(id)
   }, [pedido])
 
+  function aplicarSugestao(sugestao: string) {
+    setValor(sugestao)
+    const input = inputRef.current
+    if (!input) return
+    input.focus()
+    // cursor no fim, não select(): selecionado, a primeira tecla apagaria o prefixo.
+    // rAF porque o input é controlado — antes do re-render o value ainda é o antigo.
+    requestAnimationFrame(() => input.setSelectionRange(sugestao.length, sugestao.length))
+  }
+
   if (!pedido) return null
+
+  // some assim que o campo é tocado: já cumpriu o papel, e atrapalharia quem quer nome solto
+  const mostrarSugestao = !!pedido.sugestao && valor === pedido.valorInicial
 
   return (
     <div className="modal-overlay" onClick={() => responder(null)}>
@@ -79,6 +99,16 @@ export function HostDialogos() {
             else if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); responder(null) }
           }}
         />
+        {mostrarSugestao && (
+          <button
+            type="button"
+            className="dialogo-sugestao"
+            title="Usar este começo de nome"
+            onClick={() => aplicarSugestao(pedido.sugestao!)}
+          >
+            💡 {pedido.sugestao}…
+          </button>
+        )}
         <div className="dialogo-botoes">
           <button onClick={() => responder(null)}>Cancelar</button>
           <button className="dialogo-ok" onClick={() => responder(valor)}>{pedido.confirmar}</button>

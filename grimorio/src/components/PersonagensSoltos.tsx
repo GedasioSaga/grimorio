@@ -2,8 +2,11 @@ import { useState } from 'react'
 import { ask, message } from '@tauri-apps/plugin-dialog'
 import { useApp } from '../state/store'
 import type { ItemRef, PastaNode } from '../lib/types'
+import { buscarPersonagens } from '../lib/buscaArvore'
+import { contarPersonagens } from '../lib/filtroCampanha'
 import { pedirTexto } from './dialogos'
 import { associarNaCriacao, editarCampanhas } from './dialogoCampanhas'
+import { CaixaBusca } from './CaixaBusca'
 
 const RAIZ = 'personagens-soltos'
 const MIME = 'application/x-grimorio-personagem'
@@ -43,6 +46,9 @@ export function PersonagensSoltos({ raiz, aoMudar, ocultos = 0, aoMostrarTodos }
   aoMostrarTodos?: () => void
 }) {
   const repo = useApp((s) => s.repo)
+  const [busca, setBusca] = useState('')
+  const achados = buscarPersonagens(raiz, busca)
+  const buscando = busca.trim().length > 0
 
   async function novaPasta() {
     const nome = await pedirTexto('Nome da pasta:')
@@ -51,6 +57,7 @@ export function PersonagensSoltos({ raiz, aoMudar, ocultos = 0, aoMostrarTodos }
       const { id } = await repo.criarPasta(RAIZ, nome)
       await associarNaCriacao('pasta', id, nome, RAIZ)
       await aoMudar()
+      setBusca('')
     })
   }
   async function novoPersonagem() {
@@ -61,6 +68,8 @@ export function PersonagensSoltos({ raiz, aoMudar, ocultos = 0, aoMostrarTodos }
       // precedência: filtro ativo ganha; senão herda a campanha da pasta em que nasce; senão pergunta
       await associarNaCriacao('personagem', ref.id, nome, RAIZ)
       await aoMudar()
+      // sem isto, criar "Masmorra" com "cast" na busca pareceria não ter criado nada
+      setBusca('')
     })
   }
 
@@ -77,15 +86,27 @@ export function PersonagensSoltos({ raiz, aoMudar, ocultos = 0, aoMostrarTodos }
           <button className="btn-icon" title="Novo personagem" onClick={novoPersonagem}>+</button>
         </span>
       </div>
+      <CaixaBusca valor={busca} aoMudar={setBusca} achados={achados.length} total={contarPersonagens(raiz)} />
       {ocultos > 0 && aoMostrarTodos && (
         <button className="filtro-ocultos" onClick={aoMostrarTodos}>
           {ocultos} {ocultos === 1 ? 'personagem oculto' : 'personagens ocultos'} pelo filtro — mostrar todos
         </button>
       )}
-      {raiz.subpastas.map((p) => <PastaLinha key={p.caminho} pasta={p} nivel={0} aoMudar={aoMudar} />)}
-      {raiz.personagens.map((pr) => <PersonagemLinha key={pr.caminho} item={pr} nivel={0} aoMudar={aoMudar} />)}
-      {raiz.subpastas.length === 0 && raiz.personagens.length === 0 && (
-        <div className="rail-vazio">Sem personagens aqui. Crie ou arraste pra cá.</div>
+      {buscando ? (
+        achados.length === 0
+          ? <div className="rail-vazio">Nada com “{busca.trim()}”.</div>
+          : achados.map((a) => (
+              <PersonagemLinha key={a.item.caminho} item={a.item} nivel={0} aoMudar={aoMudar}
+                resultado={{ caminhoRotulo: a.caminhoRotulo }} />
+            ))
+      ) : (
+        <>
+          {raiz.subpastas.map((p) => <PastaLinha key={p.caminho} pasta={p} nivel={0} aoMudar={aoMudar} />)}
+          {raiz.personagens.map((pr) => <PersonagemLinha key={pr.caminho} item={pr} nivel={0} aoMudar={aoMudar} />)}
+          {raiz.subpastas.length === 0 && raiz.personagens.length === 0 && (
+            <div className="rail-vazio">Sem personagens aqui. Crie ou arraste pra cá.</div>
+          )}
+        </>
       )}
     </div>
   )
@@ -167,7 +188,11 @@ function PastaLinha({ pasta, nivel, aoMudar }: { pasta: PastaNode; nivel: number
   )
 }
 
-function PersonagemLinha({ item, nivel, aoMudar }: { item: ItemRef; nivel: number; aoMudar: () => Promise<void> }) {
+function PersonagemLinha({ item, nivel, aoMudar, resultado }: {
+  item: ItemRef; nivel: number; aoMudar: () => Promise<void>
+  /** modo lista plana da busca: mostra a pasta ao lado e desliga o arrastar */
+  resultado?: { caminhoRotulo: string }
+}) {
   const repo = useApp((s) => s.repo)
   const abrirPerfil = useApp((s) => s.abrirPerfil)
   const caminhoPorId = useApp((s) => s.caminhoPorId)
@@ -198,12 +223,14 @@ function PersonagemLinha({ item, nivel, aoMudar }: { item: ItemRef; nivel: numbe
       className={`rail-linha ${item.erro ? 'item-erro' : ''}`}
       style={{ paddingLeft: 8 + nivel * 14 }}
       onClick={() => { if (!item.erro && id) abrirPerfil(id) }}
-      draggable={!item.erro && !!id}
+      // na busca não há pasta na tela: arrastar não teria alvo visível pra onde soltar
+      draggable={!resultado && !item.erro && !!id}
       onDragStart={(e) => { if (id) e.dataTransfer.setData(MIME, id) }}
       title={item.erro ? 'Arquivo com erro' : item.nome}
     >
       <span className="chevron-vazio" />
       <span className="rail-titulo">👤 {item.nome}{item.erro ? ' ⚠' : ''}</span>
+      {resultado?.caminhoRotulo && <span className="rail-caminho">· {resultado.caminhoRotulo}</span>}
       <span className="rail-acoes" onClick={(e) => e.stopPropagation()}>
         {id && (
           <button className="btn-icon" title="Campanhas" onClick={(e) => { e.stopPropagation(); void editarCampanhas('personagem', id, item.nome) }}>🏷️</button>

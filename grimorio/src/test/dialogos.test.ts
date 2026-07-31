@@ -43,4 +43,16 @@ describe('pedirTexto', () => {
     expect(useDialogo.getState().pedido?.valorInicial).toBe('Antigo')
     useDialogo.getState().responder(null)
   })
+
+  it('leva a sugestão até o pedido (chip do prefixo de sub-cenário)', () => {
+    pedirTexto('Nome do sub-cenário:', '', 'OK', 'Reino de Goa: ')
+    expect(useDialogo.getState().pedido?.sugestao).toBe('Reino de Goa: ')
+    useDialogo.getState().responder(null)
+  })
+
+  it('chamada sem sugestão deixa o campo indefinido (os outros call sites não mudam)', () => {
+    pedirTexto('Nome da pasta:')
+    expect(useDialogo.getState().pedido?.sugestao).toBeUndefined()
+    useDialogo.getState().responder(null)
+  })
 })

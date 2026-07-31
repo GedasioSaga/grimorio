@@ -2,7 +2,7 @@ import type { Cenario, VersaoCenario } from './types'
 
 /** Campos de conteúdo que pertencem à VERSÃO ativa (não ao cenário). Mantenha em sincronia com VersaoCenario (todos os campos menos id/nome). */
 export const CHAVES_VERSAO = [
-  'retrato', 'resumo', 'descricao', 'informacao',
+  'retrato', 'foco', 'resumo', 'descricao', 'informacao',
   'historia', 'eventos', 'itens', 'anotacoes', 'imagens',
 ] as const
 

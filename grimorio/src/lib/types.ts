@@ -3,10 +3,20 @@ export interface ImagemPersonagem {
   legenda?: string
 }
 
+/**
+ * Enquadramento do retrato no círculo do perfil: vira `object-position: x% y%`.
+ * Ausente = centro, que é como todo retrato sempre foi desenhado.
+ */
+export interface FocoRetrato {
+  x: number // 0–100
+  y: number // 0–100
+}
+
 export interface VersaoPersonagem {
   id: string
   nome: string        // nome do personagem NESTA forma (ex: "Bruce Banner", "Hulk")
   retrato: string | null // caminho relativo ao cofre, ex.: "campanhas/x/assets/foo.png"
+  foco?: FocoRetrato  // enquadramento do retrato; ausente = centro
   resumo: string
   descricao: string  // HTML TipTap (era `corpo`)
   informacao: string // HTML (caixa "Informações" do card no canvas)
@@ -29,6 +39,7 @@ export interface VersaoCenario {
   id: string
   nome: string          // "Base", "Dia", "Noite", "Destruído"
   retrato: string | null // rel ao cofre, ex.: "imagens-cenarios/retrato-<cenId>-<verId>.png"
+  foco?: FocoRetrato    // enquadramento do retrato; ausente = centro
   resumo: string
   descricao: string  // HTML TipTap
   informacao: string // HTML (caixa "Informações" do card no canvas)

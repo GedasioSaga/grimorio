@@ -4,8 +4,11 @@ import { useApp } from '../state/store'
 import type { CenarioNode, PastaCenarioNode } from '../lib/types'
 import { contarDescendentes } from '../lib/cenarioArvore'
 import { personagensVivos, vincularPersonagem } from '../lib/cenarioVinculo'
+import { buscarCenarios } from '../lib/buscaArvore'
+import { contarCenarios } from '../lib/filtroCampanha'
 import { pedirTexto } from './dialogos'
 import { associarNaCriacao, editarCampanhas } from './dialogoCampanhas'
+import { CaixaBusca } from './CaixaBusca'
 
 const RAIZ = 'cenarios'
 export const MIME_CENARIO = 'application/x-grimorio-cenario'
@@ -63,6 +66,9 @@ export function CenariosSoltos({ raiz, aoMudar, ocultos = 0, aoMostrarTodos }: {
   aoMostrarTodos?: () => void
 }) {
   const repo = useApp((s) => s.repo)
+  const [busca, setBusca] = useState('')
+  const achados = buscarCenarios(raiz, busca)
+  const buscando = busca.trim().length > 0
 
   async function novaPasta() {
     const nome = await pedirTexto('Nome da pasta:')
@@ -71,6 +77,7 @@ export function CenariosSoltos({ raiz, aoMudar, ocultos = 0, aoMostrarTodos }: {
       const { id } = await repo.criarPasta(RAIZ, nome)
       await associarNaCriacao('pasta', id, nome, RAIZ)
       await aoMudar()
+      setBusca('')
     })
   }
   async function novoCenario() {
@@ -81,6 +88,8 @@ export function CenariosSoltos({ raiz, aoMudar, ocultos = 0, aoMostrarTodos }: {
       // filtro ativo ganha; senão herda da pasta em que nasce; senão pergunta as campanhas (0..N)
       await associarNaCriacao('cenario', ref.id, nome, RAIZ)
       await aoMudar()
+      // sem isto, criar "Masmorra" com "cast" na busca pareceria não ter criado nada
+      setBusca('')
     })
   }
 
@@ -97,15 +106,27 @@ export function CenariosSoltos({ raiz, aoMudar, ocultos = 0, aoMostrarTodos }: {
           <button className="btn-icon" title="Novo cenário" onClick={novoCenario}>+</button>
         </span>
       </div>
+      <CaixaBusca valor={busca} aoMudar={setBusca} achados={achados.length} total={contarCenarios(raiz)} />
       {ocultos > 0 && aoMostrarTodos && (
         <button className="filtro-ocultos" onClick={aoMostrarTodos}>
           {ocultos} {ocultos === 1 ? 'cenário oculto' : 'cenários ocultos'} pelo filtro — mostrar todos
         </button>
       )}
-      {raiz.subpastas.map((p) => <PastaCenarioLinha key={p.caminho} pasta={p} nivel={0} aoMudar={aoMudar} />)}
-      {raiz.cenarios.map((c) => <CenarioLinha key={c.caminho} node={c} nivel={0} aoMudar={aoMudar} />)}
-      {raiz.subpastas.length === 0 && raiz.cenarios.length === 0 && (
-        <div className="rail-vazio">Sem cenários ainda. Crie ou arraste pra cá.</div>
+      {buscando ? (
+        achados.length === 0
+          ? <div className="rail-vazio">Nada com “{busca.trim()}”.</div>
+          : achados.map((a) => (
+              <CenarioLinha key={a.item.caminho} node={a.item} nivel={0} aoMudar={aoMudar}
+                resultado={{ caminhoRotulo: a.caminhoRotulo, aoCriar: () => setBusca('') }} />
+            ))
+      ) : (
+        <>
+          {raiz.subpastas.map((p) => <PastaCenarioLinha key={p.caminho} pasta={p} nivel={0} aoMudar={aoMudar} />)}
+          {raiz.cenarios.map((c) => <CenarioLinha key={c.caminho} node={c} nivel={0} aoMudar={aoMudar} />)}
+          {raiz.subpastas.length === 0 && raiz.cenarios.length === 0 && (
+            <div className="rail-vazio">Sem cenários ainda. Crie ou arraste pra cá.</div>
+          )}
+        </>
       )}
     </div>
   )
@@ -187,7 +208,11 @@ function PastaCenarioLinha({ pasta, nivel, aoMudar }: { pasta: PastaCenarioNode;
   )
 }
 
-function CenarioLinha({ node, nivel, aoMudar }: { node: CenarioNode; nivel: number; aoMudar: () => Promise<void> }) {
+function CenarioLinha({ node, nivel, aoMudar, resultado }: {
+  node: CenarioNode; nivel: number; aoMudar: () => Promise<void>
+  /** modo lista plana da busca: sem filhos, sem arrastar, com o caminho ao lado */
+  resultado?: { caminhoRotulo: string; aoCriar?: () => void }
+}) {
   const repo = useApp((s) => s.repo)
   const abrirCenario = useApp((s) => s.abrirCenario)
   const cenario = useApp((s) => s.cenarios[node.id])
@@ -195,17 +220,21 @@ function CenarioLinha({ node, nivel, aoMudar }: { node: CenarioNode; nivel: numb
   const [aberto, setAberto] = useState(true)
 
   const vinculados = personagensVivos(cenario?.personagens ?? [], personagens)
-  const temFilhos = node.filhos.length > 0 || vinculados.length > 0
+  const temFilhos = !resultado && (node.filhos.length > 0 || vinculados.length > 0)
 
   async function novoSub(e: React.MouseEvent) {
     e.stopPropagation()
-    const nome = await pedirTexto('Nome do sub-cenário:')
+    // o nome do pai já carrega a cadeia inteira, então aninhar sozinho dá
+    // "Reino de Goa: Castelo: Cozinha" sem varrer a árvore
+    const nome = await pedirTexto('Nome do sub-cenário:', '', 'OK', `${node.nome}: `)
     if (!nome || !repo) return
     await comAviso(async () => {
       const ref = await repo.criarCenarioEm(node.caminho, nome)
       // dir de cenário não está no mapa de pastas: a herança sobe até a pasta que o contém
       await associarNaCriacao('cenario', ref.id, nome, node.caminho)
       await aoMudar()
+      // criado a partir de um resultado de busca: limpa a busca pra ele não nascer escondido
+      resultado?.aoCriar?.()
     })
   }
   async function renomear(e: React.MouseEvent) {
@@ -229,10 +258,12 @@ function CenarioLinha({ node, nivel, aoMudar }: { node: CenarioNode; nivel: numb
         className={`rail-linha ${node.erro ? 'item-erro' : ''}`}
         style={{ paddingLeft: 8 + nivel * 14 }}
         onClick={() => { if (!node.erro && node.id) abrirCenario(node.id) }}
-        draggable={!node.erro && !!node.id}
+        // na busca a hierarquia some da tela: soltar aqui moveria o item pra dentro
+        // deste cenário sem que você visse onde ele foi parar
+        draggable={!resultado && !node.erro && !!node.id}
         onDragStart={(e) => { if (node.id) e.dataTransfer.setData(MIME_CENARIO, node.id) }}
-        onDragOver={aceitaCenarioOuPersonagem}
-        onDrop={(e) => {
+        onDragOver={resultado ? undefined : aceitaCenarioOuPersonagem}
+        onDrop={resultado ? undefined : (e) => {
           e.stopPropagation()
           const cid = e.dataTransfer.getData(MIME_CENARIO)
           if (cid && cid !== node.id) { void moverCenarioPara(node.caminho, cid, aoMudar); return }
@@ -245,6 +276,7 @@ function CenarioLinha({ node, nivel, aoMudar }: { node: CenarioNode; nivel: numb
           ? <span className="chevron" onClick={(e) => { e.stopPropagation(); setAberto(!aberto) }}>{aberto ? '▾' : '▸'}</span>
           : <span className="chevron-vazio" />}
         <span className="rail-titulo">🗺 {node.nome}{node.erro ? ' ⚠' : ''}</span>
+        {resultado?.caminhoRotulo && <span className="rail-caminho">· {resultado.caminhoRotulo}</span>}
         <span className="rail-acoes" onClick={(e) => e.stopPropagation()}>
           <button className="btn-icon" title="Novo sub-cenário" onClick={novoSub}>+</button>
           {node.id && (
@@ -254,7 +286,7 @@ function CenarioLinha({ node, nivel, aoMudar }: { node: CenarioNode; nivel: numb
           <button className="btn-icon" title="Excluir" onClick={excluir}>🗑</button>
         </span>
       </div>
-      {aberto && (
+      {!resultado && aberto && (
         <>
           {node.filhos.map((f) => <CenarioLinha key={f.caminho} node={f} nivel={nivel + 1} aoMudar={aoMudar} />)}
           {vinculados.map((pid) => <PersonagemVinculadoLinha key={pid} personagemId={pid} nivel={nivel + 1} />)}
