@@ -7,6 +7,7 @@ export const TIPO_PARTICIPA = 'participa'
 export const TIPOS_SUGERIDOS = [
   'conhece', 'aliado de', 'inimigo de', 'família de', 'mentor de',
   'deve favor a', 'mora em', 'frequenta', 'protege', 'teme',
+  'carrega', 'guarda', 'procura', 'forjou',
 ]
 
 /** Adiciona com dedupe por (deId, paraId, tipo). Retorna a MESMA lista se nada mudou. */
@@ -91,9 +92,9 @@ export function normalizarVinculos(raw: unknown): Vinculo[] {
     if (typeof v.deId !== 'string' || !v.deId) continue
     if (typeof v.paraId !== 'string' || !v.paraId) continue
     if (typeof v.tipo !== 'string' || !v.tipo) continue
-    if (v.deTipo !== 'personagem' && v.deTipo !== 'cenario' && v.deTipo !== 'canvas' && v.deTipo !== 'pasta') continue
+    if (v.deTipo !== 'personagem' && v.deTipo !== 'cenario' && v.deTipo !== 'item' && v.deTipo !== 'canvas' && v.deTipo !== 'pasta') continue
     // canvas e pasta nunca são alvo de relação (só participam de campanha) → fora do paraTipo aceito
-    if (v.paraTipo !== 'personagem' && v.paraTipo !== 'cenario' && v.paraTipo !== 'campanha') continue
+    if (v.paraTipo !== 'personagem' && v.paraTipo !== 'cenario' && v.paraTipo !== 'item' && v.paraTipo !== 'campanha') continue
     out.push({
       id: v.id,
       deTipo: v.deTipo,

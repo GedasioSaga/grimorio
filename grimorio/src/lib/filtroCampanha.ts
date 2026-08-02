@@ -1,4 +1,4 @@
-import type { CenarioNode, ItemRef, PastaCenarioNode, PastaNode } from './types'
+import type { CenarioNode, ItemRef, PastaCenarioNode, PastaItemNode, PastaNode } from './types'
 
 /**
  * As raízes ('personagens-soltos', 'cenarios') nunca podem ser "permitidas": uma raiz
@@ -38,6 +38,33 @@ export function filtrarPastaPersonagens(
     // a 3ª condição segura a pasta etiquetada que está legitimamente vazia
     .filter((s) => s.personagens.length > 0 || s.subpastas.length > 0 || (!!s.id && idsPermitidos.has(s.id)))
   return { ...pasta, personagens, subpastas }
+}
+
+/**
+ * Filtra a árvore de itens. Irmã de `filtrarPastaPersonagens`, com a mesma regra de pasta
+ * etiquetada liberando a subárvore inteira. São funções separadas em vez de uma genérica
+ * porque a folha tem nome diferente em cada seção (`personagens` × `itens`), e o genérico
+ * que unificasse as duas custaria mais em leitura do que as poucas linhas que economiza.
+ */
+export function filtrarPastaItens(
+  pasta: PastaItemNode,
+  caminhosPermitidos: Set<string>,
+  idsPermitidos: Set<string> = new Set(),
+  herdado = false,
+): PastaItemNode {
+  const permitida = herdado || (!ehRaiz(pasta.caminho) && !!pasta.id && idsPermitidos.has(pasta.id))
+  if (permitida) {
+    return {
+      ...pasta,
+      subpastas: pasta.subpastas.map((s) => filtrarPastaItens(s, caminhosPermitidos, idsPermitidos, true)),
+    }
+  }
+  const itens = pasta.itens.filter((i) => caminhosPermitidos.has(i.caminho))
+  const subpastas = pasta.subpastas
+    .map((s) => filtrarPastaItens(s, caminhosPermitidos, idsPermitidos, false))
+    // a 3ª condição segura a pasta etiquetada que está legitimamente vazia
+    .filter((s) => s.itens.length > 0 || s.subpastas.length > 0 || (!!s.id && idsPermitidos.has(s.id)))
+  return { ...pasta, itens, subpastas }
 }
 
 /**
@@ -92,4 +119,9 @@ function contarNos(nos: CenarioNode[]): number {
 /** Total de cenários na árvore, incluindo sub-cenários (recursivo). */
 export function contarCenarios(raiz: PastaCenarioNode): number {
   return contarNos(raiz.cenarios) + raiz.subpastas.reduce((acc, s) => acc + contarCenarios(s), 0)
+}
+
+/** Total de itens na árvore (recursivo) — para o aviso de "N ocultos pelo filtro". */
+export function contarItens(raiz: PastaItemNode): number {
+  return raiz.itens.length + raiz.subpastas.reduce((acc, s) => acc + contarItens(s), 0)
 }

@@ -1,5 +1,6 @@
-import { describe, it, expect } from 'vitest'
-import { JANELA_HISTORICO, normalizarChat } from '../lib/chatIA'
+// @vitest-environment jsdom
+import { describe, it, expect, beforeEach } from 'vitest'
+import { JANELAS, JANELA_PADRAO, janelaSalva, normalizarChat, recortarJanela, salvarJanela } from '../lib/chatIA'
 
 describe('normalizarChat', () => {
   it('aceita formato { mensagens: [...] }', () => {
@@ -14,7 +15,51 @@ describe('normalizarChat', () => {
     expect(normalizarChat(null)).toEqual([])
     expect(normalizarChat('oi')).toEqual([])
   })
-  it('janela de histórico é 20', () => {
-    expect(JANELA_HISTORICO).toBe(20)
+})
+
+describe('janela de histórico', () => {
+  beforeEach(() => {
+    localStorage.clear()
+  })
+
+  it('padrão é 20, como sempre foi', () => {
+    expect(JANELA_PADRAO).toBe(20)
+    expect(janelaSalva()).toBe(20)
+  })
+
+  it('guarda a escolha e ignora valor fora da lista', () => {
+    salvarJanela(40)
+    expect(janelaSalva()).toBe(40)
+    localStorage.setItem('grimorio.janelaIA', '7')
+    expect(janelaSalva()).toBe(JANELA_PADRAO)
+  })
+
+  it('0 ("tudo") é uma escolha válida', () => {
+    expect(JANELAS).toContain(0)
+    salvarJanela(0)
+    expect(janelaSalva()).toBe(0)
+  })
+})
+
+describe('recortarJanela', () => {
+  const conversa = Array.from({ length: 25 }, (_, i) => i)
+
+  it('conversa menor que a janela vai inteira, sem corte', () => {
+    expect(recortarJanela([1, 2, 3], 20)).toEqual({ enviadas: [1, 2, 3], cortadas: 0 })
+  })
+
+  it('manda as ÚLTIMAS e conta quantas ficaram de fora', () => {
+    const { enviadas, cortadas } = recortarJanela(conversa, 20)
+    expect(enviadas[0]).toBe(5)
+    expect(enviadas).toHaveLength(20)
+    expect(cortadas).toBe(5)
+  })
+
+  it('janela exatamente do tamanho da conversa não corta nada', () => {
+    expect(recortarJanela(conversa, 25).cortadas).toBe(0)
+  })
+
+  it('janela 0 manda tudo', () => {
+    expect(recortarJanela(conversa, 0)).toEqual({ enviadas: conversa, cortadas: 0 })
   })
 })

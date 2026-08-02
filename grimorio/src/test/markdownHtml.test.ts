@@ -72,3 +72,52 @@ describe('markdownParaHtml — segurança e marcadores', () => {
     )
   })
 })
+
+/**
+ * A saída deste módulo é injetada como HTML em duas telas (NotasEditor e as bolhas do
+ * chat), e o texto vem do modelo — ou seja, de fora. A segurança disso não está em
+ * escapar bem: está em o gerador ser incapaz de emitir ATRIBUTO. Sem atributo não há
+ * `onerror`, não há `href="javascript:"`, não há `src`. Estes testes prendem essa
+ * propriedade para que dar suporte a links um dia seja uma decisão consciente, e não uma
+ * brecha aberta sem querer.
+ */
+describe('markdownParaHtml — invariante de injeção', () => {
+  /** Só estas tags podem sair daqui, e nenhuma com atributo. */
+  const PERMITIDAS = new Set(['p', 'br', 'hr', 'h1', 'h2', 'h3', 'ul', 'ol', 'li', 'blockquote', 'strong', 'em'])
+
+  const HOSTIS = [
+    '<script>alert(1)</script>',
+    '<img src=x onerror=alert(1)>',
+    '# <img src=x onerror=alert(1)>',
+    '- <iframe src="javascript:alert(1)"></iframe>',
+    '> <svg onload=alert(1)>',
+    '[clique](javascript:alert(1))',
+    '**<a href="javascript:alert(1)">x</a>**',
+    '<p onclick="roubar()">texto</p>',
+    '<!-- <script>alert(1)</script> -->',
+    '<style>body{display:none}</style>',
+  ]
+
+  it.each(HOSTIS)('não emite tag com atributo para %j', (entrada) => {
+    const html = markdownParaHtml(entrada)
+    for (const [, nome, resto] of html.matchAll(/<\/?([a-z0-9]+)([^>]*)>/gi)) {
+      expect(PERMITIDAS).toContain(nome.toLowerCase())
+      expect(resto.trim()).toBe('') // nenhum atributo, nunca
+    }
+  })
+
+  it.each(HOSTIS.filter((h) => h.includes('<')))('neutraliza o < da marcação hostil em %j', (entrada) => {
+    // todo '<' que sobrou abre uma das tags permitidas; o do texto virou &lt;
+    expect(markdownParaHtml(entrada)).toContain('&lt;')
+  })
+
+  it('sintaxe de link do Markdown fica literal — nenhum href chega ao DOM', () => {
+    expect(markdownParaHtml('[clique](javascript:alert(1))')).toBe('<p>[clique](javascript:alert(1))</p>')
+    expect(markdownParaHtml('[site](https://exemplo.com)')).toBe('<p>[site](https://exemplo.com)</p>')
+  })
+
+  it('não deixa passar tag mesmo quebrada entre linhas do mesmo parágrafo', () => {
+    const html = markdownParaHtml('<img\nsrc=x onerror=alert(1)>')
+    expect(html).toBe('<p>&lt;img<br>src=x onerror=alert(1)&gt;</p>')
+  })
+})

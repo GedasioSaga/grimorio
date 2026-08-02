@@ -60,15 +60,43 @@ export interface Cenario {
   modificadoEm: string
 }
 
+/**
+ * Item do acervo: arma, relíquia, poção, artefato.
+ *
+ * Sem versões, ao contrário de personagem e cenário. Aqueles têm versão porque a mesma
+ * entidade assume ESTADOS (dia/noite, Bruce Banner/Hulk); um item que muda a ponto de
+ * precisar disso é outro item. Se algum dia precisar, a migração preguiçosa dos outros
+ * dois já é o molde pronto.
+ */
+export interface Item {
+  id: string
+  nome: string
+  resumo: string       // aparece na sidebar, no contexto da IA e no grafo
+  retrato: string | null // rel ao cofre, ex.: "imagens-itens/retrato-<itemId>.png"
+  foco?: FocoRetrato   // enquadramento do retrato; ausente = centro
+  descricao: string    // HTML TipTap — o que é e como se parece
+  informacao: string   // HTML — dados secos: peso, raridade, valor, requisitos
+  efeito: string       // HTML — o que faz em jogo
+  criadoEm: string // ISO-8601
+  modificadoEm: string
+}
+
 /** Ponta de vínculo. Canvas e pasta só participam de campanha (nunca são alvo de relação). */
-export type TipoEntidadeVinculo = 'personagem' | 'cenario' | 'canvas' | 'pasta'
+export type TipoEntidadeVinculo = 'personagem' | 'cenario' | 'item' | 'canvas' | 'pasta'
+
+/**
+ * Subconjunto que pode ser ALVO de uma relação. Existe como tipo próprio para o
+ * compilador barrar `paraTipo: 'canvas'` — antes a regra só vivia num comentário e na
+ * checagem de `normalizarVinculos`, ou seja, só era descoberta em tempo de execução.
+ */
+export type TipoAlvoVinculo = 'personagem' | 'cenario' | 'item'
 
 /** Relação tipada entre entidades OU participação em campanha (tipo TIPO_PARTICIPA). */
 export interface Vinculo {
   id: string
   deTipo: TipoEntidadeVinculo
   deId: string
-  paraTipo: TipoEntidadeVinculo | 'campanha'
+  paraTipo: TipoAlvoVinculo | 'campanha'
   paraId: string
   tipo: string      // 'conhece', 'mora em', … ou texto livre
   notas: string     // '' quando vazia
@@ -146,6 +174,21 @@ export interface PastaCenarioNode {
   cenarios: CenarioNode[]
 }
 
+/**
+ * Pasta organizacional de itens. Mesma forma da de personagens: o item é um ARQUIVO
+ * dentro da pasta, não uma pasta (como é o cenário). Isso mantém item fora do caso
+ * especial do sincronizador, que precisa saber quando a entidade é um diretório.
+ */
+export interface PastaItemNode {
+  slug: string
+  nome: string
+  caminho: string // dir relativo ao cofre, ex.: "itens/armas"
+  /** id do pasta.json; ausente em pasta criada à mão no disco */
+  id?: string
+  subpastas: PastaItemNode[]
+  itens: ItemRef[]
+}
+
 export interface VaultTree {
   campanhas: CampanhaNode[]
   canvasesSoltos: ItemRef[]
@@ -153,6 +196,8 @@ export interface VaultTree {
   personagensSoltos: PastaNode
   /** raiz da seção de cenários (caminho = "cenarios") */
   cenarios: PastaCenarioNode
+  /** raiz da seção de itens (caminho = "itens") */
+  itens: PastaItemNode
 }
 
 export interface Pagina {

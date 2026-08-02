@@ -431,7 +431,7 @@ describe('idsDePastas + campanhasHerdadas ligados à árvore real do VaultRepo',
 
     const personagensSoltos = await repo.montarArvorePastas('personagens-soltos')
     const cenarios = await repo.montarArvoreCenarios()
-    const tree: VaultTree = { campanhas: [], canvasesSoltos: [], personagensSoltos, cenarios }
+    const tree: VaultTree = { campanhas: [], canvasesSoltos: [], personagensSoltos, cenarios, itens: await repo.montarArvoreItens() }
 
     const mapa = idsDePastas(tree)
 
@@ -445,7 +445,7 @@ describe('idsDePastas + campanhasHerdadas ligados à árvore real do VaultRepo',
 
     const personagensSoltos = await repo.montarArvorePastas('personagens-soltos')
     const cenarios = await repo.montarArvoreCenarios()
-    const tree: VaultTree = { campanhas: [], canvasesSoltos: [], personagensSoltos, cenarios }
+    const tree: VaultTree = { campanhas: [], canvasesSoltos: [], personagensSoltos, cenarios, itens: await repo.montarArvoreItens() }
     const mapa = idsDePastas(tree)
 
     const vinculo: Vinculo = {

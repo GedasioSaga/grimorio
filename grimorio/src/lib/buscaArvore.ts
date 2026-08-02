@@ -1,7 +1,7 @@
-import type { CenarioNode, ItemRef, PastaCenarioNode, PastaNode } from './types'
+import type { CenarioNode, ItemRef, PastaCenarioNode, PastaItemNode, PastaNode } from './types'
 
 /**
- * Busca por nome nas seções de Personagens e Cenários da sidebar.
+ * Busca por nome nas seções de Personagens, Cenários e Itens da sidebar.
  *
  * Diferente de `filtroCampanha`, que PODA a árvore devolvendo outra árvore, aqui a árvore é
  * ACHATADA: enquanto há texto a seção vira lista plana ordenada do mais parecido pro menos.
@@ -81,6 +81,21 @@ export function buscarPersonagens(raiz: PastaNode, termo: string): Achado<ItemRe
     for (const p of pasta.personagens) {
       const pontuacao = pontuar(p.nome, termo)
       if (pontuacao) achados.push({ item: p, caminhoRotulo: rotuloDe(ancestrais), pontuacao })
+    }
+    for (const sub of pasta.subpastas) daPasta(sub, [...ancestrais, sub.nome])
+  }
+  daPasta(raiz, [])
+  return ordenar(achados)
+}
+
+/** Itens da árvore cujo nome casa com o termo, do mais parecido pro menos. */
+export function buscarItens(raiz: PastaItemNode, termo: string): Achado<ItemRef>[] {
+  if (!normalizar(termo)) return []
+  const achados: Achado<ItemRef>[] = []
+  const daPasta = (pasta: PastaItemNode, ancestrais: string[]) => {
+    for (const i of pasta.itens) {
+      const pontuacao = pontuar(i.nome, termo)
+      if (pontuacao) achados.push({ item: i, caminhoRotulo: rotuloDe(ancestrais), pontuacao })
     }
     for (const sub of pasta.subpastas) daPasta(sub, [...ancestrais, sub.nome])
   }

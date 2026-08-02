@@ -1,4 +1,4 @@
-import type { CampanhaNode, Cenario, CenarioNode, PastaCenarioNode, Personagem, VaultTree, Vinculo } from './types'
+import type { CampanhaNode, Cenario, CenarioNode, Item, PastaCenarioNode, Personagem, VaultTree, Vinculo } from './types'
 import { campanhasDe, idsDaCampanha } from './vinculos'
 import { filtrarArvoreCenarios } from './filtroCampanha'
 import { resumoAtivo } from './cenarioVersao'
@@ -87,6 +87,7 @@ export function montarContextoCampanha(d: {
   nomeCampanha: string
   personagens: EntidadeCtx[]
   cenarios: CenarioCtx[]
+  itens?: EntidadeCtx[]
   vinculos: string[]
   notas: string
 }): string {
@@ -100,6 +101,10 @@ export function montarContextoCampanha(d: {
     secoes.push(`## Cenários\n${d.cenarios
       .map((c) => `${'  '.repeat(c.nivel)}- ${c.nome}${c.resumo ? ` — ${c.resumo}` : ''}`).join('\n')}`)
   }
+  if (d.itens && d.itens.length > 0) {
+    secoes.push(`## Itens\n${d.itens
+      .map((i) => (i.resumo ? `- ${i.nome} — ${i.resumo}` : `- ${i.nome}`)).join('\n')}`)
+  }
   if (d.vinculos.length > 0) secoes.push(`## Vínculos\n${d.vinculos.map((v) => `- ${v}`).join('\n')}`)
   if (d.notas) secoes.push(`## Notas da sessão\n${d.notas}`)
   return secoes.join('\n\n')
@@ -110,6 +115,8 @@ export interface DepsContexto {
   tree: VaultTree
   personagens: Record<string, Pick<Personagem, 'id' | 'nome' | 'versoes' | 'versaoAtivaId'>>
   cenarios: Record<string, Pick<Cenario, 'id' | 'nome' | 'versoes' | 'versaoAtivaId'>>
+  /** Opcional para não quebrar chamadores antigos (e os testes que montam deps à mão). */
+  itens?: Record<string, Pick<Item, 'id' | 'nome' | 'resumo'>>
   vinculos: Vinculo[]
 }
 
@@ -119,17 +126,21 @@ export interface DepsContexto {
  * serve modais (por entidade) e escrita (por caminho do caderno).
  */
 export function montarContextoDaCampanha(camp: CampanhaNode, deps: DepsContexto): string {
-  const { tree, personagens, cenarios, vinculos } = deps
+  const { tree, personagens, cenarios, itens = {}, vinculos } = deps
   const ids = idsDaCampanha(vinculos, camp.id)
   const parts = Object.values(personagens)
     .filter((p) => ids.has(p.id))
     .map((p) => ({ nome: p.nome, resumo: resumoAtivoPersonagem(p) }))
   const linhasCen = achatarCenarios(filtrarArvoreCenarios(tree.cenarios, ids), (id) => resumoAtivo(cenarios[id]))
-  const nomeDe = (id: string) => personagens[id]?.nome ?? cenarios[id]?.nome ?? null
+  const linhasItens = Object.values(itens)
+    .filter((i) => ids.has(i.id))
+    .map((i) => ({ nome: i.nome, resumo: i.resumo }))
+  const nomeDe = (id: string) => personagens[id]?.nome ?? cenarios[id]?.nome ?? itens[id]?.nome ?? null
   return montarContextoCampanha({
     nomeCampanha: camp.nome,
     personagens: parts,
     cenarios: linhasCen,
+    itens: linhasItens,
     vinculos: frasesDeVinculosNoEscopo(vinculos, ids, nomeDe),
     notas: '',
   })

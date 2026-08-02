@@ -13,6 +13,7 @@ const tree: VaultTree = {
   canvasesSoltos: [],
   personagensSoltos: { slug: '', nome: '', caminho: 'personagens-soltos', subpastas: [], personagens: [] },
   cenarios: { slug: '', nome: '', caminho: 'cenarios', subpastas: [], cenarios: [] },
+  itens: { slug: 'itens', nome: 'itens', caminho: 'itens', subpastas: [], itens: [] },
 }
 
 beforeEach(() => {

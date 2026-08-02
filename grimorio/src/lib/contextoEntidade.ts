@@ -3,16 +3,22 @@
  * a versão ATIVA em texto plano. Lógica pura (sem UI/store/Tauri) — a camada de
  * componentes injeta a entidade; aqui só formatamos. Testável sem DOM.
  */
-import type { Cenario, Personagem } from './types'
+import type { Cenario, Item, Personagem } from './types'
 import { versaoAtivaPersonagem } from './personagemVersao'
 import { versaoAtiva } from './cenarioVersao'
 import { htmlParaTexto, temConteudo } from './htmlTexto'
 
-export type TipoEntidade = 'personagem' | 'cenario'
+export type TipoEntidade = 'personagem' | 'cenario' | 'item'
+
+const ALVO: Record<TipoEntidade, string> = {
+  personagem: 'personagem',
+  cenario: 'cenário',
+  item: 'item',
+}
 
 /** Persona do assistente para o chat de uma entidade específica. */
 export function SYSTEM_ENTIDADE(tipo: TipoEntidade): string {
-  const alvo = tipo === 'personagem' ? 'personagem' : 'cenário'
+  const alvo = ALVO[tipo]
   return [
     `Você é um assistente criativo ajudando o autor a desenvolver um ${alvo} específico da história dele, em português do Brasil.`,
     `Use as informações fornecidas sobre o ${alvo} como verdade estabelecida; nunca contradiga esses fatos.`,
@@ -31,7 +37,7 @@ function montar(cabecalho: string, resumo: string, campos: [rotulo: string, html
 }
 
 /** Versão ativa da entidade em texto plano (nome, resumo e todas as abas com conteúdo). */
-export function textoDaEntidade(ent: Personagem | Cenario, tipo: TipoEntidade): string {
+export function textoDaEntidade(ent: Personagem | Cenario | Item, tipo: TipoEntidade): string {
   if (tipo === 'personagem') {
     const v = versaoAtivaPersonagem(ent as Personagem)
     return montar(`# Personagem: ${v.nome}`, v.resumo, [
@@ -40,6 +46,15 @@ export function textoDaEntidade(ent: Personagem | Cenario, tipo: TipoEntidade): 
       ['História', v.historia],
       ['Extras', v.extras],
       ['Anotações', v.anotacoes],
+    ])
+  }
+  if (tipo === 'item') {
+    const i = ent as Item
+    // item não tem versões: o texto sai direto da entidade, sem passar por versão ativa
+    return montar(`# Item: ${i.nome}`, i.resumo, [
+      ['Descrição', i.descricao],
+      ['Informações', i.informacao],
+      ['Efeito', i.efeito],
     ])
   }
   const c = ent as Cenario

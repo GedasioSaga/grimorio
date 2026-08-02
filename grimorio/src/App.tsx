@@ -6,6 +6,8 @@ import { Sidebar } from './components/Sidebar'
 import { Workspace } from './components/Workspace'
 import { PerfilModal } from './components/PerfilModal'
 import { CenarioModal } from './components/CenarioModal'
+import { ItemModal } from './components/ItemModal'
+import { GrafoVinculos } from './components/GrafoVinculos'
 import { HostDialogos } from './components/dialogos'
 import { HostDialogoCampanhas } from './components/dialogoCampanhas'
 import { HostOpcoes } from './components/Opcoes'
@@ -19,6 +21,8 @@ export default function App() {
   const aberto = useApp((s) => s.aberto)
   const perfilAbertoId = useApp((s) => s.perfilAbertoId)
   const cenarioAbertoId = useApp((s) => s.cenarioAbertoId)
+  const itemAbertoId = useApp((s) => s.itemAbertoId)
+  const grafoAberto = useApp((s) => s.grafoAberto)
   const abrirCofre = useApp((s) => s.abrirCofre)
   const [sidebarRecolhida, setSidebarRecolhida] = useState(() => localStorage.getItem('grimorio.sidebar') === '1')
 
@@ -69,10 +73,13 @@ export default function App() {
   return (
     <div className="app-layout">
       <Sidebar recolhida={sidebarRecolhida} onToggle={alternarSidebar} />
+      {/* a teia ocupa a área principal inteira: ela é uma leitura do cofre todo, não de
+          um documento, e conviver com o workspace no mesmo espaço só disputaria pixels */}
       <main className="app-main">
-        {!aberto && <div className="app-empty">Selecione uma sessão, canvas ou a Escrita na barra lateral</div>}
+        {grafoAberto && <GrafoVinculos />}
+        {!grafoAberto && !aberto && <div className="app-empty">Selecione uma sessão, canvas ou a Escrita na barra lateral</div>}
 
-        {aberto?.tipo === 'canvas' && vaultPath && (
+        {!grafoAberto && aberto?.tipo === 'canvas' && vaultPath && (
           <Workspace
             key={aberto.caminho}
             chaveSplit={aberto.caminho}
@@ -84,7 +91,7 @@ export default function App() {
           />
         )}
 
-        {aberto?.tipo === 'sessao' && vaultPath && (
+        {!grafoAberto && aberto?.tipo === 'sessao' && vaultPath && (
           <Workspace
             key={aberto.caminho}
             chaveSplit={aberto.caminho}
@@ -96,7 +103,7 @@ export default function App() {
           />
         )}
 
-        {aberto?.tipo === 'escrita' && vaultPath && (
+        {!grafoAberto && aberto?.tipo === 'escrita' && vaultPath && (
           <Workspace
             key={aberto.caminho}
             chaveSplit={aberto.caminho}
@@ -109,6 +116,7 @@ export default function App() {
       </main>
       {perfilAbertoId && <PerfilModal key={perfilAbertoId} personagemId={perfilAbertoId} />}
       {cenarioAbertoId && <CenarioModal key={cenarioAbertoId} cenarioId={cenarioAbertoId} />}
+      {itemAbertoId && <ItemModal key={itemAbertoId} itemId={itemAbertoId} />}
       {/* ORDEM IMPORTA: todo host aqui é uma .modal-overlay com o MESMO z-index (1000),
           então quem vem depois no DOM pinta por cima. HostDialogos fica por último
           porque qualquer um dos outros abre um pedirTexto em cima de si (Opções →

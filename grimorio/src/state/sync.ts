@@ -86,9 +86,38 @@ async function temConta(): Promise<boolean> {
  * minutos depois: capturar a função de hoje ligaria o sync a um estado que pode já ter sido
  * substituído.
  */
+/**
+ * Faz o app reler o cofre depois de o ciclo ter escrito nele.
+ *
+ * O sincronizador baixa, apaga e cria cópia de conflito direto no disco, sem passar pelo store.
+ * Enquanto ninguém avisava, a árvore e os caches continuavam sendo o retrato de ANTES do ciclo,
+ * e saíam três estragos: sessão listada na sidebar que ao abrir dá "os error 2"; arquivo vindo
+ * do outro computador que não aparece; e, o pior, o autosave seguinte gravando o cache velho por
+ * cima do arquivo recém-baixado — o que recria a divergência e gera conflito "do nada".
+ *
+ * Preso ao `caminho` deste sincronizador: um ciclo que termina depois de uma troca de cofre não
+ * pode mandar reler o cofre novo. Falha aqui não derruba o ciclo — vale a regra 2 deste arquivo.
+ */
+async function relerCofreApos(resultado: ResultadoDoCiclo, caminho: string): Promise<void> {
+  if (resultado.tipo !== 'sincronizado' || !resultado.mudouDisco) return
+  if (useApp.getState().vaultPath !== caminho) return
+  try {
+    await useApp.getState().recarregarDoDisco()
+  } catch (e) {
+    console.warn('Sync: o cofre mudou no disco mas não deu para reler:', e)
+  }
+}
+
 function montarCiclo(caminho: string, dirManifesto: string): () => Promise<ResultadoDoCiclo> {
-  return () =>
-    executarCiclo({
+  return async () => {
+    const resultado = await executarCicloDoCofre(caminho, dirManifesto)
+    await relerCofreApos(resultado, caminho)
+    return resultado
+  }
+}
+
+function executarCicloDoCofre(caminho: string, dirManifesto: string): Promise<ResultadoDoCiclo> {
+  return executarCiclo({
       fs: tauriFs,
       drive: tauriDrive,
       dirManifesto,
@@ -106,8 +135,8 @@ function montarCiclo(caminho: string, dirManifesto: string): () => Promise<Resul
           novoId: () => crypto.randomUUID(),
           agora: () => new Date(),
         }).preservarPerdedor,
-      agora: () => new Date().toISOString(),
-    })
+    agora: () => new Date().toISOString(),
+  })
 }
 
 /**

@@ -462,6 +462,47 @@ button:hover { border-color: var(--dourado); color: var(--dourado-claro); }
 .chat-msg-user { align-self: flex-end; background: var(--fundo-elevado); border: 1px solid var(--dourado); }
 .chat-msg-model { align-self: flex-start; background: var(--fundo); border: 1px solid var(--borda); }
 .chat-ia-pensando { color: var(--texto-fraco); font-style: italic; }
+
+/* Resposta do modelo renderizada como Markdown. `pre-wrap` vem de .chat-msg e serve ao
+   texto puro do usuário; aqui as quebras já são tags, então volta ao normal — senão cada
+   bloco ganharia uma linha em branco extra. */
+.chat-msg-md { white-space: normal; }
+.chat-msg-md > :first-child { margin-top: 0; }
+.chat-msg-md > :last-child { margin-bottom: 0; }
+.chat-msg-md p { margin: 0 0 8px; }
+.chat-msg-md h1, .chat-msg-md h2, .chat-msg-md h3 {
+  margin: 12px 0 6px; line-height: 1.3; color: var(--dourado-claro);
+}
+.chat-msg-md h1 { font-size: 1.12em; }
+.chat-msg-md h2 { font-size: 1.06em; }
+.chat-msg-md h3 { font-size: 1em; }
+.chat-msg-md ul, .chat-msg-md ol { margin: 0 0 8px; padding-left: 20px; }
+.chat-msg-md li { margin: 2px 0; }
+.chat-msg-md strong { color: var(--dourado-claro); }
+.chat-msg-md blockquote {
+  margin: 0 0 8px; padding: 2px 0 2px 10px;
+  border-left: 2px solid var(--borda); color: var(--texto-fraco);
+}
+.chat-msg-md hr { margin: 10px 0; border: 0; border-top: 1px solid var(--borda); }
+
+/* Cursor da resposta que ainda está chegando: mostra que o silêncio é escrita, não travada. */
+.chat-cursor {
+  display: inline-block; width: 7px; height: 1em; margin-left: 2px;
+  vertical-align: text-bottom; background: var(--dourado);
+  animation: chat-piscar 1s step-end infinite;
+}
+@keyframes chat-piscar { 50% { opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .chat-cursor { animation: none; } }
+
+/* Onde a janela de contexto corta: acima daqui a IA não enxerga. */
+.chat-corte {
+  align-self: center; display: flex; align-items: center; gap: 8px;
+  width: 100%; margin: 2px 0; font-size: 11px; font-style: italic;
+  color: var(--texto-fraco); cursor: help;
+}
+.chat-corte::before, .chat-corte::after {
+  content: ''; flex: 1; border-top: 1px dashed var(--borda);
+}
 .chat-ia-erro { color: var(--erro); font-size: 12px; padding: 4px 12px; }
 .chat-ia-anexo {
   display: flex; align-items: center; gap: 6px; margin: 0 12px;
@@ -714,6 +755,33 @@ button:hover { border-color: var(--dourado); color: var(--dourado-claro); }
 .opcoes-cofre-caminho { grid-column: 1; font-size: 0.78rem; color: var(--texto-fraco); word-break: break-all; }
 .opcoes-cofre-acoes { grid-column: 2; grid-row: 1 / span 2; display: flex; align-items: center; gap: 4px; }
 .opcoes-acao { margin-right: 8px; }
+.opcoes-aviso {
+  margin: 0 0 12px; padding: 8px 10px; font-size: 0.82rem;
+  color: var(--erro); background: var(--fundo-elevado);
+  border: 1px solid var(--erro); border-radius: 6px;
+}
+.opcoes-aviso code { font-size: 0.95em; }
+.opcoes-select {
+  width: 100%; padding: 7px 9px; border-radius: 6px;
+  background: var(--fundo); color: var(--texto); border: 1px solid var(--borda);
+}
+
+/* ---- aba IA: escolha do modelo (do mais barato ao mais caro) ---- */
+.opcoes-modelos { display: flex; flex-direction: column; gap: 6px; }
+.opcao-modelo {
+  display: flex; flex-direction: column; gap: 3px;
+  padding: 9px 11px; text-align: left; cursor: pointer;
+  background: var(--fundo); color: var(--texto);
+  border: 1px solid var(--borda); border-radius: 6px;
+}
+.opcao-modelo:hover { background: var(--fundo-elevado); }
+.opcao-modelo.ativa { border-color: var(--dourado); background: var(--fundo-elevado); }
+.opcao-modelo-topo { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
+.opcao-modelo-nome { font-size: 0.9rem; }
+.opcao-modelo.ativa .opcao-modelo-nome { color: var(--dourado-claro); }
+.opcao-modelo-faixa { flex: none; font-size: 0.72rem; color: var(--texto-fraco); letter-spacing: 0.03em; }
+.opcao-modelo-nota { font-size: 0.78rem; line-height: 1.4; color: var(--texto-fraco); }
+.opcao-modelo-id { font-size: 0.7rem; color: var(--texto-fraco); opacity: 0.75; }
 
 /* ---- aba Nuvem: retrato do sync com o Google Drive ---- */
 .sync-titulo { margin: 0 0 4px; font-size: 0.9rem; color: var(--texto); }
@@ -743,3 +811,71 @@ button:hover { border-color: var(--dourado); color: var(--dourado-claro); }
   border: 1px solid var(--borda);
   border-radius: 6px;
 }
+
+/* ---- teia de vínculos (grafo) ---- */
+/* Cores próprias do grafo, escopadas no componente: os três temas são escuros, então uma
+   paleta só serve aos três; o personagem herda o dourado do tema por ser a entidade
+   central, e cenário/item ganham matizes que se distinguem dele em qualquer um deles. */
+.grafo {
+  --no-personagem: var(--dourado);
+  --no-cenario: #6f9dbd;
+  --no-item: #7fae72;
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+}
+.grafo-legenda { display: flex; gap: 6px; margin-left: auto; }
+.grafo-chip {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 3px 10px; font-size: 11px; cursor: pointer;
+  border-radius: 12px; border: 1px solid currentColor; background: var(--fundo-elevado);
+}
+.grafo-chip-personagem { color: var(--no-personagem); }
+.grafo-chip-cenario { color: var(--no-cenario); }
+.grafo-chip-item { color: var(--no-item); }
+.grafo-chip.oculto { color: var(--texto-fraco); background: transparent; text-decoration: line-through; }
+/* o SVG é posicionado sobre o wrapper em vez de participar do flex: com proporção
+   intrínseca (viewBox) ele resolve a própria altura e vazaria por baixo do rodapé */
+.grafo-tela { position: relative; flex: 1; min-height: 0; }
+.grafo-svg {
+  position: absolute; inset: 0; width: 100%; height: 100%;
+  cursor: grab; user-select: none; touch-action: none;
+}
+.grafo-svg.arrastando { cursor: grabbing; }
+.grafo-vazio, .grafo-aviso {
+  padding: 12px 16px; font-size: 0.85rem; color: var(--texto-fraco); font-style: italic;
+}
+.grafo-aviso { padding: 6px 16px; border-bottom: 1px solid var(--borda); }
+.grafo-rodape {
+  padding: 6px 16px; font-size: 11px; color: var(--texto-fraco);
+  border-top: 1px solid var(--borda);
+}
+
+.grafo-arestas line { stroke: var(--borda); stroke-width: 2; }
+.grafo-arestas text { fill: var(--texto-fraco); font-size: 13px; pointer-events: none; }
+/* selecionar um nó apaga o resto em vez de escondê-lo: a vizinhança salta sem que a
+   forma geral da teia mude debaixo do olho de quem clicou */
+.grafo-arestas .apagado { opacity: 0.12; }
+.grafo-no.apagado { opacity: 0.18; }
+
+.grafo-no { cursor: pointer; }
+/* miolo CLARO, não escuro: sem retrato o nó mostra um emoji, e emoji escuro (o 🗺 é quase
+   preto) sumia dentro de um círculo escuro. Com retrato o fundo nem aparece — ele é o que
+   se vê enquanto a imagem carrega. O anel colorido é que carrega o tipo. */
+.grafo-no-fundo { fill: var(--texto); stroke: none; }
+.grafo-no-anel { fill: none; stroke-width: 3; }
+.grafo-no-personagem .grafo-no-anel { stroke: var(--no-personagem); }
+.grafo-no-cenario .grafo-no-anel { stroke: var(--no-cenario); }
+.grafo-no-item .grafo-no-anel { stroke: var(--no-item); }
+.grafo-no:hover .grafo-no-fundo { fill: var(--dourado-claro); }
+.grafo-no:hover .grafo-no-anel { stroke-width: 4; }
+.grafo-no.selecionado .grafo-no-anel { stroke-width: 5; }
+/* imagem é arrastável por padrão no navegador: sem isto, puxar um nó pelo retrato dispararia
+   o drag-and-drop nativo da imagem em vez do arrasto do grafo */
+.grafo-no image { pointer-events: none; }
+.grafo-no-icone { font-size: 22px; pointer-events: none; }
+.grafo-no-nome { fill: var(--texto); font-size: 14px; pointer-events: none; }
+
+.btn-icon.ativo { color: var(--dourado-claro); }

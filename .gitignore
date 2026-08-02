@@ -8,3 +8,8 @@ src-tauri/target/
 # chaves de assinatura do updater — NUNCA commitar (privada mora em ~/.tauri)
 *.key
 *.key.pub
+
+# grafo de código: reconstruído por máquina pelo hook post-commit, nunca compartilhado
+graphify-out/
+# trilha de sessões do assistente
+.claude-trail.md

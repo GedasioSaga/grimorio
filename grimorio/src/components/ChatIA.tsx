@@ -1,13 +1,16 @@
-import { useEffect, useRef, useState } from 'react'
+import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
 import { ask } from '@tauri-apps/plugin-dialog'
 import { convertFileSrc } from '@tauri-apps/api/core'
 import { useApp } from '../state/store'
 import type { NotebookRepo } from '../lib/notebookRepo'
 import type { CenarioCardShapeType } from './CenarioCardShape'
 import type { CharacterCardShapeType } from './CharacterCardShape'
-import { JANELA_HISTORICO, SYSTEM_MESTRE, type MensagemChat } from '../lib/chatIA'
+import { SYSTEM_MESTRE, janelaSalva, recortarJanela, type MensagemChat } from '../lib/chatIA'
 import { gerarConteudo, type ImagemIA } from '../lib/gemini'
 import { garantirChaves } from '../lib/chavesIA'
+import { modeloSalvo } from '../lib/modeloIA'
+import { BolhaChat, BolhaParcial, CorteJanela } from './BolhaChat'
+import { useOpcoes } from './Opcoes'
 import { pedirTexto } from './dialogos'
 import {
   acharCampanhaDaSessao,
@@ -54,8 +57,16 @@ export function ChatIA({
   const [mensagens, setMensagens] = useState<MensagemChat[]>([])
   const [texto, setTexto] = useState('')
   const [pensando, setPensando] = useState(false)
+  // resposta chegando aos poucos; null = nenhuma em voo
+  const [parcial, setParcial] = useState<string | null>(null)
   const [erro, setErro] = useState<string | null>(null)
   const [anexo, setAnexo] = useState<Anexo | null>(null)
+
+  // relê a janela quando as Opções fecham, para o aviso de corte não ficar mentindo na
+  // tela depois de o usuário mudar o valor lá dentro
+  const opcoesAberto = useOpcoes((s) => s.aberto)
+  const janela = useMemo(() => janelaSalva(), [opcoesAberto])
+  const { cortadas } = recortarJanela(mensagens, janela)
   const timerSalvar = useRef<ReturnType<typeof setTimeout> | null>(null)
   const fimRef = useRef<HTMLDivElement | null>(null)
   // false após o unmount: bloqueia o save da resposta de um enviar() em voo (evita
@@ -77,10 +88,10 @@ export function ChatIA({
     }
   }, [repo, cadernoDirRel])
 
-  // autoscroll para a última mensagem
+  // autoscroll para a última mensagem (e acompanhando o texto que vai chegando)
   useEffect(() => {
     fimRef.current?.scrollIntoView({ block: 'end' })
-  }, [mensagens, pensando])
+  }, [mensagens, pensando, parcial])
 
   // salva com debounce; ref espelho permite o flush no unmount (padrão dos modais)
   const mensagensRef = useRef<MensagemChat[]>([])
@@ -213,12 +224,16 @@ export function ChatIA({
     try {
       const contexto = await montarContexto()
       const systemComCtx = contexto ? `${system}\n\n# Contexto da campanha\n${contexto}` : system
-      const janela = novas.slice(-JANELA_HISTORICO).map((m) => ({ papel: m.papel, texto: m.texto }))
+      // janela relida AQUI, não do render: vale a configuração do momento do envio
+      const { enviadas } = recortarJanela(novas, janelaSalva())
       const resposta = await gerarConteudo({
         system: systemComCtx,
-        historico: janela,
+        historico: enviadas.map((m) => ({ papel: m.papel, texto: m.texto })),
         imagens: anexo?.imagem ? [anexo.imagem] : [],
         chaves: await garantirChaves(pedirTexto),
+        modelo: modeloSalvo(),
+        // desmontou no meio do stream: parar de pintar evita escrever na conversa de outra sessão
+        aoReceber: (p) => { if (montadoRef.current) setParcial(p) },
       })
       // desmontou durante o await (troca de sessão): a pergunta já foi persistida
       // por agendarSalvar(novas)/flush; descartar a resposta evita clobber da conversa nova
@@ -229,6 +244,7 @@ export function ChatIA({
     } finally {
       setAnexo(null)
       setPensando(false)
+      setParcial(null)
     }
   }
 
@@ -246,11 +262,14 @@ export function ChatIA({
           </div>
         )}
         {mensagens.map((m, i) => (
-          <div key={i} className={`chat-msg chat-msg-${m.papel}`}>
-            {m.texto}
-          </div>
+          <Fragment key={i}>
+            {i === cortadas && <CorteJanela quantas={cortadas} />}
+            <BolhaChat mensagem={m} />
+          </Fragment>
         ))}
-        {pensando && <div className="chat-msg chat-msg-model chat-ia-pensando">pensando…</div>}
+        {parcial !== null
+          ? <BolhaParcial texto={parcial} />
+          : pensando && <div className="chat-msg chat-msg-model chat-ia-pensando">pensando…</div>}
         <div ref={fimRef} />
       </div>
       {erro && <div className="chat-ia-erro">{erro}</div>}

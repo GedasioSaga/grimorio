@@ -73,6 +73,7 @@ beforeEach(() => {
     vinculos: [],
     personagens: { a: { id: 'a', nome: 'Alice' }, b: { id: 'b', nome: 'Bruno' } },
     cenarios: { t: { id: 't', nome: 'Taverna' } },
+    itens: { e: { id: 'e', nome: 'Espada Rúnica' } },
     tree: { campanhas: [{ id: 'camp1', nome: 'Campanha 1' }] },
   }
 })

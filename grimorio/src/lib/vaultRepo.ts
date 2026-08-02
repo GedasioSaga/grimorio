@@ -1,5 +1,15 @@
 import type { FsBridge } from './fsBridge'
-import type { Campanha, CampanhaNode, CanvasDoc, Cenario, CenarioNode, CenarioRef, ItemRef, PastaCenarioNode, PastaNode, Personagem, VaultTree, VersaoCenario, VersaoPersonagem, Vinculo } from './types'
+import type { Campanha, CampanhaNode, CanvasDoc, Cenario, CenarioNode, CenarioRef, Item, ItemRef, PastaCenarioNode, PastaItemNode, PastaNode, Personagem, VaultTree, VersaoCenario, VersaoPersonagem, Vinculo } from './types'
+
+/** Forma comum das seções "pastas aninhadas com arquivos .json" (personagens e itens). */
+interface ArvoreDeArquivos {
+  slug: string
+  nome: string
+  id?: string
+  caminho: string
+  subpastas: ArvoreDeArquivos[]
+  arquivos: ItemRef[]
+}
 import { slugify, slugUnico } from './slug'
 import { normalizarFoco } from './focoRetrato'
 import { normalizarVinculos } from './vinculos'
@@ -102,6 +112,28 @@ export function normalizarCenario(raw: Record<string, any>): Cenario {
     personagens: Array.isArray(raw?.personagens) ? raw.personagens : [],
     versoes,
     versaoAtivaId,
+    criadoEm: raw?.criadoEm ?? agora(),
+    modificadoEm: raw?.modificadoEm ?? agora(),
+  }
+}
+
+/**
+ * Normaliza um item lido do disco. Não há formato legado a migrar (o item nasceu já
+ * assim), então isto só repara arquivo editado à mão ou truncado por conflito de sync:
+ * campo faltando vira o vazio equivalente, e o id só é gerado quando de fato não existe —
+ * gerar id a cada leitura quebraria todos os vínculos que apontam para ele.
+ */
+export function normalizarItem(raw: Record<string, any>): Item {
+  return {
+    id: typeof raw?.id === 'string' ? raw.id : novoId(),
+    nome: raw?.nome ?? '',
+    resumo: raw?.resumo ?? '',
+    retrato: raw?.retrato ?? null,
+    // undefined some do JSON.stringify: arquivo sem enquadramento não ganha campo vazio
+    foco: normalizarFoco(raw?.foco),
+    descricao: raw?.descricao ?? '',
+    informacao: raw?.informacao ?? '',
+    efeito: raw?.efeito ?? '',
     criadoEm: raw?.criadoEm ?? agora(),
     modificadoEm: raw?.modificadoEm ?? agora(),
   }
@@ -497,6 +529,38 @@ export class VaultRepo {
     return { id, slug, nome, caminho: dir, erro, filhos }
   }
 
+  // ---------- itens ----------
+
+  /** Cria um item (arquivo .json) dentro de dir (a raiz `itens` ou uma pasta dela). */
+  async criarItemEm(dir: string, nome: string): Promise<ItemRef & { id: string }> {
+    await this.fs.mkdirAll(this.abs(dir))
+    const slug = await this.slugLivre(dir, nome)
+    const item: Item = {
+      id: novoId(), nome, resumo: '', retrato: null,
+      descricao: '', informacao: '', efeito: '',
+      criadoEm: agora(), modificadoEm: agora(),
+    }
+    const caminho = `${dir}/${slug}.json`
+    await this.fs.writeTextAtomic(this.abs(caminho), JSON.stringify(item, null, 2))
+    return { slug, nome, caminho, id: item.id }
+  }
+
+  async lerItem(caminho: string): Promise<Item> {
+    return normalizarItem(JSON.parse(await this.fs.readText(this.abs(caminho))))
+  }
+
+  async salvarItem(caminho: string, item: Item): Promise<void> {
+    return this.naFila(caminho, async () => {
+      const salvo = { ...item, modificadoEm: agora() }
+      await this.fs.writeTextAtomic(this.abs(caminho), JSON.stringify(salvo, null, 2))
+    })
+  }
+
+  /** Move o .json do item para outra pasta (mesma mecânica do personagem). */
+  async moverItem(caminhoOrigem: string, dirDestino: string): Promise<void> {
+    return this.moverPersonagem(caminhoOrigem, dirDestino)
+  }
+
   // ---------- vínculos ----------
 
   /** Lê vinculos.json da raiz do cofre; ausente/corrompido → lista vazia. */
@@ -565,22 +629,47 @@ export class VaultRepo {
       canvasesSoltos: await this.listarItens('canvases-soltos'),
       personagensSoltos: await this.montarArvorePastas('personagens-soltos'),
       cenarios: await this.montarArvoreCenarios(),
+      itens: await this.montarArvoreItens(),
     }
   }
 
   /** Monta recursivamente a árvore de pastas + personagens de um diretório raiz. */
   async montarArvorePastas(dir: string): Promise<PastaNode> {
+    const a = await this.montarArvoreDeArquivos(dir)
+    const comoPasta = (n: ArvoreDeArquivos): PastaNode => ({
+      slug: n.slug, nome: n.nome, id: n.id, caminho: n.caminho,
+      subpastas: n.subpastas.map(comoPasta), personagens: n.arquivos,
+    })
+    return comoPasta(a)
+  }
+
+  /** Monta a árvore da seção de Itens (mesma varredura, outro rótulo de folha). */
+  async montarArvoreItens(dir = 'itens'): Promise<PastaItemNode> {
+    const a = await this.montarArvoreDeArquivos(dir)
+    const comoPasta = (n: ArvoreDeArquivos): PastaItemNode => ({
+      slug: n.slug, nome: n.nome, id: n.id, caminho: n.caminho,
+      subpastas: n.subpastas.map(comoPasta), itens: n.arquivos,
+    })
+    return comoPasta(a)
+  }
+
+  /**
+   * Varredura genérica de "pastas aninhadas contendo arquivos .json". Serve a personagens
+   * e a itens: as duas seções têm exatamente esta forma, e só divergem no nome do campo
+   * das folhas. Cenário NÃO passa por aqui — lá a entidade é o próprio diretório.
+   */
+  private async montarArvoreDeArquivos(dir: string): Promise<ArvoreDeArquivos> {
     let entries: { name: string; isDir: boolean }[] = []
     try {
       entries = await this.fs.listDir(this.abs(dir))
     } catch {
       // diretório ainda não existe
     }
-    const subpastas: PastaNode[] = []
+    const subpastas: ArvoreDeArquivos[] = []
     const personagens: ItemRef[] = []
     for (const e of entries) {
       if (e.isDir) {
-        subpastas.push(await this.montarArvorePastas(`${dir}/${e.name}`))
+        subpastas.push(await this.montarArvoreDeArquivos(`${dir}/${e.name}`))
       } else if (e.name.endsWith('.json') && e.name !== 'pasta.json') {
         const slug = e.name.replace(/\.json$/, '')
         const caminho = `${dir}/${e.name}`
@@ -603,7 +692,7 @@ export class VaultRepo {
     }
     subpastas.sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'))
     personagens.sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'))
-    return { slug: dir.split('/').pop() ?? dir, nome, id, caminho: dir, subpastas, personagens }
+    return { slug: dir.split('/').pop() ?? dir, nome, id, caminho: dir, subpastas, arquivos: personagens }
   }
 
   private async listarDirs(rel: string): Promise<{ name: string }[]> {

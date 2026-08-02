@@ -19,6 +19,7 @@ const tree: VaultTree = {
   canvasesSoltos: [],
   personagensSoltos: pasta('personagens-soltos', undefined, [pasta('personagens-soltos/viloes', 'pasta-viloes')]),
   cenarios: raizCenarios,
+  itens: { slug: 'itens', nome: 'itens', caminho: 'itens', subpastas: [], itens: [] },
 }
 
 const vinculoPastaViloes: Vinculo = {

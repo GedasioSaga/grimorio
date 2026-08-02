@@ -1,14 +1,26 @@
-import { useEffect, useRef, useState } from 'react'
+import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
 import { useApp } from '../state/store'
-import { JANELA_HISTORICO, type MensagemChat } from '../lib/chatIA'
+import { janelaSalva, recortarJanela, type MensagemChat } from '../lib/chatIA'
 import { gerarConteudo } from '../lib/gemini'
 import { garantirChaves } from '../lib/chavesIA'
+import { modeloSalvo } from '../lib/modeloIA'
+import { BolhaChat, BolhaParcial, CorteJanela } from './BolhaChat'
+import { useOpcoes } from './Opcoes'
 import { pedirTexto } from './dialogos'
 import { contextoDeEntidade } from '../lib/contextoIA'
 import { SYSTEM_ENTIDADE, textoDaEntidade, type TipoEntidade } from '../lib/contextoEntidade'
 
+const ALVO: Record<TipoEntidade, string> = { personagem: 'personagem', cenario: 'cenário', item: 'item' }
+
+/** A entidade no cache do tipo certo (um único ponto a mudar quando nascer um tipo novo). */
+function entidadeDe(s: ReturnType<typeof useApp.getState>, tipo: TipoEntidade, id: string) {
+  if (tipo === 'personagem') return s.personagens[id]
+  if (tipo === 'cenario') return s.cenarios[id]
+  return s.itens[id]
+}
+
 /**
- * Chat lateral escopado num personagem/cenário. Efêmero: a conversa vive só em
+ * Chat lateral escopado num personagem/cenário/item. Efêmero: a conversa vive só em
  * memória enquanto o drawer está aberto (fechar = zerar). O contexto (versão ativa
  * + campanha) é remontado a cada envio, então trocar de forma no meio acompanha.
  */
@@ -17,13 +29,18 @@ export function ChatEntidade({ tipo, entidadeId, onFechar }: {
   entidadeId: string
   onFechar: () => void
 }) {
-  const nome = useApp((s) =>
-    (tipo === 'personagem' ? s.personagens[entidadeId]?.nome : s.cenarios[entidadeId]?.nome) ?? '')
+  const nome = useApp((s) => entidadeDe(s, tipo, entidadeId)?.nome ?? '')
 
   const [mensagens, setMensagens] = useState<MensagemChat[]>([])
   const [entrada, setEntrada] = useState('')
   const [pensando, setPensando] = useState(false)
+  // resposta chegando aos poucos; null = nenhuma em voo
+  const [parcial, setParcial] = useState<string | null>(null)
   const [erro, setErro] = useState<string | null>(null)
+
+  const opcoesAberto = useOpcoes((s) => s.aberto)
+  const janela = useMemo(() => janelaSalva(), [opcoesAberto])
+  const { cortadas } = recortarJanela(mensagens, janela)
   const fimRef = useRef<HTMLDivElement | null>(null)
   // false após o unmount: descarta a resposta de um enviar() em voo (o drawer é efêmero)
   const montadoRef = useRef(true)
@@ -33,10 +50,10 @@ export function ChatEntidade({ tipo, entidadeId, onFechar }: {
     return () => { montadoRef.current = false }
   }, [])
 
-  // autoscroll para a última mensagem
+  // autoscroll para a última mensagem (e acompanhando o texto que vai chegando)
   useEffect(() => {
     fimRef.current?.scrollIntoView({ block: 'end' })
-  }, [mensagens, pensando])
+  }, [mensagens, pensando, parcial])
 
   async function enviar() {
     const pergunta = entrada.trim()
@@ -48,20 +65,30 @@ export function ChatEntidade({ tipo, entidadeId, onFechar }: {
     setPensando(true)
     try {
       const s = useApp.getState()
-      const ent = tipo === 'personagem' ? s.personagens[entidadeId] : s.cenarios[entidadeId]
+      const ent = entidadeDe(s, tipo, entidadeId)
       if (!ent) throw new Error('Entidade não encontrada.')
-      const alvo = tipo === 'personagem' ? 'personagem' : 'cenário'
+      const alvo = ALVO[tipo]
       let system = `${SYSTEM_ENTIDADE(tipo)}\n\n# Sobre este ${alvo}\n${textoDaEntidade(ent, tipo)}`
       const contexto = s.tree ? contextoDeEntidade(entidadeId, { ...s, tree: s.tree }) : ''
       if (contexto) system += `\n\n# Contexto da campanha\n${contexto}`
-      const janela = novas.slice(-JANELA_HISTORICO).map((m) => ({ papel: m.papel, texto: m.texto }))
-      const resposta = await gerarConteudo({ system, historico: janela, chaves: await garantirChaves(pedirTexto) })
+      // janela relida AQUI, não do render: vale a configuração do momento do envio
+      const { enviadas } = recortarJanela(novas, janelaSalva())
+      const resposta = await gerarConteudo({
+        system,
+        historico: enviadas.map((m) => ({ papel: m.papel, texto: m.texto })),
+        chaves: await garantirChaves(pedirTexto),
+        modelo: modeloSalvo(),
+        aoReceber: (p) => { if (montadoRef.current) setParcial(p) },
+      })
       if (!montadoRef.current) return
       setMensagens([...novas, { papel: 'model', texto: resposta, em: new Date().toISOString() }])
     } catch (e) {
       if (montadoRef.current) setErro(e instanceof Error ? e.message : String(e))
     } finally {
-      if (montadoRef.current) setPensando(false)
+      if (montadoRef.current) {
+        setPensando(false)
+        setParcial(null)
+      }
     }
   }
 
@@ -77,9 +104,14 @@ export function ChatEntidade({ tipo, entidadeId, onFechar }: {
             <div className="chat-ia-vazio">Converse com a IA sobre {nome || 'esta entidade'}…</div>
           )}
           {mensagens.map((m, i) => (
-            <div key={i} className={`chat-msg chat-msg-${m.papel}`}>{m.texto}</div>
+            <Fragment key={i}>
+              {i === cortadas && <CorteJanela quantas={cortadas} />}
+              <BolhaChat mensagem={m} />
+            </Fragment>
           ))}
-          {pensando && <div className="chat-msg chat-msg-model chat-ia-pensando">pensando…</div>}
+          {parcial !== null
+            ? <BolhaParcial texto={parcial} />
+            : pensando && <div className="chat-msg chat-msg-model chat-ia-pensando">pensando…</div>}
           <div ref={fimRef} />
         </div>
         {erro && <div className="chat-ia-erro">{erro}</div>}

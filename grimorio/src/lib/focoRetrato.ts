@@ -40,6 +40,27 @@ export function posicaoCss(foco: FocoRetrato | undefined): string {
 }
 
 /**
+ * Mesmo enquadramento, escrito como o SVG entende.
+ *
+ * `<image>` não tem `object-position`: o que existe é `preserveAspectRatio`, que só aceita
+ * NOVE alinhamentos discretos (Min/Mid/Max em cada eixo). Então o foco contínuo de 0–100% é
+ * arredondado para o terço mais próximo — 0 vira Min, 50 vira Mid, 100 vira Max, que são
+ * exatamente os presets da janela de enquadrar.
+ *
+ * A perda é real e aceita: num nó de 52px do grafo, a diferença entre 60% e 66% não aparece.
+ * O que importa é o retrato que foi enquadrado no topo não sair cortado no meio da testa.
+ *
+ * `slice` é o equivalente de `object-fit: cover` — cobre o quadro e corta a sobra, em vez de
+ * espremer a imagem.
+ */
+export function alinhamentoSvg(foco: FocoRetrato | undefined): string {
+  const f = foco ?? FOCO_CENTRO
+  const terco = (n: number, min: string, mid: string, max: string) =>
+    n < 100 / 3 ? min : n > 200 / 3 ? max : mid
+  return `${terco(f.x, 'xMin', 'xMid', 'xMax')}${terco(f.y, 'YMin', 'YMid', 'YMax')} slice`
+}
+
+/**
  * Canto do quadrado de seleção (px do preview) → foco em %.
  * Eixo sem sobra devolve 50: `x / 0` daria NaN, e `object-position: NaN%` é regra inválida —
  * o navegador descarta em silêncio e o enquadramento inteiro para de valer, sem erro nenhum.

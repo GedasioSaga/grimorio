@@ -3,7 +3,7 @@ import type { ClienteDrive, ConteudoRemoto } from './driveBridge'
 import { executarPlano, type AcaoConflito, type FalhaAcao } from './executar'
 import { gravarManifesto, lerManifesto, rotacionar } from './manifesto'
 import { reconciliar } from './reconciliar'
-import type { EntradaArquivo, EstadoLocal, EstadoRemoto, Manifesto } from './tipos'
+import type { Acao, EntradaArquivo, EstadoLocal, EstadoRemoto, Manifesto } from './tipos'
 
 /**
  * UM ciclo de sincronização, do começo ao fim: descarrega as filas, lê os dois lados, chama o
@@ -76,9 +76,41 @@ export type PreservarPerdedor = (
   remoto: EstadoRemoto | undefined,
 ) => Promise<void>
 
+/**
+ * Ações que ESCREVEM no cofre local. É por elas que o app precisa reler o disco: a árvore e os
+ * caches do store são um retrato tirado na última leitura, e o sync não passa por eles.
+ *
+ * `conflito` entra sempre: `preservarPerdedor` grava a cópia do lado perdedor no disco antes de
+ * o executor convergir, e a convergência em si é uma subida OU uma descida — nos dois casos algo
+ * novo apareceu no cofre.
+ *
+ * `subir`, `apagarRemoto` e `registrar` ficam de fora porque nenhum deles toca um byte local: o
+ * primeiro só lê, o segundo acontece no Drive e o terceiro nem transfere. Incluí-los faria um
+ * cofre que só envia reler centenas de arquivos a cada 60 segundos sem nada ter mudado.
+ */
+const ACOES_QUE_ESCREVEM_LOCAL: ReadonlySet<Acao['tipo']> = new Set(['baixar', 'apagarLocal', 'conflito'])
+
+/** O ciclo mexeu em algum arquivo do cofre no disco? Ver `ACOES_QUE_ESCREVEM_LOCAL`. */
+export function mexeuNoDiscoLocal(acoes: Acao[]): boolean {
+  return acoes.some((a) => ACOES_QUE_ESCREVEM_LOCAL.has(a.tipo))
+}
+
 export type ResultadoDoCiclo =
   /** O plano rodou. `falhas` vazio = ciclo completo; com falhas o manifesto guarda só o que deu certo. */
-  | { tipo: 'sincronizado'; manifesto: Manifesto; falhas: FalhaAcao[] }
+  | {
+      tipo: 'sincronizado'
+      manifesto: Manifesto
+      falhas: FalhaAcao[]
+      /**
+       * Algum arquivo do cofre mudou NO DISCO por conta deste ciclo.
+       *
+       * Quem orquestra usa isto para mandar o app reler o cofre. Sem essa releitura a sidebar
+       * mostra arquivo que já não existe (e abrir dá "os error 2"), o que foi baixado do outro
+       * computador não aparece, e — o pior — o autosave seguinte grava o cache velho por cima do
+       * arquivo recém-baixado, recriando a divergência que gerou o conflito.
+       */
+      mudouDisco: boolean
+    }
   /** O freio de deleção em massa disparou. NADA foi executado; quem orquestra tem de perguntar. */
   | { tipo: 'freio'; apagaria: number; total: number }
   /** A fila do app não chegou ao disco. O cofre nem foi lido — sincronizar aqui subiria versão velha. */
@@ -168,5 +200,11 @@ export async function executarCiclo(deps: DependenciasDoSync): Promise<Resultado
   // parcialmente divergente, e guardá-lo como "último estado bom" apagaria o último que era.
   if (resultado.falhas.length === 0) await promoverBackup(deps)
   await gravarManifesto(deps.dirManifesto, resultado.manifesto, deps.fs)
-  return { tipo: 'sincronizado', manifesto: resultado.manifesto, falhas: resultado.falhas }
+  return {
+    tipo: 'sincronizado',
+    manifesto: resultado.manifesto,
+    falhas: resultado.falhas,
+    // só o que CONCLUIU conta: uma descida que falhou não deixou nada novo no disco
+    mudouDisco: mexeuNoDiscoLocal(resultado.concluidas),
+  }
 }

@@ -26,6 +26,7 @@ const tree: VaultTree = {
     pasta('personagens-soltos/sem-id', undefined),
   ]),
   cenarios: pastaCen('cenarios', undefined, [pastaCen('cenarios/reinos', 'pasta-reinos')]),
+  itens: { slug: 'itens', nome: 'itens', caminho: 'itens', subpastas: [], itens: [] },
 }
 
 describe('idsDePastas', () => {

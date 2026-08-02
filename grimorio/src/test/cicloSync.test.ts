@@ -267,6 +267,31 @@ describe('executarCiclo', () => {
     expect(chamadas).toEqual(['listar:raizDrive', 'enviar:a.json'])
   })
 
+  // `mudouDisco` é o que manda o app reler o cofre. Sem ele a sidebar segue mostrando arquivo
+  // que já não existe ("os error 2" ao abrir) e o autosave regrava o cache velho por cima do
+  // que acabou de ser baixado. Os casos por tipo de ação estão em `recargaAposSync.test.ts`;
+  // aqui é a propagação pelo ciclo de verdade.
+  it('ciclo que só ENVIA não pede recarga do cofre', async () => {
+    const { deps } = montar({ local: { 'a.json': loc({ hash: 'H1' }) } })
+    const r = await executarCiclo(deps)
+    expect(r.tipo === 'sincronizado' && r.mudouDisco).toBe(false)
+  })
+
+  it('ciclo que BAIXA pede recarga do cofre', async () => {
+    const { deps } = montar({ listagem: { arquivos: [item({ hash: 'H9' })] } })
+    const r = await executarCiclo(deps)
+    expect(r.tipo === 'sincronizado' && r.mudouDisco).toBe(true)
+  })
+
+  it('conflito pede recarga: a cópia do perdedor nasceu no disco', async () => {
+    const { deps } = montar({
+      local: { 'a.json': loc({ hash: 'H1' }) },
+      listagem: { arquivos: [item({ hash: 'H2' })] },
+    })
+    const r = await executarCiclo(deps)
+    expect(r.tipo === 'sincronizado' && r.mudouDisco).toBe(true)
+  })
+
   it('erro de rede na listagem sobe para quem orquestra', async () => {
     const { deps, falhas } = montar()
     falhas.set('listar:raizDrive', new Error('sem internet'))

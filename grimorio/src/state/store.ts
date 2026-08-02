@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import type { Cenario, ItemRef, PastaNode, Personagem, TipoEntidadeVinculo, VaultTree, VersaoCenario, VersaoPersonagem, Vinculo } from '../lib/types'
+import type { Cenario, Item, ItemRef, PastaItemNode, PastaNode, Personagem, TipoEntidadeVinculo, VaultTree, VersaoCenario, VersaoPersonagem, Vinculo } from '../lib/types'
 import { tauriFs } from '../lib/fsBridge'
 import { VaultRepo } from '../lib/vaultRepo'
 import { coletarCenarioRefs } from '../lib/cenarioArvore'
@@ -18,6 +18,9 @@ const timersSalvarParcial = new Map<string, ReturnType<typeof setTimeout>>()
 
 // mesmo racional para cenários (cards no canvas desmontam fora da viewport)
 const timersSalvarCenario = new Map<string, ReturnType<typeof setTimeout>>()
+
+// itens não têm card no canvas, mas o modal fecha durante o debounce pelos mesmos motivos
+const timersSalvarItem = new Map<string, ReturnType<typeof setTimeout>>()
 
 /**
  * Avisado sempre que uma gravação é AGENDADA. É o gatilho de "o usuário salvou alguma coisa"
@@ -73,6 +76,28 @@ function agendarSalvarCenario(get: () => AppState, id: string) {
   )
 }
 
+/** Agenda a persistência debounced do item `id`. */
+function agendarSalvarItem(get: () => AppState, id: string) {
+  sinalizarGravacao()
+  const pendente = timersSalvarItem.get(id)
+  if (pendente) clearTimeout(pendente)
+  timersSalvarItem.set(
+    id,
+    setTimeout(() => {
+      timersSalvarItem.delete(id)
+      // caminho re-resolvido no disparo: após mover/excluir não grava no lugar antigo
+      const { repo, caminhoItemPorId, itens } = get()
+      const caminho = caminhoItemPorId[id]
+      const i = itens[id]
+      if (!repo || !caminho || !i) return
+      // fire-and-forget: VaultRepo serializa escritas por caminho
+      repo.salvarItem(caminho, { ...i }).catch((e) => {
+        console.error('Falha ao salvar item:', e)
+      })
+    }, SALVAR_PARCIAL_DEBOUNCE_MS),
+  )
+}
+
 /** Agenda a persistência debounced do personagem `id` (reusada por edições e ações de versão). */
 function agendarSalvarPersonagem(get: () => AppState, id: string) {
   sinalizarGravacao()
@@ -98,7 +123,15 @@ function agendarSalvarPersonagem(get: () => AppState, id: string) {
 // um arquivo só (vinculos.json): um timer só
 let timerSalvarVinculos: ReturnType<typeof setTimeout> | null = null
 
-export interface ItemAberto {
+/**
+ * Documento aberto no workspace (sessão, canvas ou caderno de escrita).
+ *
+ * Chamava-se `ItemAberto`, e o par que o manipula, `abrirItem`/`fecharItem`. O nome foi
+ * cedido: "Item" agora é uma entidade de verdade do cofre (arma, relíquia), e manter os
+ * dois significados na mesma interface seria pedir para alguém abrir um documento achando
+ * que está abrindo a ficha de um item.
+ */
+export interface DocumentoAberto {
   tipo: TipoAberto
   /** sessao/canvas: caminho do .json do mapa. escrita: caminho da pasta do caderno (relativo ao cofre). */
   caminho: string
@@ -119,7 +152,7 @@ export interface FalhaDescarga {
  */
 interface EstadoDeCofre {
   tree: VaultTree | null
-  aberto: ItemAberto | null
+  aberto: DocumentoAberto | null
   /** slug da página ativa por caderno (chave = dir do caderno relativo ao cofre) */
   paginaAtivaPorCaderno: Record<string, string | null>
   /** cache de personagens do cofre: id -> Personagem */
@@ -132,10 +165,17 @@ interface EstadoDeCofre {
   /** id -> dir do cenário relativo ao cofre */
   caminhoCenarioPorId: Record<string, string>
   cenarioAbertoId: string | null
+  /** cache de itens do cofre: id -> Item */
+  itens: Record<string, Item>
+  /** id -> caminho do .json do item relativo ao cofre */
+  caminhoItemPorId: Record<string, string>
+  itemAbertoId: string | null
   /** relações tipadas entre entidades + participação em campanhas (vinculos.json único) */
   vinculos: Vinculo[]
   /** id da campanha selecionada no filtro da sidebar; null = "Todas" */
   campanhaFiltro: string | null
+  /** teia de vínculos ocupando a área principal (some junto com o cofre) */
+  grafoAberto: boolean
   erroCofre: string | null
 }
 
@@ -146,8 +186,13 @@ interface AppState extends EstadoDeCofre {
 
   abrirCofre(path: string): Promise<void>
   recarregarArvore(): Promise<void>
-  abrirItem(tipo: TipoAberto, caminho: string, nome: string): void
-  fecharItem(): void
+  /**
+   * Relê o cofre inteiro do disco. Para quando alguém MEXEU nos arquivos por fora do app —
+   * hoje, só o sincronizador. Ver a implementação para a ordem, que não é acidental.
+   */
+  recarregarDoDisco(): Promise<void>
+  abrirDocumento(tipo: TipoAberto, caminho: string, nome: string): void
+  fecharDocumento(): void
   setPaginaAtiva(cadernoDir: string, slug: string | null): void
   carregarPersonagens(): Promise<void>
   /** Merge otimista no cache + gravação debounced (edição inline no card do canvas). */
@@ -175,6 +220,11 @@ interface AppState extends EstadoDeCofre {
   removerVersao(id: string, versaoId: string): void
   abrirCenario(id: string): void
   fecharCenario(): void
+  carregarItens(): Promise<void>
+  /** Merge otimista no cache + gravação debounced (edição no modal do item). */
+  salvarItemParcial(id: string, mudancas: Partial<Item>): void
+  abrirItem(id: string): void
+  fecharItem(): void
   carregarVinculos(): Promise<void>
   /** true quando adicionou; false quando já existia (dedupe por deId/paraId/tipo). */
   adicionarVinculo(v: Omit<Vinculo, 'id' | 'criadoEm'>): boolean
@@ -183,12 +233,14 @@ interface AppState extends EstadoDeCofre {
   removerVinculosDe(entidadeId: string): void
   alternarParticipacao(entidadeTipo: TipoEntidadeVinculo, entidadeId: string, campanhaId: string): void
   setCampanhaFiltro(id: string | null): void
+  /** Abre/fecha a teia de vínculos na área principal. */
+  alternarGrafo(): void
   /** Ajusta os vínculos 'participa' da entidade para bater EXATAMENTE com a lista (add os novos, remove os que saíram). */
   definirCampanhas(entidadeTipo: TipoEntidadeVinculo, entidadeId: string, campanhaIds: string[]): void
   /**
    * Executa AGORA as gravações debounced pendentes e cancela os timers. Devolve as que falharam.
    *
-   * Cobre APENAS os timers de nível de módulo (personagens, cenários, vínculos).
+   * Cobre APENAS os timers de nível de módulo (personagens, cenários, itens, vínculos).
    * NotasEditor (via `NotebookRepo.salvarCorpo`), CanvasView e ChatIA gravam pelas
    * closures deles e as falhas de lá nunca chegam em `falhas` — ou seja, o diálogo de
    * confirmação pode dizer "tudo certo" com uma dessas tendo falhado.
@@ -238,12 +290,16 @@ async function descarregarFilasPendentes(get: () => AppState): Promise<FalhaDesc
   for (const t of timersSalvarCenario.values()) clearTimeout(t)
   timersSalvarCenario.clear()
 
+  const idsItens = [...timersSalvarItem.keys()]
+  for (const t of timersSalvarItem.values()) clearTimeout(t)
+  timersSalvarItem.clear()
+
   const tinhaVinculos = timerSalvarVinculos !== null
   if (timerSalvarVinculos) clearTimeout(timerSalvarVinculos)
   timerSalvarVinculos = null
 
   const falhas: FalhaDescarga[] = []
-  const { repo, personagens, caminhoPorId, cenarios, caminhoCenarioPorId, vinculos } = get()
+  const { repo, personagens, caminhoPorId, cenarios, caminhoCenarioPorId, itens, caminhoItemPorId, vinculos } = get()
   if (!repo) return falhas
 
   for (const id of idsPersonagens) {
@@ -268,6 +324,18 @@ async function descarregarFilasPendentes(get: () => AppState): Promise<FalhaDesc
     } catch (e) {
       console.error('Falha ao salvar cenário:', e)
       falhas.push({ caminho, rotulo: c.nome, erro: e })
+    }
+  }
+  for (const id of idsItens) {
+    const caminho = caminhoItemPorId[id]
+    const i = itens[id]
+    // pular NÃO é falha: sem caminho ou sem entidade = foi excluído antes do disparo
+    if (!caminho || !i) continue
+    try {
+      await repo.salvarItem(caminho, { ...i })
+    } catch (e) {
+      console.error('Falha ao salvar item:', e)
+      falhas.push({ caminho, rotulo: i.nome, erro: e })
     }
   }
   if (tinhaVinculos) {
@@ -298,8 +366,12 @@ export function estadoLimpoDeCofre(): EstadoDeCofre {
     cenarios: {},
     caminhoCenarioPorId: {},
     cenarioAbertoId: null,
+    itens: {},
+    caminhoItemPorId: {},
+    itemAbertoId: null,
     vinculos: [],
     campanhaFiltro: null,
+    grafoAberto: false,
     erroCofre: null,
   }
 }
@@ -316,8 +388,12 @@ export const useApp = create<AppState>((set, get) => ({
   cenarios: {},
   caminhoCenarioPorId: {},
   cenarioAbertoId: null,
+  itens: {},
+  caminhoItemPorId: {},
+  itemAbertoId: null,
   vinculos: [],
   campanhaFiltro: null,
+  grafoAberto: false,
   carregando: false,
   erroCofre: null,
 
@@ -337,6 +413,7 @@ export const useApp = create<AppState>((set, get) => ({
       await get().recarregarArvore()
       await get().carregarPersonagens()
       await get().carregarCenarios()
+      await get().carregarItens()
       await get().carregarVinculos()
     } catch (e) {
       set({ erroCofre: `Não foi possível abrir o cofre: ${e}` })
@@ -357,11 +434,47 @@ export const useApp = create<AppState>((set, get) => ({
     set({ tree })
   },
 
-  abrirItem(tipo, caminho, nome) {
+  /**
+   * Relê árvore e caches do disco, depois de o sincronizador ter escrito nele.
+   *
+   * A ORDEM é o ponto. As gravações do app são debounced em 800 ms e guardam o CACHE, não o
+   * arquivo: reler antes de descarregar faria a fila pendente gravar, 800 ms depois, o cache
+   * pré-download por cima do que acabou de ser baixado — que é exatamente a perda de dado que
+   * esta função existe para estancar. Descarregar primeiro põe a edição do usuário no disco, e
+   * a leitura seguinte já a enxerga.
+   *
+   * Se a edição local e o download tocaram o mesmo arquivo, a local vence aqui e o ciclo
+   * seguinte vê a divergência e gera cópia de conflito — que é o mecanismo desenhado para isso.
+   *
+   * Falha de descarga NÃO cancela a recarga: o cofre no disco mudou de qualquer jeito, e seguir
+   * mostrando o retrato velho é pior do que mostrar o disco com uma gravação perdida (que já
+   * foi para o `console` e para a aba Nuvem).
+   */
+  async recarregarDoDisco() {
+    const { repo, carregando } = get()
+    // durante `abrirCofre`/`trocarCofre` o cache está a meio caminho; a abertura termina lendo tudo
+    if (!repo || carregando) return
+    try {
+      await get().descarregarFilas()
+    } catch (e) {
+      console.error('Falha ao descarregar a fila antes de reler o cofre:', e)
+    }
+    // trocou de cofre no meio: `recarregarArvore` já desiste sozinho, e reler os caches de um
+    // cofre que não está mais aberto encheria o store com entidades do cofre anterior
+    if (get().repo !== repo) return
+    await get().recarregarArvore()
+    if (get().repo !== repo) return
+    await get().carregarPersonagens()
+    await get().carregarCenarios()
+    await get().carregarItens()
+    await get().carregarVinculos()
+  },
+
+  abrirDocumento(tipo, caminho, nome) {
     set({ aberto: { tipo, caminho, nome } })
   },
 
-  fecharItem() {
+  fecharDocumento() {
     set({ aberto: null })
   },
 
@@ -534,6 +647,45 @@ export const useApp = create<AppState>((set, get) => ({
     set({ cenarioAbertoId: null })
   },
 
+  async carregarItens() {
+    const { repo, tree } = get()
+    if (!repo || !tree) return
+    const refs: ItemRef[] = []
+    const daPasta = (pasta: PastaItemNode) => {
+      refs.push(...pasta.itens)
+      pasta.subpastas.forEach(daPasta)
+    }
+    daPasta(tree.itens)
+
+    const itens: Record<string, Item> = {}
+    const caminhoItemPorId: Record<string, string> = {}
+    for (const ref of refs) {
+      if (ref.erro) continue
+      try {
+        const i = await repo.lerItem(ref.caminho)
+        itens[i.id] = i
+        caminhoItemPorId[i.id] = ref.caminho
+      } catch {
+        // ignora corrompido; sidebar já marca erro
+      }
+    }
+    set({ itens, caminhoItemPorId })
+  },
+
+  salvarItemParcial(id, mudancas) {
+    if (!get().itens[id]) return
+    set((s) => ({ itens: { ...s.itens, [id]: { ...s.itens[id], ...mudancas } } }))
+    agendarSalvarItem(get, id)
+  },
+
+  abrirItem(id) {
+    set({ itemAbertoId: id })
+  },
+
+  fecharItem() {
+    set({ itemAbertoId: null })
+  },
+
   async carregarVinculos() {
     const { repo, tree, vaultPath } = get()
     if (!repo) return
@@ -590,6 +742,10 @@ export const useApp = create<AppState>((set, get) => ({
     set({ campanhaFiltro: id })
   },
 
+  alternarGrafo() {
+    set((s) => ({ grafoAberto: !s.grafoAberto }))
+  },
+
   definirCampanhas(entidadeTipo, entidadeId, campanhaIds) {
     const alvo = new Set(campanhaIds)
     const atuais = campanhasDe(get().vinculos, entidadeId)
@@ -627,7 +783,7 @@ export const useApp = create<AppState>((set, get) => ({
     //    cofre certo. perfilAbertoId/cenarioAbertoId NÃO saem junto com `aberto`.
     //    Consequência aceita: se `confirmarFalhas` recusar lá embaixo, o que estava
     //    aberto na tela já foi fechado — só o cache de dados é que fica intacto.
-    set({ aberto: null, perfilAbertoId: null, cenarioAbertoId: null })
+    set({ aberto: null, perfilAbertoId: null, cenarioAbertoId: null, itemAbertoId: null })
     // 2) dá uma volta na fila de tarefas para o React processar os unmounts de cima.
     //    É best-effort, não garantia: o cleanup de efeito passivo roda numa tarefa de
     //    MessageChannel do Scheduler do React, e ela vir antes de um setTimeout(0)

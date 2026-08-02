@@ -1,7 +1,40 @@
 import { describe, it, expect } from 'vitest'
 import {
-  FOCO_CENTRO, PRESETS_FOCO, cantoDoFoco, focoDeCanto, normalizarFoco, posicaoCss,
+  FOCO_CENTRO, PRESETS_FOCO, alinhamentoSvg, cantoDoFoco, focoDeCanto, normalizarFoco, posicaoCss,
 } from '../lib/focoRetrato'
+
+/**
+ * O mesmo enquadramento do perfil, aplicado às miniaturas da teia. O SVG não tem
+ * `object-position`, só nove alinhamentos — daí o arredondamento por terços.
+ */
+describe('alinhamentoSvg', () => {
+  it('sem foco é centro, como sempre foi', () => {
+    expect(alinhamentoSvg(undefined)).toBe('xMidYMid slice')
+    expect(alinhamentoSvg(FOCO_CENTRO)).toBe('xMidYMid slice')
+  })
+
+  it('os presets da janela de enquadrar caem nos cantos certos', () => {
+    expect(alinhamentoSvg(PRESETS_FOCO.topo)).toBe('xMidYMin slice')
+    expect(alinhamentoSvg(PRESETS_FOCO.centro)).toBe('xMidYMid slice')
+    expect(alinhamentoSvg(PRESETS_FOCO.base)).toBe('xMidYMax slice')
+  })
+
+  it('os dois eixos são independentes', () => {
+    expect(alinhamentoSvg({ x: 0, y: 100 })).toBe('xMinYMax slice')
+    expect(alinhamentoSvg({ x: 100, y: 0 })).toBe('xMaxYMin slice')
+  })
+
+  it('valor intermediário cai no terço mais próximo', () => {
+    expect(alinhamentoSvg({ x: 30, y: 70 })).toBe('xMinYMax slice')
+    expect(alinhamentoSvg({ x: 40, y: 60 })).toBe('xMidYMid slice')
+  })
+
+  it('sempre pede slice — sem ele o retrato sairia espremido em vez de cortado', () => {
+    for (const f of [PRESETS_FOCO.topo, PRESETS_FOCO.base, { x: 0, y: 0 }, { x: 100, y: 100 }]) {
+      expect(alinhamentoSvg(f)).toMatch(/ slice$/)
+    }
+  })
+})
 
 describe('normalizarFoco', () => {
   it('aceita par numérico dentro de 0–100', () => {

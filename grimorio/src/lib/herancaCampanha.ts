@@ -1,4 +1,4 @@
-import type { PastaCenarioNode, PastaNode, VaultTree, Vinculo } from './types'
+import type { PastaCenarioNode, PastaItemNode, PastaNode, VaultTree, Vinculo } from './types'
 import { campanhasDe } from './vinculos'
 
 /**
@@ -16,8 +16,13 @@ export function idsDePastas(tree: VaultTree | null): Record<string, string> {
     if (p.id) mapa[p.caminho] = p.id
     p.subpastas.forEach(deCenarios)
   }
+  const deItens = (p: PastaItemNode) => {
+    if (p.id) mapa[p.caminho] = p.id
+    p.subpastas.forEach(deItens)
+  }
   dePersonagens(tree.personagensSoltos)
   deCenarios(tree.cenarios)
+  deItens(tree.itens)
   return mapa
 }
 

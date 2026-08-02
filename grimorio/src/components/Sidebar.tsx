@@ -6,10 +6,11 @@ import { pedirTexto } from './dialogos'
 import type { CampanhaNode, ItemRef } from '../lib/types'
 import { escritaDirDaCampanha } from '../lib/caminhos'
 import { idsDaCampanha } from '../lib/vinculos'
-import { contarCenarios, contarPersonagens, filtrarArvoreCenarios, filtrarCanvasesSoltos, filtrarPastaPersonagens } from '../lib/filtroCampanha'
+import { contarCenarios, contarItens, contarPersonagens, filtrarArvoreCenarios, filtrarCanvasesSoltos, filtrarPastaItens, filtrarPastaPersonagens } from '../lib/filtroCampanha'
 import { associarNaCriacao, editarCampanhas } from './dialogoCampanhas'
 import { PersonagensSoltos } from './PersonagensSoltos'
 import { CenariosSoltos } from './CenariosSoltos'
+import { ItensSoltos } from './ItensSoltos'
 import grimoireIcon from '../assets/grimoire.png'
 import { useOpcoes } from './Opcoes'
 
@@ -27,9 +28,13 @@ export function Sidebar({ recolhida, onToggle }: { recolhida: boolean; onToggle:
   const recarregar = useApp((s) => s.recarregarArvore)
   const carregarPersonagens = useApp((s) => s.carregarPersonagens)
   const carregarCenarios = useApp((s) => s.carregarCenarios)
+  const carregarItens = useApp((s) => s.carregarItens)
+  const caminhoItemPorId = useApp((s) => s.caminhoItemPorId)
   const vinculos = useApp((s) => s.vinculos)
   const campanhaFiltro = useApp((s) => s.campanhaFiltro)
   const setCampanhaFiltro = useApp((s) => s.setCampanhaFiltro)
+  const grafoAberto = useApp((s) => s.grafoAberto)
+  const alternarGrafo = useApp((s) => s.alternarGrafo)
   const caminhoPorId = useApp((s) => s.caminhoPorId)
 
   if (recolhida) {
@@ -80,9 +85,17 @@ export function Sidebar({ recolhida, onToggle }: { recolhida: boolean; onToggle:
       )
     : tree.personagensSoltos
   const raizCenarios = idsFiltro ? filtrarArvoreCenarios(tree.cenarios, idsFiltro) : tree.cenarios
-  // aviso "N ocultos": sem ele, item criado sem vínculo some e criar parece quebrado
+  const raizItens = idsFiltro
+    ? filtrarPastaItens(
+        tree.itens,
+        new Set([...idsFiltro].map((id) => caminhoItemPorId[id]).filter((c): c is string => !!c)),
+        idsFiltro,
+      )
+    : tree.itens
+  // aviso "N ocultos": sem ele, entidade criada sem vínculo some e criar parece quebrado
   const ocultosPersonagens = idsFiltro ? contarPersonagens(tree.personagensSoltos) - contarPersonagens(raizPersonagens) : 0
   const ocultosCenarios = idsFiltro ? contarCenarios(tree.cenarios) - contarCenarios(raizCenarios) : 0
+  const ocultosItens = idsFiltro ? contarItens(tree.itens) - contarItens(raizItens) : 0
   // sob filtro: seção Campanhas mostra só a selecionada; canvases soltos podados por etiqueta
   const campanhasVisiveis = campanhaValida ? tree.campanhas.filter((c) => c.id === campanhaValida) : tree.campanhas
   const canvasesVisiveis = idsFiltro ? filtrarCanvasesSoltos(tree.canvasesSoltos, idsFiltro) : tree.canvasesSoltos
@@ -94,6 +107,7 @@ export function Sidebar({ recolhida, onToggle }: { recolhida: boolean; onToggle:
       <div className="sidebar-header">
         <span className="sidebar-title"><img className="sidebar-logo" src={grimoireIcon} alt="" draggable={false} />Grimório</span>
         <span className="sidebar-header-acoes">
+          <button className={`btn-icon${grafoAberto ? ' ativo' : ''}`} title="Teia de vínculos" onClick={alternarGrafo}>🕸</button>
           <button className="btn-icon" title="Opções" onClick={() => useOpcoes.getState().abrir()}>⚙️</button>
           <button className="btn-icon" title="Recolher barra" onClick={onToggle}>‹</button>
         </span>
@@ -148,6 +162,9 @@ export function Sidebar({ recolhida, onToggle }: { recolhida: boolean; onToggle:
 
       <CenariosSoltos raiz={raizCenarios} ocultos={ocultosCenarios} aoMostrarTodos={limparFiltro}
         aoMudar={async () => { await recarregar(); await carregarCenarios() }} />
+
+      <ItensSoltos raiz={raizItens} ocultos={ocultosItens} aoMostrarTodos={limparFiltro}
+        aoMudar={async () => { await recarregar(); await carregarItens() }} />
     </aside>
   )
 }
@@ -221,7 +238,7 @@ function ItemLinha({ item, tipo, tipoAbertura, aoMudar, aoEtiquetar }: {
   aoEtiquetar?: () => void
 }) {
   const repo = useApp((s) => s.repo)
-  const abrirItem = useApp((s) => s.abrirItem)
+  const abrirDocumento = useApp((s) => s.abrirDocumento)
   const abrirPerfil = useApp((s) => s.abrirPerfil)
   const caminhoPorId = useApp((s) => s.caminhoPorId)
 
@@ -232,7 +249,7 @@ function ItemLinha({ item, tipo, tipoAbertura, aoMudar, aoEtiquetar }: {
   function abrir() {
     if (item.erro) return
     if (tipo === 'canvas') {
-      abrirItem(tipoAbertura ?? 'canvas', item.caminho, item.nome)
+      abrirDocumento(tipoAbertura ?? 'canvas', item.caminho, item.nome)
     } else {
       if (id) abrirPerfil(id)
     }

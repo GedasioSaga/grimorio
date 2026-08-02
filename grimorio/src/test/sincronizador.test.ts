@@ -27,7 +27,7 @@ const MANIFESTO: Manifesto = {
   arquivos: {},
 }
 
-const SINCRONIZADO: ResultadoDoCiclo = { tipo: 'sincronizado', manifesto: MANIFESTO, falhas: [] }
+const SINCRONIZADO: ResultadoDoCiclo = { tipo: 'sincronizado', manifesto: MANIFESTO, falhas: [], mudouDisco: false }
 
 /** Deixa a cadeia de promises do sincronizador andar sem depender de timer real. */
 async function assentar(): Promise<void> {

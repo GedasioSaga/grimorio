@@ -1,12 +1,19 @@
 import { useState } from 'react'
 import { useApp } from '../state/store'
-import type { TipoEntidadeVinculo } from '../lib/types'
+import type { TipoAlvoVinculo, TipoEntidadeVinculo } from '../lib/types'
 import { TIPOS_SUGERIDOS, campanhasDe, vinculosDaEntidade } from '../lib/vinculos'
 
 const OUTRO = '__outro__'
 
+const ICONE: Record<TipoAlvoVinculo, string> = {
+  personagem: '👤',
+  cenario: '🗺',
+  item: '💎',
+}
+
+/** A outra ponta da relação: nunca um canvas nem uma pasta. */
 interface Alvo {
-  tipo: TipoEntidadeVinculo
+  tipo: TipoAlvoVinculo
   id: string
   nome: string
 }
@@ -22,6 +29,7 @@ export function AbaVinculos({ entidadeTipo, entidadeId }: {
   const vinculos = useApp((s) => s.vinculos)
   const personagens = useApp((s) => s.personagens)
   const cenarios = useApp((s) => s.cenarios)
+  const itens = useApp((s) => s.itens)
   const tree = useApp((s) => s.tree)
   const adicionar = useApp((s) => s.adicionarVinculo)
   const remover = useApp((s) => s.removerVinculo)
@@ -34,7 +42,7 @@ export function AbaVinculos({ entidadeTipo, entidadeId }: {
   const [nota, setNota] = useState('')
   const [aviso, setAviso] = useState<string | null>(null)
 
-  const nomeDe = (id: string) => personagens[id]?.nome ?? cenarios[id]?.nome ?? null
+  const nomeDe = (id: string) => personagens[id]?.nome ?? cenarios[id]?.nome ?? itens[id]?.nome ?? null
 
   // vínculos da entidade com a outra ponta ainda viva (órfãos somem da exibição)
   const relacoes = vinculosDaEntidade(vinculos, entidadeId).filter((v) => {
@@ -42,12 +50,13 @@ export function AbaVinculos({ entidadeTipo, entidadeId }: {
     return nomeDe(outra) !== null
   })
 
-  // candidatos do autocomplete: personagens + cenários, exclui a própria entidade
+  // candidatos do autocomplete: personagens + cenários + itens, exclui a própria entidade
   const termo = busca.trim().toLowerCase()
   const candidatos: Alvo[] = termo
     ? [
         ...Object.values(personagens).map((p) => ({ tipo: 'personagem' as const, id: p.id, nome: p.nome })),
         ...Object.values(cenarios).map((c) => ({ tipo: 'cenario' as const, id: c.id, nome: c.nome })),
+        ...Object.values(itens).map((i) => ({ tipo: 'item' as const, id: i.id, nome: i.nome })),
       ]
         .filter((e) => e.id !== entidadeId && e.nome.toLowerCase().includes(termo))
         .slice(0, 8)
@@ -101,7 +110,7 @@ export function AbaVinculos({ entidadeTipo, entidadeId }: {
           <div className="vinculo-busca-lista">
             {candidatos.map((c) => (
               <button type="button" key={c.id} className="vinculo-busca-item" onClick={() => { setAviso(null); setAlvo(c) }}>
-                {c.tipo === 'personagem' ? '👤' : '🗺'} {c.nome}
+                {ICONE[c.tipo]} {c.nome}
               </button>
             ))}
           </div>

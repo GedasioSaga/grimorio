@@ -53,6 +53,7 @@ function arvore(campanhas: CampanhaNode[]): VaultTree {
     canvasesSoltos: [],
     personagensSoltos: { slug: 'personagens-soltos', nome: 'personagens-soltos', caminho: 'personagens-soltos', subpastas: [], personagens: [] },
     cenarios: { slug: 'cenarios', nome: 'cenarios', caminho: 'cenarios', subpastas: [], cenarios: [] },
+    itens: { slug: 'itens', nome: 'itens', caminho: 'itens', subpastas: [], itens: [] },
   }
 }
 
