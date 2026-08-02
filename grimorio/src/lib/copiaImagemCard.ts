@@ -1,4 +1,4 @@
-import type { Cenario, Personagem } from './types'
+import type { Cenario, Item, Personagem } from './types'
 import { retratoAtivo } from './cenarioVersao'
 import { retratoAtivoPersonagem } from './personagemVersao'
 
@@ -17,6 +17,7 @@ export function relRetratoDoCard(
   shape: ShapeMinimo | null,
   personagens: Record<string, Pick<Personagem, 'versoes' | 'versaoAtivaId'>>,
   cenarios: Record<string, Pick<Cenario, 'versoes' | 'versaoAtivaId'>>,
+  itens: Record<string, Pick<Item, 'retrato'>> = {},
 ): string | null {
   if (!shape) return null
   if (shape.type === 'character-card') {
@@ -24,6 +25,10 @@ export function relRetratoDoCard(
   }
   if (shape.type === 'cenario-card') {
     return retratoAtivo(cenarios[shape.props.cenarioId as string])
+  }
+  if (shape.type === 'item-card') {
+    // item não tem versões: o retrato mora direto no registro
+    return itens[shape.props.itemId as string]?.retrato ?? null
   }
   return null
 }

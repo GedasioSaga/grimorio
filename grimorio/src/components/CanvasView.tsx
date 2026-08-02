@@ -31,7 +31,9 @@ import {
   type CharacterCardShapeType,
 } from './CharacterCardShape'
 import { CenarioCardShapeUtil, type CenarioCardShapeType } from './CenarioCardShape'
+import { ItemCardShapeUtil, type ItemCardShapeType } from './ItemCardShape'
 import { MIME_CENARIO } from './CenariosSoltos'
+import { MIME_ITEM } from './ItensSoltos'
 import { relRetratoDoCard, type ShapeMinimo } from '../lib/copiaImagemCard'
 import { copiarImagemParaClipboard } from '../lib/copiarImagem'
 import { paresParaLigar } from '../lib/ligacaoCenario'
@@ -43,8 +45,21 @@ const AUTOSAVE_DEBOUNCE_MS = 1000
 // Constantes em nível de módulo: arrays recriados a cada render remontam o editor.
 // `shapeUtilsCustom` vai na prop `shapeUtils` do <Tldraw> (que soma aos defaults);
 // o store precisa do schema completo (defaults + customizados).
-const shapeUtilsCustom = [CharacterCardShapeUtil, CenarioCardShapeUtil]
-const shapeUtilsDoStore = [...defaultShapeUtils, CharacterCardShapeUtil, CenarioCardShapeUtil]
+const shapeUtilsCustom = [CharacterCardShapeUtil, CenarioCardShapeUtil, ItemCardShapeUtil]
+const shapeUtilsDoStore = [...defaultShapeUtils, CharacterCardShapeUtil, CenarioCardShapeUtil, ItemCardShapeUtil]
+
+const MIME_PERSONAGEM = 'application/x-grimorio-personagem'
+const MIME_IMAGEM = 'application/x-grimorio-imagem'
+
+/**
+ * Entidades que viram card ao serem soltas no mapa: MIME arrastado da sidebar →
+ * shape criado e nome da prop que guarda o id. Ordem irrelevante (um drag carrega um MIME só).
+ */
+const DROPS_DE_ENTIDADE = [
+  { mime: MIME_CENARIO, tipo: 'cenario-card', propId: 'cenarioId' },
+  { mime: MIME_PERSONAGEM, tipo: 'character-card', propId: 'personagemId' },
+  { mime: MIME_ITEM, tipo: 'item-card', propId: 'itemId' },
+] as const
 
 // Fallback quando o tamanho natural da imagem não pôde ser lido (arquivo ausente/corrompido).
 const IMG_FALLBACK_LARGURA = 320
@@ -159,13 +174,14 @@ function criarSeta(editor: Editor, deShape: TLShapeId, paraShape: TLShapeId, rot
   ])
 }
 
-/** Shapes de card por id de entidade. Supõe que UUIDs de personagem e cenário não colidem. */
+/** Shapes de card por id de entidade. Supõe que UUIDs das três entidades não colidem. */
 function cardsPorEntidade(editor: Editor): Map<string, TLShapeId[]> {
   const mapa = new Map<string, TLShapeId[]>()
   for (const s of editor.getCurrentPageShapes()) {
     let eid: string | null = null
     if (s.type === 'cenario-card') eid = (s as CenarioCardShapeType).props.cenarioId
     else if (s.type === 'character-card') eid = (s as CharacterCardShapeType).props.personagemId
+    else if (s.type === 'item-card') eid = (s as ItemCardShapeType).props.itemId
     if (!eid) continue
     const lista = mapa.get(eid) ?? []
     lista.push(s.id)
@@ -330,9 +346,8 @@ export function CanvasView({ caminho, nome }: { caminho: string; nome: string })
       // O guard pelo MIME type deixa drags alheios passarem intactos pro tldraw.
       onDragOverCapture={(e) => {
         if (
-          e.dataTransfer.types.includes('application/x-grimorio-personagem') ||
-          e.dataTransfer.types.includes(MIME_CENARIO) ||
-          e.dataTransfer.types.includes('application/x-grimorio-imagem')
+          e.dataTransfer.types.includes(MIME_IMAGEM) ||
+          DROPS_DE_ENTIDADE.some((d) => e.dataTransfer.types.includes(d.mime))
         ) {
           e.preventDefault()
           e.stopPropagation()
@@ -340,7 +355,7 @@ export function CanvasView({ caminho, nome }: { caminho: string; nome: string })
       }}
       onDropCapture={(e) => {
         // imagem arrastada de uma nota: referencia o mesmo arquivo do cofre (sem copiar)
-        const relImg = e.dataTransfer.getData('application/x-grimorio-imagem')
+        const relImg = e.dataTransfer.getData(MIME_IMAGEM)
         if (relImg) {
           const editor = editorRef.current
           if (editor && vaultPath) {
@@ -351,49 +366,34 @@ export function CanvasView({ caminho, nome }: { caminho: string; nome: string })
           }
           return
         }
-        const cenarioId = e.dataTransfer.getData(MIME_CENARIO)
-        if (cenarioId) {
-          const editorAtual = editorRef.current
-          if (editorAtual) {
-            e.preventDefault()
-            e.stopPropagation()
-            const ponto = editorAtual.screenToPage({ x: e.clientX, y: e.clientY })
-            // Batch: card + setas viram UM passo de undo (Ctrl+Z desfaz o drop inteiro).
-            editorAtual.run(() => {
-              editorAtual.createShape({
-                id: createShapeId(),
-                type: 'cenario-card',
-                x: ponto.x - CARD_LARGURA_PADRAO / 2,
-                y: ponto.y - CARD_ALTURA_PADRAO / 2,
-                props: { cenarioId },
-              })
-              const cards = cardsPorEntidade(editorAtual)
-              // Relações rotuladas ANTES da hierarquia: existeSetaEntre é agnóstico a rótulo,
-              // então quem cria primeiro ocupa o par — o rótulo explícito tem prioridade.
-              ligarRelacoesNoCanvas(editorAtual, cards, useApp.getState().vinculos, cenarioId)
-              const raiz = useApp.getState().tree?.cenarios
-              if (raiz) ligarCenarioNoCanvas(editorAtual, cards, raiz, cenarioId)
+        for (const { mime, tipo, propId } of DROPS_DE_ENTIDADE) {
+          const id = e.dataTransfer.getData(mime)
+          if (!id) continue
+          const editor = editorRef.current
+          if (!editor) return
+          e.preventDefault()
+          e.stopPropagation()
+          const ponto = editor.screenToPage({ x: e.clientX, y: e.clientY })
+          // Batch: card + setas viram UM passo de undo (Ctrl+Z desfaz o drop inteiro).
+          editor.run(() => {
+            editor.createShape({
+              id: createShapeId(),
+              type: tipo,
+              x: ponto.x - CARD_LARGURA_PADRAO / 2,
+              y: ponto.y - CARD_ALTURA_PADRAO / 2,
+              props: { [propId]: id },
             })
-          }
+            const cards = cardsPorEntidade(editor)
+            // Relações rotuladas ANTES da hierarquia: existeSetaEntre é agnóstico a rótulo,
+            // então quem cria primeiro ocupa o par — o rótulo explícito tem prioridade.
+            ligarRelacoesNoCanvas(editor, cards, useApp.getState().vinculos, id)
+            if (tipo === 'cenario-card') {
+              const raiz = useApp.getState().tree?.cenarios
+              if (raiz) ligarCenarioNoCanvas(editor, cards, raiz, id)
+            }
+          })
           return
         }
-        const id = e.dataTransfer.getData('application/x-grimorio-personagem')
-        const editor = editorRef.current
-        if (!id || !editor) return
-        e.preventDefault()
-        e.stopPropagation()
-        const ponto = editor.screenToPage({ x: e.clientX, y: e.clientY })
-        // Batch: card + setas de relação viram UM passo de undo (Ctrl+Z desfaz o drop inteiro).
-        editor.run(() => {
-          editor.createShape({
-            id: createShapeId(),
-            type: 'character-card',
-            x: ponto.x - CARD_LARGURA_PADRAO / 2,
-            y: ponto.y - CARD_ALTURA_PADRAO / 2,
-            props: { personagemId: id },
-          })
-          ligarRelacoesNoCanvas(editor, cardsPorEntidade(editor), useApp.getState().vinculos, id)
-        })
       }}
     >
       <div className="canvas-toolbar">
@@ -417,12 +417,13 @@ export function CanvasView({ caminho, nome }: { caminho: string; nome: string })
             // o clique na <img> não é confiável dentro do canvas (o tldraw captura o ponteiro).
             if ((e.ctrlKey || e.metaKey) && (e.key === 'c' || e.key === 'C')) {
               if (editor.getEditingShapeId()) return // editando texto: deixa copiar o texto
-              const { personagens, cenarios, vaultPath: vp } = useApp.getState()
+              const { personagens, cenarios, itens, vaultPath: vp } = useApp.getState()
               // TLShape → ShapeMinimo: só lemos type/props; o cast evita acoplar o helper ao tldraw
               const rel = relRetratoDoCard(
                 editor.getOnlySelectedShape() as unknown as ShapeMinimo | null,
                 personagens,
                 cenarios,
+                itens,
               )
               if (!rel || !vp) return // sem imagem: deixa o Ctrl+C nativo do tldraw agir
               e.preventDefault()
@@ -453,6 +454,10 @@ export function CanvasView({ caminho, nome }: { caminho: string; nome: string })
               e.preventDefault()
               e.stopPropagation()
               useApp.getState().abrirCenario((shape as CenarioCardShapeType).props.cenarioId)
+            } else if (shape.type === 'item-card') {
+              e.preventDefault()
+              e.stopPropagation()
+              useApp.getState().abrirItem((shape as ItemCardShapeType).props.itemId)
             }
           }
           const container = editor.getContainer()

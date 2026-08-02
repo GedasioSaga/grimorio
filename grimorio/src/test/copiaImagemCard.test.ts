@@ -10,7 +10,27 @@ const cenarios = {
   c2: { versoes: [{ id: 'v2', nome: 'Base', retrato: null, resumo: '', descricao: '', informacao: '', historia: '', eventos: '', itens: '', anotacoes: '', imagens: [] }], versaoAtivaId: 'v2' },
 }
 
+const itens = {
+  i1: { retrato: 'imagens-itens/i1.png' },
+  i2: { retrato: null },
+}
+
 describe('relRetratoDoCard', () => {
+  it('card de item com retrato', () => {
+    expect(
+      relRetratoDoCard({ type: 'item-card', props: { itemId: 'i1' } }, personagens, cenarios, itens),
+    ).toBe('imagens-itens/i1.png')
+  })
+  it('card de item sem retrato → null', () => {
+    expect(
+      relRetratoDoCard({ type: 'item-card', props: { itemId: 'i2' } }, personagens, cenarios, itens),
+    ).toBeNull()
+  })
+  it('item inexistente → null', () => {
+    expect(
+      relRetratoDoCard({ type: 'item-card', props: { itemId: 'zzz' } }, personagens, cenarios, itens),
+    ).toBeNull()
+  })
   it('card de personagem com retrato', () => {
     expect(
       relRetratoDoCard({ type: 'character-card', props: { personagemId: 'p1' } }, personagens, cenarios),
