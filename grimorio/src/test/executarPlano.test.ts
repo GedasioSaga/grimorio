@@ -43,6 +43,11 @@ function conteudoDe(fileId: string): string {
   return `conteúdo de ${fileId}`
 }
 
+/** Mesma convenção de `criarSondador`: hash do conteúdo REAL do fake fs, para o snapshot bater. */
+function shaDe(conteudo: string): string {
+  return `sha(${conteudo})`
+}
+
 /**
  * Cliente do Drive falso.
  *
@@ -265,11 +270,12 @@ describe('baixar', () => {
 
 describe('apagarLocal e apagarRemoto', () => {
   it('apagarLocal tira do disco e o caminho some do manifesto', async () => {
+    const conteudo = 'conteúdo antigo'
     const { fs, fake, executar } = montar({
       anterior: manifesto({ arquivos: { [A]: ent() } }),
-      local: { [A]: loc() },
+      local: { [A]: loc({ hash: shaDe(conteudo) }) },
     })
-    await fs.writeTextAtomic(`${RAIZ}/${A}`, 'conteúdo antigo')
+    await fs.writeTextAtomic(`${RAIZ}/${A}`, conteudo)
 
     const resultado = await executar([{ tipo: 'apagarLocal', caminho: A }])
 
@@ -288,6 +294,53 @@ describe('apagarLocal e apagarRemoto', () => {
 
     expect(fake.apagados).toEqual(['f1'])
     expect(resultado.manifesto.arquivos).toEqual({})
+  })
+})
+
+describe('arquivo local mudou durante o ciclo', () => {
+  const SNAPSHOT = 'estado que a varredura viu no início do ciclo'
+  const EDICAO_DURANTE_O_CICLO = 'edição feita pelo usuário enquanto o ciclo rodava'
+
+  it('baixar não sobrescreve o arquivo divergente: vira falha', async () => {
+    const { fs, executar } = montar({
+      local: { [A]: loc({ hash: shaDe(SNAPSHOT) }) },
+      remoto: { [A]: rem({ fileId: 'f1' }) },
+    })
+    await fs.writeTextAtomic(`${RAIZ}/${A}`, EDICAO_DURANTE_O_CICLO)
+
+    const resultado = await executar([{ tipo: 'baixar', caminho: A }])
+
+    expect(await fs.readText(`${RAIZ}/${A}`)).toBe(EDICAO_DURANTE_O_CICLO)
+    expect(resultado.falhas[0]?.erro).toContain('mudou no disco durante o ciclo')
+    expect(resultado.manifesto.arquivos[A]).toBeUndefined()
+  })
+
+  it('apagarLocal não apaga o arquivo divergente: vira falha', async () => {
+    const { fs, executar } = montar({
+      anterior: manifesto({ arquivos: { [A]: ent() } }),
+      local: { [A]: loc({ hash: shaDe(SNAPSHOT) }) },
+    })
+    await fs.writeTextAtomic(`${RAIZ}/${A}`, EDICAO_DURANTE_O_CICLO)
+
+    const resultado = await executar([{ tipo: 'apagarLocal', caminho: A }])
+
+    expect(await fs.readText(`${RAIZ}/${A}`)).toBe(EDICAO_DURANTE_O_CICLO)
+    expect(resultado.falhas[0]?.erro).toContain('mudou no disco durante o ciclo')
+    // a entrada anterior sobrevive: o próximo ciclo vê local mudou × remoto apagado e refaz a conta
+    expect(resultado.manifesto.arquivos[A]).toEqual(ent())
+  })
+
+  it('baixar com arquivo intacto no disco segue normal', async () => {
+    const { fs, executar } = montar({
+      local: { [A]: loc({ hash: shaDe(SNAPSHOT) }) },
+      remoto: { [A]: rem({ fileId: 'f1' }) },
+    })
+    await fs.writeTextAtomic(`${RAIZ}/${A}`, SNAPSHOT)
+
+    const resultado = await executar([{ tipo: 'baixar', caminho: A }])
+
+    expect(resultado.falhas).toEqual([])
+    expect(await fs.readText(`${RAIZ}/${A}`)).toBe(conteudoDe('f1'))
   })
 })
 

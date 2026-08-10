@@ -50,6 +50,12 @@ export interface EstadoRemoto {
    * enviado por uma versão do app anterior à propriedade; a reconciliação ignora este campo.
    */
   deviceNome?: string
+  /**
+   * `ItemRemoto.modificadoEm` já convertido para epoch ms, mesma unidade de `EstadoLocal.mtime`.
+   * Só serve para decidir o vencedor de conflito de política `metadado` por data — as demais
+   * políticas guardam o perdedor como cópia e não precisam saber qual lado é mais novo.
+   */
+  modificadoEm?: number
 }
 
 export type Acao =

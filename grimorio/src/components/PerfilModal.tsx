@@ -84,6 +84,16 @@ export function PerfilModal({ personagemId }: { personagemId: string }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
+  useEffect(() => {
+    const aoTeclar = (e: KeyboardEvent) => {
+      // não fecha por cima do enquadrar retrato: o Escape dele já cuida do próprio overlay
+      if (e.key === 'Escape' && !enquadrando) void fechar()
+    }
+    window.addEventListener('keydown', aoTeclar)
+    return () => window.removeEventListener('keydown', aoTeclar)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [enquadrando])
+
   if (!p) return null
   const va = versaoAtivaPersonagem(p)
 

@@ -10,6 +10,7 @@ import { ItemModal } from './components/ItemModal'
 import { GrafoVinculos } from './components/GrafoVinculos'
 import { HostDialogos } from './components/dialogos'
 import { HostDialogoCampanhas } from './components/dialogoCampanhas'
+import { HostDialogoTransformar } from './components/dialogoTransformar'
 import { HostOpcoes } from './components/Opcoes'
 import { checarAtualizacao } from './lib/atualizador'
 import { dirNotasDoMapa } from './lib/caminhos'
@@ -123,6 +124,7 @@ export default function App() {
           "Renomear rótulo" / "Alterar chaves"); invertido, o prompt some atrás do
           modal que o chamou, ainda focado — o usuário digita no escuro. */}
       <HostOpcoes />
+      <HostDialogoTransformar />
       <HostDialogoCampanhas />
       <HostDialogos />
     </div>

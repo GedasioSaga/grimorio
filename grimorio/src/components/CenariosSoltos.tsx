@@ -9,6 +9,13 @@ import { contarCenarios } from '../lib/filtroCampanha'
 import { pedirTexto } from './dialogos'
 import { associarNaCriacao, editarCampanhas } from './dialogoCampanhas'
 import { CaixaBusca } from './CaixaBusca'
+import { CardRetrato } from './CardRetrato'
+import { urlRetrato } from '../lib/urlRetrato'
+import { versaoAtiva } from '../lib/cenarioVersao'
+import { versaoAtivaPersonagem } from '../lib/personagemVersao'
+import { useMiniaturas } from '../state/miniaturas'
+import { useAberto, useArvoreRail } from '../state/arvoreRail'
+import { BotaoArvore } from './BotaoArvore'
 
 const RAIZ = 'cenarios'
 export const MIME_CENARIO = 'application/x-grimorio-cenario'
@@ -102,6 +109,7 @@ export function CenariosSoltos({ raiz, aoMudar, ocultos = 0, aoMostrarTodos }: {
       <div className="sidebar-section-header">
         <span>Cenários</span>
         <span>
+          <BotaoArvore secao="cenarios" />
           <button className="btn-icon" title="Nova pasta" onClick={novaPasta}>📁+</button>
           <button className="btn-icon" title="Novo cenário" onClick={novoCenario}>+</button>
         </span>
@@ -134,7 +142,8 @@ export function CenariosSoltos({ raiz, aoMudar, ocultos = 0, aoMostrarTodos }: {
 
 function PastaCenarioLinha({ pasta, nivel, aoMudar }: { pasta: PastaCenarioNode; nivel: number; aoMudar: () => Promise<void> }) {
   const repo = useApp((s) => s.repo)
-  const [aberta, setAberta] = useState(true)
+  const aberta = useAberto('cenarios', pasta.caminho)
+  const alternar = useArvoreRail((s) => s.alternar)
 
   async function criar(tipo: 'pasta' | 'cenario') {
     const nome = await pedirTexto(tipo === 'pasta' ? 'Nome da subpasta:' : 'Nome do cenário:')
@@ -183,7 +192,7 @@ function PastaCenarioLinha({ pasta, nivel, aoMudar }: { pasta: PastaCenarioNode;
       <div
         className="rail-linha"
         style={{ paddingLeft: 8 + nivel * 14 }}
-        onClick={() => setAberta(!aberta)}
+        onClick={() => alternar('cenarios', pasta.caminho)}
         onDragOver={aceitaCenario}
         onDrop={(e) => { e.stopPropagation(); const id = e.dataTransfer.getData(MIME_CENARIO); if (id) void moverCenarioPara(pasta.caminho, id, aoMudar) }}
         title={pasta.nome}
@@ -217,10 +226,21 @@ function CenarioLinha({ node, nivel, aoMudar, resultado }: {
   const abrirCenario = useApp((s) => s.abrirCenario)
   const cenario = useApp((s) => s.cenarios[node.id])
   const personagens = useApp((s) => s.personagens)
-  const [aberto, setAberto] = useState(true)
+  const aberto = useAberto('cenarios', node.caminho)
+  const alternarNo = useArvoreRail((s) => s.alternar)
 
   const vinculados = personagensVivos(cenario?.personagens ?? [], personagens)
   const temFilhos = !resultado && (node.filhos.length > 0 || vinculados.length > 0)
+
+  const vaultPath = useApp((s) => s.vaultPath)
+  const miniaturas = useMiniaturas((s) => s.ligadas)
+  const retratoSrc = miniaturas
+    ? urlRetrato(
+        vaultPath,
+        cenario ? versaoAtiva(cenario).retrato : null,
+        cenario ? `${cenario.modificadoEm}:${cenario.versaoAtivaId}` : '',
+      )
+    : null
 
   async function novoSub(e: React.MouseEvent) {
     e.stopPropagation()
@@ -273,9 +293,10 @@ function CenarioLinha({ node, nivel, aoMudar, resultado }: {
         title={node.erro ? 'Arquivo com erro' : node.nome}
       >
         {temFilhos
-          ? <span className="chevron" onClick={(e) => { e.stopPropagation(); setAberto(!aberto) }}>{aberto ? '▾' : '▸'}</span>
+          ? <span className="chevron" onClick={(e) => { e.stopPropagation(); alternarNo('cenarios', node.caminho) }}>{aberto ? '▾' : '▸'}</span>
           : <span className="chevron-vazio" />}
-        <span className="rail-titulo">🗺 {node.nome}{node.erro ? ' ⚠' : ''}</span>
+        <CardRetrato className="rail-icone" src={retratoSrc} alt="" fallback={<span>🗺</span>} />
+        <span className="rail-titulo">{node.nome}{node.erro ? ' ⚠' : ''}</span>
         {resultado?.caminhoRotulo && <span className="rail-caminho">· {resultado.caminhoRotulo}</span>}
         <span className="rail-acoes" onClick={(e) => e.stopPropagation()}>
           <button className="btn-icon" title="Novo sub-cenário" onClick={novoSub}>+</button>
@@ -300,6 +321,15 @@ function CenarioLinha({ node, nivel, aoMudar, resultado }: {
 function PersonagemVinculadoLinha({ personagemId, nivel }: { personagemId: string; nivel: number }) {
   const p = useApp((s) => s.personagens[personagemId])
   const abrirPerfil = useApp((s) => s.abrirPerfil)
+  const vaultPath = useApp((s) => s.vaultPath)
+  const miniaturas = useMiniaturas((s) => s.ligadas)
+  const retratoSrc = miniaturas
+    ? urlRetrato(
+        vaultPath,
+        p ? versaoAtivaPersonagem(p).retrato : null,
+        p ? `${p.modificadoEm}:${p.versaoAtivaId}` : '',
+      )
+    : null
   if (!p) return null
   return (
     <div
@@ -309,7 +339,8 @@ function PersonagemVinculadoLinha({ personagemId, nivel }: { personagemId: strin
       title={p.nome}
     >
       <span className="chevron-vazio" />
-      <span className="rail-titulo">👤 {p.nome}</span>
+      <CardRetrato className="rail-icone" src={retratoSrc} alt="" fallback={<span>👤</span>} />
+      <span className="rail-titulo">{p.nome}</span>
     </div>
   )
 }

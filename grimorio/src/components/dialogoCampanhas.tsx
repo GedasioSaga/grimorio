@@ -85,6 +85,29 @@ export async function associarNaCriacao(
   if (escolhidas) definirCampanhas(tipo, id, escolhidas)
 }
 
+/**
+ * Como associarNaCriacao, mas SEMPRE abre o seletor — para fluxos onde escolher a
+ * campanha faz parte do gesto (ex.: transformar imagem do canvas). Filtro ativo e
+ * herança da pasta viram pré-marcação, não decisão automática.
+ */
+export async function associarEscolhendoCampanhas(
+  tipo: TipoEntidadeVinculo,
+  id: string,
+  nome: string,
+  dirPai?: string,
+): Promise<void> {
+  const { campanhaFiltro, definirCampanhas, tree, vinculos } = useApp.getState()
+  const opcoes = opcoesDoCofre()
+  if (opcoes.length === 0) return
+  const preMarcadas = campanhaFiltro
+    ? [campanhaFiltro]
+    : dirPai
+      ? campanhasHerdadas(dirPai, idsDePastas(tree), vinculos)
+      : []
+  const escolhidas = await pedirCampanhas(`Campanhas de "${nome}":`, opcoes, preMarcadas)
+  if (escolhidas) definirCampanhas(tipo, id, escolhidas)
+}
+
 /** Edita manualmente as campanhas de uma entidade já existente (botão 🏷️), pré-marcando as atuais. */
 export async function editarCampanhas(tipo: TipoEntidadeVinculo, id: string, nome: string): Promise<void> {
   const opcoes = opcoesDoCofre()

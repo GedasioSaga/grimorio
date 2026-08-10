@@ -7,6 +7,7 @@ import { desvincularPersonagem, personagensVivos, vincularPersonagem } from '../
 import { EditorTexto } from './EditorTexto'
 import { GaleriaPersonagem } from './GaleriaPersonagem'
 import { AbaVinculos } from './AbaVinculos'
+import { AcervoCenario } from './AcervoCenario'
 import { AcoesIA, type AcaoIA } from './AcoesIA'
 import { ChatEntidade } from './ChatEntidade'
 import { SYSTEM_MESTRE } from '../lib/chatIA'
@@ -93,6 +94,16 @@ export function CenarioModal({ cenarioId }: { cenarioId: string }) {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  useEffect(() => {
+    const aoTeclar = (e: KeyboardEvent) => {
+      // não fecha por cima do enquadrar retrato: o Escape dele já cuida do próprio overlay
+      if (e.key === 'Escape' && !enquadrando) void fechar()
+    }
+    window.addEventListener('keydown', aoTeclar)
+    return () => window.removeEventListener('keydown', aoTeclar)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [enquadrando])
 
   if (!c) return null
   const va = versaoAtiva(c)
@@ -240,6 +251,26 @@ export function CenarioModal({ cenarioId }: { cenarioId: string }) {
           <AbaConteudo cenarioId={cenarioId} agendarSalvar={agendarSalvar} />
         ) : aba === 'vinculos' ? (
           <AbaVinculos entidadeTipo="cenario" entidadeId={cenarioId} />
+        ) : aba === 'itens' ? (
+          <div className="aba-itens">
+            <AcervoCenario
+              acervo={va.acervo}
+              onChange={(mudanca) => {
+                // lê o acervo mais fresco do store, não o `va.acervo` fechado neste render:
+                // um updater assíncrono (ex.: criar item no acervo) pode resolver depois de
+                // uma edição concorrente já ter mudado o acervo
+                const atualCenario = useApp.getState().cenarios[cenarioId]
+                const acervoAtual = atualCenario ? versaoAtiva(atualCenario).acervo : va.acervo
+                const acervo = typeof mudanca === 'function' ? mudanca(acervoAtual) : mudanca
+                agendarSalvar({ acervo })
+              }}
+            />
+            <EditorTexto
+              key={`itens:${c.versaoAtivaId}`}
+              value={va.itens}
+              onChange={(html) => agendarSalvar({ itens: html })}
+            />
+          </div>
         ) : (
           <EditorTexto
             key={`${aba}:${c.versaoAtivaId}`}

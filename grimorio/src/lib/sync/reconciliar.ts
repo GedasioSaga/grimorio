@@ -1,3 +1,4 @@
+import { politicaDoCaminho } from './conflito'
 import type { Acao, EntradaArquivo, EstadoLocal, EstadoRemoto, Manifesto, Plano } from './tipos'
 
 /**
@@ -31,13 +32,39 @@ const LIMITE_DELECAO = 0.5
 const MINIMO_PARA_FREIO = 10
 
 /**
- * Vencedor do conflito. **Provisório e deliberado:** `EstadoRemoto` não carrega nada
- * comparável ao `mtimeLocal` do manifesto, então decidir por data aqui dentro exigiria
- * inventar um dado que a função não recebe. Quem vai comparar tempos de modificação de
- * verdade é o executor, que tem o metadado do Drive em mãos. Até lá vence o local, que é o
- * lado cuja edição o usuário acabou de ver na tela.
+ * Vencedor de conflito quando não há como (ou não faz sentido) comparar datas: vence o local,
+ * que é o lado cuja edição o usuário acabou de ver na tela. Ver `decidirVencedor` para a exceção
+ * — política `metadado`, onde vence a mais recente.
  */
 const VENCEDOR_PROVISORIO = 'local' as const
+
+/**
+ * Acima deste intervalo entre os dois `modificadoEm`, um lado é considerado mais novo que o
+ * outro de verdade. Abaixo, os relógios de duas máquinas — que não são sincronizados entre si —
+ * não permitem provar qual foi de fato a edição mais recente, e a dúvida resolve para o
+ * `VENCEDOR_PROVISORIO`.
+ */
+const LIMIAR_CLOCK_SKEW_MS = 2_000
+
+/**
+ * Vencedor de um conflito de política `metadado` (`campanha.json`, `pasta.json`, `cofre.json`):
+ * vence a edição mais recente, e não sempre o local. As demais políticas preservam o perdedor
+ * como cópia — não precisam saber qual lado é mais novo, e continuam no `VENCEDOR_PROVISORIO`.
+ *
+ * Exige os dois tempos. Sem `modificadoEm` do Drive (arquivo enviado antes deste campo existir,
+ * ou `Date.parse` de um ISO inválido) não há como provar que o remoto é mais novo, e inventar
+ * uma resposta destruiria a edição do usuário com base em nada.
+ */
+function decidirVencedor(
+  caminho: string,
+  atualLocal: EstadoLocal | undefined,
+  atualRemoto: EstadoRemoto | undefined,
+): 'local' | 'remoto' {
+  if (politicaDoCaminho(caminho) !== 'metadado') return VENCEDOR_PROVISORIO
+  if (atualLocal === undefined || atualRemoto?.modificadoEm === undefined) return VENCEDOR_PROVISORIO
+  const remotoMaisNovoPor = atualRemoto.modificadoEm - atualLocal.mtime
+  return remotoMaisNovoPor > LIMIAR_CLOCK_SKEW_MS ? 'remoto' : VENCEDOR_PROVISORIO
+}
 
 /**
  * Matriz para arquivos COM entrada no manifesto. Duas células parecem arbitrárias e não são:
@@ -86,9 +113,9 @@ function ladoRemoto(entrada: EntradaArquivo, atual: EstadoRemoto | undefined): L
 }
 
 /** Converte a célula da matriz em ação. `'nada'` vira `null` — nunca um `undefined` na lista. */
-function montarAcao(celula: Celula, caminho: string): Acao | null {
+function montarAcao(celula: Celula, caminho: string, vencedor: 'local' | 'remoto'): Acao | null {
   if (celula === 'nada') return null
-  if (celula === 'conflito') return { tipo: celula, caminho, vencedor: VENCEDOR_PROVISORIO }
+  if (celula === 'conflito') return { tipo: celula, caminho, vencedor }
   return { tipo: celula, caminho }
 }
 
@@ -126,7 +153,7 @@ function acaoComManifesto(
   if (l === 'mudou' && r === 'mudou' && convergiram(atualLocal, atualRemoto)) {
     return { tipo: 'registrar', caminho }
   }
-  return montarAcao(MATRIZ_CONHECIDO[l][r], caminho)
+  return montarAcao(MATRIZ_CONHECIDO[l][r], caminho, decidirVencedor(caminho, atualLocal, atualRemoto))
 }
 
 /**
@@ -150,7 +177,9 @@ function acaoSemManifesto(
   if (vivoRemoto === undefined) return { tipo: 'subir', caminho }
   // Sem `hash` do Drive não dá para PROVAR que os dois lados são iguais, e supor que são
   // sobrescreveria uma das versões em silêncio. Conflito é a suposição recuperável.
-  if (vivoRemoto.hash === undefined) return { tipo: 'conflito', caminho, vencedor: VENCEDOR_PROVISORIO }
+  if (vivoRemoto.hash === undefined) {
+    return { tipo: 'conflito', caminho, vencedor: decidirVencedor(caminho, atualLocal, atualRemoto) }
+  }
   // CONTRATO, para quem for escrever o cliente do Drive: `EstadoRemoto.hash` tem de vir de
   // `sha256Checksum`, NUNCA de `md5Checksum`. O lado local é SHA-256 (`hash_arquivo`, em Rust), e
   // md5 é o campo que todo mundo conhece — é a escolha errada que a mão vai fazer sozinha. Com
@@ -163,7 +192,7 @@ function acaoSemManifesto(
   // segundo PC que já tem uma cópia idêntica: só adota no manifesto, sem subir nem baixar.
   return vivoRemoto.hash === atualLocal.hash
     ? { tipo: 'registrar', caminho }
-    : { tipo: 'conflito', caminho, vencedor: VENCEDOR_PROVISORIO }
+    : { tipo: 'conflito', caminho, vencedor: decidirVencedor(caminho, atualLocal, atualRemoto) }
 }
 
 /**

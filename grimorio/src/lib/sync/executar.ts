@@ -182,9 +182,35 @@ async function subir(caminho: string, ciclo: Ciclo): Promise<Desfecho> {
   }
 }
 
+/**
+ * O arquivo no disco mudou depois da varredura que gerou este plano?
+ *
+ * O ciclo inteiro (rede + N ações em série) dura bem mais que os 800 ms de debounce do autosave
+ * do app: uma edição feita pelo usuário DURANTE o ciclo não entra no plano, que foi derivado de
+ * um snapshot mais velho. Sem esta checagem, `baixar`/`apagarLocal` sobrescreveriam essa edição
+ * em silêncio — nem conflito, nem aviso.
+ *
+ * Só reler quando o arquivo EXISTE agora: se ele não está no disco, não há edição local a
+ * proteger (é o caso comum de uma descida nova, sem entrada na varredura). Isto também evita
+ * comparar contra um snapshot que nunca teve o arquivo fisicamente presente no fake de teste.
+ */
+async function arquivoDivergiuDoSnapshot(caminho: string, ciclo: Ciclo): Promise<boolean> {
+  const destino = caminhoAbsoluto(ciclo.estado.raizLocal, caminho)
+  if (!(await ciclo.deps.fs.exists(destino))) return false
+  const snapshot = ciclo.estado.local.get(caminho)
+  if (snapshot === undefined) return true
+  const agora = await ciclo.deps.sondarLocal(destino)
+  return agora.hash !== snapshot.hash
+}
+
+function erroDeDivergencia(caminho: string): Error {
+  return new Error(`${caminho} mudou no disco durante o ciclo — adiado para a próxima rodada`)
+}
+
 /** Baixa por cima do arquivo local e registra o que REALMENTE ficou no disco. */
 async function baixar(caminho: string, ciclo: Ciclo): Promise<Desfecho> {
   const remoto = exigirRemotoVivo(caminho, ciclo)
+  if (await arquivoDivergiuDoSnapshot(caminho, ciclo)) throw erroDeDivergencia(caminho)
   const destino = caminhoAbsoluto(ciclo.estado.raizLocal, caminho)
   await ciclo.deps.drive.baixar(remoto.fileId, destino)
   const depois = await ciclo.deps.sondarLocal(destino)
@@ -203,6 +229,7 @@ async function baixar(caminho: string, ciclo: Ciclo): Promise<Desfecho> {
  * conhece.
  */
 async function apagarLocal(caminho: string, ciclo: Ciclo): Promise<Desfecho> {
+  if (await arquivoDivergiuDoSnapshot(caminho, ciclo)) throw erroDeDivergencia(caminho)
   await ciclo.deps.fs.removePath(caminhoAbsoluto(ciclo.estado.raizLocal, caminho))
   return null
 }

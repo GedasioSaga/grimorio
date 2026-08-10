@@ -6,8 +6,8 @@ const personagens = {
   p2: { versoes: [{ id: 'pv2', nome: 'P2', retrato: null, resumo: '', descricao: '', informacao: '', historia: '', extras: '', anotacoes: '', imagens: [] }], versaoAtivaId: 'pv2' },
 }
 const cenarios = {
-  c1: { versoes: [{ id: 'v1', nome: 'Base', retrato: 'imagens/c1.png', resumo: '', descricao: '', informacao: '', historia: '', eventos: '', itens: '', anotacoes: '', imagens: [] }], versaoAtivaId: 'v1' },
-  c2: { versoes: [{ id: 'v2', nome: 'Base', retrato: null, resumo: '', descricao: '', informacao: '', historia: '', eventos: '', itens: '', anotacoes: '', imagens: [] }], versaoAtivaId: 'v2' },
+  c1: { versoes: [{ id: 'v1', nome: 'Base', retrato: 'imagens/c1.png', resumo: '', descricao: '', informacao: '', historia: '', eventos: '', itens: '', acervo: [], anotacoes: '', imagens: [] }], versaoAtivaId: 'v1' },
+  c2: { versoes: [{ id: 'v2', nome: 'Base', retrato: null, resumo: '', descricao: '', informacao: '', historia: '', eventos: '', itens: '', acervo: [], anotacoes: '', imagens: [] }], versaoAtivaId: 'v2' },
 }
 
 const itens = {

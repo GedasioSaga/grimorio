@@ -1,7 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useApp, type FalhaDescarga } from '../state/store'
-import type { VaultRepo } from '../lib/vaultRepo'
-import type { Cenario, Personagem, Vinculo } from '../lib/types'
+import { VaultRepo } from '../lib/vaultRepo'
+import type { Cenario, Personagem, VaultTree, Vinculo } from '../lib/types'
+import { criarFakeFs } from './fakeFs'
 
 const CAMINHO_BRUCE = 'personagens-soltos/bruce.json'
 const CAMINHO_CIDADE = 'cenarios/cidade-alta'
@@ -17,7 +18,7 @@ function pers(): Personagem {
 function cen(): Cenario {
   return {
     id: 'c1', nome: 'Cidade Alta', personagens: [],
-    versoes: [{ id: 'cv1', nome: 'Dia', retrato: null, resumo: 'ensolarada', descricao: '', informacao: '', historia: '', eventos: '', itens: '', anotacoes: '', imagens: [] }],
+    versoes: [{ id: 'cv1', nome: 'Dia', retrato: null, resumo: 'ensolarada', descricao: '', informacao: '', historia: '', eventos: '', itens: '', acervo: [], anotacoes: '', imagens: [] }],
     versaoAtivaId: 'cv1', criadoEm: 'x', modificadoEm: 'y',
   }
 }
@@ -304,5 +305,42 @@ describe('trocarCofre', () => {
     expect(useApp.getState().vaultPath).toBeNull()
     expect(useApp.getState().repo).toBeNull()
     expect(useApp.getState().erroCofre).toBeTruthy()
+  })
+})
+
+describe('carregarPersonagens', () => {
+  it('lê refs em paralelo, mas preserva a ordem original e pula corrompido', async () => {
+    const fs = criarFakeFs()
+    const repo = new VaultRepo('C:/Cofre', fs)
+
+    // b.json demora mais pra "gravar" (não afeta leitura, mas comprova que a ordem
+    // do resultado não depende de qual promise resolve primeiro)
+    await fs.writeTextAtomic('C:/Cofre/personagens-soltos/a.json', JSON.stringify({ id: 'pa', nome: 'A', versoes: [], versaoAtivaId: '', criadoEm: 'x', modificadoEm: 'y' }))
+    await fs.writeTextAtomic('C:/Cofre/personagens-soltos/b.json', '{not json')
+    await fs.writeTextAtomic('C:/Cofre/personagens-soltos/c.json', JSON.stringify({ id: 'pc', nome: 'C', versoes: [], versaoAtivaId: '', criadoEm: 'x', modificadoEm: 'y' }))
+
+    const tree: VaultTree = {
+      campanhas: [],
+      canvasesSoltos: [],
+      personagensSoltos: {
+        slug: 'personagens-soltos', nome: 'Personagens', caminho: 'personagens-soltos', subpastas: [],
+        personagens: [
+          { slug: 'a', nome: 'A', caminho: 'personagens-soltos/a.json' },
+          { slug: 'b', nome: 'B', caminho: 'personagens-soltos/b.json' },
+          { slug: 'c', nome: 'C', caminho: 'personagens-soltos/c.json' },
+        ],
+      },
+      cenarios: { slug: 'cenarios', nome: 'Cenários', caminho: 'cenarios', subpastas: [], cenarios: [] },
+      itens: { slug: 'itens', nome: 'Itens', caminho: 'itens', subpastas: [], itens: [] },
+    }
+    useApp.setState({ repo, tree })
+
+    await useApp.getState().carregarPersonagens()
+
+    expect(Object.keys(useApp.getState().personagens)).toEqual(['pa', 'pc'])
+    expect(useApp.getState().caminhoPorId).toEqual({
+      pa: 'personagens-soltos/a.json',
+      pc: 'personagens-soltos/c.json',
+    })
   })
 })

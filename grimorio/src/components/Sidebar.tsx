@@ -243,7 +243,7 @@ function ItemLinha({ item, tipo, tipoAbertura, aoMudar, aoEtiquetar }: {
   const caminhoPorId = useApp((s) => s.caminhoPorId)
 
   const id = tipo === 'personagem'
-    ? Object.entries(caminhoPorId).find(([, cam]) => cam === item.caminho)?.[0]
+    ? item.id ?? Object.entries(caminhoPorId).find(([, cam]) => cam === item.caminho)?.[0]
     : undefined
 
   function abrir() {

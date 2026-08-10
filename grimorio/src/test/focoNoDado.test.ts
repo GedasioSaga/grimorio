@@ -65,8 +65,8 @@ const duasFormas: Personagem = {
 const duasVersoes: Cenario = {
   id: 'c1', nome: 'Goa', personagens: [], versaoAtivaId: 'v2', criadoEm: '', modificadoEm: '',
   versoes: [
-    { id: 'v1', nome: 'Dia', retrato: null, resumo: '', descricao: '', informacao: '', historia: '', eventos: '', itens: '', anotacoes: '', imagens: [] },
-    { id: 'v2', nome: 'Noite', retrato: null, resumo: '', descricao: '', informacao: '', historia: '', eventos: '', itens: '', anotacoes: '', imagens: [] },
+    { id: 'v1', nome: 'Dia', retrato: null, resumo: '', descricao: '', informacao: '', historia: '', eventos: '', itens: '', acervo: [], anotacoes: '', imagens: [] },
+    { id: 'v2', nome: 'Noite', retrato: null, resumo: '', descricao: '', informacao: '', historia: '', eventos: '', itens: '', acervo: [], anotacoes: '', imagens: [] },
   ],
 }
 

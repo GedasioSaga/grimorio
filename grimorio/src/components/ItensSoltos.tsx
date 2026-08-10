@@ -7,6 +7,11 @@ import { contarItens } from '../lib/filtroCampanha'
 import { pedirTexto } from './dialogos'
 import { associarNaCriacao, editarCampanhas } from './dialogoCampanhas'
 import { CaixaBusca } from './CaixaBusca'
+import { CardRetrato } from './CardRetrato'
+import { urlRetrato } from '../lib/urlRetrato'
+import { useMiniaturas } from '../state/miniaturas'
+import { useAberto, useArvoreRail } from '../state/arvoreRail'
+import { BotaoArvore } from './BotaoArvore'
 
 const RAIZ = 'itens'
 export const MIME_ITEM = 'application/x-grimorio-item'
@@ -82,6 +87,7 @@ export function ItensSoltos({ raiz, aoMudar, ocultos = 0, aoMostrarTodos }: {
       <div className="sidebar-section-header">
         <span>Itens</span>
         <span>
+          <BotaoArvore secao="itens" />
           <button className="btn-icon" title="Nova pasta" onClick={novaPasta}>📁+</button>
           <button className="btn-icon" title="Novo item" onClick={novoItem}>+</button>
         </span>
@@ -114,7 +120,8 @@ export function ItensSoltos({ raiz, aoMudar, ocultos = 0, aoMostrarTodos }: {
 
 function PastaItemLinha({ pasta, nivel, aoMudar }: { pasta: PastaItemNode; nivel: number; aoMudar: () => Promise<void> }) {
   const repo = useApp((s) => s.repo)
-  const [aberta, setAberta] = useState(true)
+  const aberta = useAberto('itens', pasta.caminho)
+  const alternar = useArvoreRail((s) => s.alternar)
 
   async function criar(tipo: 'pasta' | 'item') {
     const nome = await pedirTexto(tipo === 'pasta' ? 'Nome da subpasta:' : 'Nome do item:')
@@ -163,7 +170,7 @@ function PastaItemLinha({ pasta, nivel, aoMudar }: { pasta: PastaItemNode; nivel
       <div
         className="rail-linha"
         style={{ paddingLeft: 8 + nivel * 14 }}
-        onClick={() => setAberta(!aberta)}
+        onClick={() => alternar('itens', pasta.caminho)}
         onDragOver={aceitaItem}
         onDrop={(e) => { e.stopPropagation(); const id = e.dataTransfer.getData(MIME_ITEM); if (id) void moverPara(pasta.caminho, id, aoMudar) }}
         title={pasta.nome}
@@ -196,7 +203,13 @@ function ItemLinha({ item, nivel, aoMudar, resultado }: {
   const repo = useApp((s) => s.repo)
   const abrirItem = useApp((s) => s.abrirItem)
   const caminhoItemPorId = useApp((s) => s.caminhoItemPorId)
-  const id = Object.entries(caminhoItemPorId).find(([, cam]) => cam === item.caminho)?.[0]
+  const id = item.id ?? Object.entries(caminhoItemPorId).find(([, cam]) => cam === item.caminho)?.[0]
+  const registro = useApp((s) => (id ? s.itens[id] : undefined))
+  const vaultPath = useApp((s) => s.vaultPath)
+  const miniaturas = useMiniaturas((s) => s.ligadas)
+  const retratoSrc = miniaturas
+    ? urlRetrato(vaultPath, registro?.retrato, registro?.modificadoEm ?? '')
+    : null
 
   async function renomear(e: React.MouseEvent) {
     e.stopPropagation()
@@ -229,7 +242,13 @@ function ItemLinha({ item, nivel, aoMudar, resultado }: {
       title={item.erro ? 'Arquivo com erro' : item.nome}
     >
       <span className="chevron-vazio" />
-      <span className="rail-titulo">💎 {item.nome}{item.erro ? ' ⚠' : ''}</span>
+      <CardRetrato
+        className="rail-icone"
+        src={retratoSrc}
+        alt=""
+        fallback={<span>💎</span>}
+      />
+      <span className="rail-titulo">{item.nome}{item.erro ? ' ⚠' : ''}</span>
       {resultado?.caminhoRotulo && <span className="rail-caminho">· {resultado.caminhoRotulo}</span>}
       <span className="rail-acoes" onClick={(e) => e.stopPropagation()}>
         {id && (

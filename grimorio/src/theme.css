@@ -298,6 +298,13 @@ button:hover { border-color: var(--dourado); color: var(--dourado-claro); }
   color: var(--texto); padding: 8px 10px; outline: none; font-size: 14px;
 }
 .dialogo-input:focus { border-color: var(--dourado); }
+/* opção "criar pasta nova" no seletor de pasta: parece item de lista, age como botão */
+.dialogo-nova-pasta {
+  align-self: flex-start; background: none; border: 1px dashed var(--borda);
+  border-radius: 4px; color: var(--texto-fraco); font-size: 13px;
+  padding: 6px 10px; text-align: left; cursor: pointer;
+}
+.dialogo-nova-pasta:hover { border-color: var(--dourado); color: var(--dourado-claro); }
 /* chip clicável que preenche o campo (prefixo do cenário pai) */
 .dialogo-sugestao {
   align-self: flex-start; max-width: 100%; background: var(--fundo);
@@ -371,6 +378,20 @@ button:hover { border-color: var(--dourado); color: var(--dourado-claro); }
 .cenario-chip-nome { background: none; border: none; color: var(--texto); cursor: pointer; padding: 2px; }
 .cenario-chip-x { background: none; border: none; color: var(--texto-fraco); cursor: pointer; padding: 2px 6px; }
 .cenario-chip-x:hover { color: var(--erro); }
+/* aba Itens: acervo em cima (altura própria), texto livre embaixo (ocupa o resto) */
+.aba-itens { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.cenario-acervo { flex: 0 0 auto; max-height: 40%; overflow-y: auto; padding: 12px 20px 8px; border-bottom: 1px solid var(--borda); }
+.acervo-qtd {
+  width: 34px; margin-right: 2px; padding: 1px 4px; text-align: right;
+  background: var(--fundo); color: var(--texto);
+  border: 1px solid var(--borda); border-radius: 8px; font-size: 12px; outline: none;
+}
+.acervo-qtd:focus { border-color: var(--dourado); }
+/* o spinner rouba largura de um campo tão estreito */
+.acervo-qtd::-webkit-inner-spin-button, .acervo-qtd::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+.acervo-criar { color: var(--dourado-claro); font-style: italic; }
+.acervo-criar:disabled { opacity: 0.6; cursor: default; }
+
 .cenario-vincular { margin-top: 8px; }
 .cenario-vincular input {
   width: 100%; padding: 6px 10px; background: var(--fundo-elevado); color: var(--texto);
@@ -462,6 +483,7 @@ button:hover { border-color: var(--dourado); color: var(--dourado-claro); }
 .chat-msg-user { align-self: flex-end; background: var(--fundo-elevado); border: 1px solid var(--dourado); }
 .chat-msg-model { align-self: flex-start; background: var(--fundo); border: 1px solid var(--borda); }
 .chat-ia-pensando { color: var(--texto-fraco); font-style: italic; }
+.chat-msg-interrompida { color: var(--texto-fraco); font-size: 11px; font-style: italic; margin-top: 6px; }
 
 /* Resposta do modelo renderizada como Markdown. `pre-wrap` vem de .chat-msg e serve ao
    texto puro do usuário; aqui as quebras já são tags, então volta ao normal — senão cada
@@ -560,6 +582,15 @@ button:hover { border-color: var(--dourado); color: var(--dourado-claro); }
 .rail-acoes { display: none; }
 .rail-linha:hover .rail-acoes { display: inline-flex; }
 .chevron, .chevron-vazio { width: 12px; font-size: 10px; color: var(--texto-fraco); }
+/* miniatura do item no rail. `flex: 0 0 16px` porque `.rail-titulo` é flex:1 e sem
+   base fixa a caixa encolheria em nome comprido; o emoji do fallback ocupa a mesma
+   caixa da imagem pra linha não dançar entre item com e sem retrato. */
+.rail-icone {
+  flex: 0 0 16px; width: 16px; height: 16px;
+  display: flex; align-items: center; justify-content: center;
+  border-radius: 3px; overflow: hidden; font-size: 12px; line-height: 1;
+}
+.rail-icone img { width: 100%; height: 100%; object-fit: cover; display: block; }
 
 /* ========== Escrita: editor de notas ========== */
 /* min-height:0 obrigatório: sem ele o item flex cresce até a altura do conteúdo
@@ -738,6 +769,8 @@ button:hover { border-color: var(--dourado); color: var(--dourado-claro); }
 .opcoes-fechar { position: absolute; top: 8px; right: 8px; }
 .opcoes-secao h3 { margin: 0 0 6px; font-size: 0.95rem; color: var(--dourado-claro); }
 .opcoes-secao h3 + h3 { margin-top: 20px; }
+.opcoes-alternador { display: flex; align-items: flex-start; gap: 8px; cursor: pointer; font-size: 0.9rem; }
+.opcoes-alternador small { display: block; margin-top: 2px; font-size: 0.8rem; color: var(--texto-fraco); }
 .opcoes-caminho { margin: 0 0 4px; font-size: 0.85rem; color: var(--texto-fraco); word-break: break-all; }
 .opcoes-vazio { margin: 0 0 12px; font-size: 0.85rem; color: var(--texto-fraco); }
 .opcoes-erro { margin: 0 0 12px; font-size: 0.85rem; color: var(--erro); }

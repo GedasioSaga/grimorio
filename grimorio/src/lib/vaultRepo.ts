@@ -84,6 +84,7 @@ export function normalizarVersaoCenario(raw: Record<string, any>, nomePadrao = '
     historia: raw?.historia ?? '',
     eventos: raw?.eventos ?? '',
     itens: raw?.itens ?? '',
+    acervo: Array.isArray(raw?.acervo) ? raw.acervo.filter((a: any) => typeof a?.itemId === 'string') : [],
     anotacoes: raw?.anotacoes ?? '',
     imagens: Array.isArray(raw?.imagens) ? raw.imagens : [],
   }
@@ -101,7 +102,7 @@ export function normalizarCenario(raw: Record<string, any>): Cenario {
         // só os campos de conteúdo do formato plano — id/nome do cenário NÃO viram da versão
         retrato: raw?.retrato, foco: raw?.foco, resumo: raw?.resumo, descricao: raw?.descricao,
         informacao: raw?.informacao, historia: raw?.historia, eventos: raw?.eventos,
-        itens: raw?.itens, anotacoes: raw?.anotacoes, imagens: raw?.imagens,
+        itens: raw?.itens, acervo: raw?.acervo, anotacoes: raw?.anotacoes, imagens: raw?.imagens,
       }, 'Base')]
   const versaoAtivaId = typeof raw?.versaoAtivaId === 'string' && versoes.some((v) => v.id === raw.versaoAtivaId)
     ? raw.versaoAtivaId
@@ -411,7 +412,7 @@ export class VaultRepo {
     const dir = `${dirPai}/${slug}`
     const versaoBase: VersaoCenario = {
       id: novoId(), nome: 'Base', retrato: null, resumo: '',
-      descricao: '', informacao: '', historia: '', eventos: '', itens: '', anotacoes: '', imagens: [],
+      descricao: '', informacao: '', historia: '', eventos: '', itens: '', acervo: [], anotacoes: '', imagens: [],
     }
     const c: Cenario = {
       id: novoId(), nome, personagens: [],

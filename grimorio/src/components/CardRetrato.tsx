@@ -9,10 +9,13 @@ export function CardRetrato({
   src,
   alt,
   fallback,
+  className = 'char-card-retrato',
 }: {
   src: string | null
   alt: string
   fallback: ReactNode
+  /** troca o wrapper para reusar a lógica de erro fora do card (ex.: miniatura do rail) */
+  className?: string
 }) {
   const [erroImg, setErroImg] = useState(false)
   useEffect(() => {
@@ -21,7 +24,7 @@ export function CardRetrato({
 
   const mostrarImg = src && !erroImg
   return (
-    <div className="char-card-retrato">
+    <div className={className}>
       {mostrarImg ? (
         <img src={src} alt={alt} draggable={false} onError={() => setErroImg(true)} />
       ) : (

@@ -161,6 +161,46 @@ describe('matriz A — derivação de estado contra o manifesto', () => {
   })
 })
 
+describe('conflito de política metadado: vence a edição mais recente', () => {
+  const METADADO = 'campanha.json'
+  const CONHECIDO_METADADO = { [METADADO]: entrada() }
+
+  it('remoto claramente mais novo (fora do clock skew) → vencedor remoto', () => {
+    const local = { [METADADO]: loc({ hash: HASH_LOCAL_NOVO, mtime: 1000 }) }
+    const remoto = { [METADADO]: rem({ hash: HASH_REMOTO_NOVO, versao: 'v1', modificadoEm: 1000 + 5000 }) }
+    expect(acoesDe(planejar(CONHECIDO_METADADO, local, remoto)))
+      .toEqual([{ tipo: 'conflito', caminho: METADADO, vencedor: 'remoto' }])
+  })
+
+  it('diferença dentro do clock skew (2s) mantém o vencedor local', () => {
+    const local = { [METADADO]: loc({ hash: HASH_LOCAL_NOVO, mtime: 1000 }) }
+    const remoto = { [METADADO]: rem({ hash: HASH_REMOTO_NOVO, versao: 'v1', modificadoEm: 1000 + 1500 }) }
+    expect(acoesDe(planejar(CONHECIDO_METADADO, local, remoto)))
+      .toEqual([{ tipo: 'conflito', caminho: METADADO, vencedor: 'local' }])
+  })
+
+  it('local mais novo → vencedor continua local', () => {
+    const local = { [METADADO]: loc({ hash: HASH_LOCAL_NOVO, mtime: 10_000 }) }
+    const remoto = { [METADADO]: rem({ hash: HASH_REMOTO_NOVO, versao: 'v1', modificadoEm: 1000 }) }
+    expect(acoesDe(planejar(CONHECIDO_METADADO, local, remoto)))
+      .toEqual([{ tipo: 'conflito', caminho: METADADO, vencedor: 'local' }])
+  })
+
+  it('sem modificadoEm do Drive (não disponível), mantém o vencedor provisório local', () => {
+    const local = { [METADADO]: loc({ hash: HASH_LOCAL_NOVO }) }
+    const remoto = { [METADADO]: rem({ hash: HASH_REMOTO_NOVO, versao: 'v1' }) }
+    expect(acoesDe(planejar(CONHECIDO_METADADO, local, remoto)))
+      .toEqual([{ tipo: 'conflito', caminho: METADADO, vencedor: 'local' }])
+  })
+
+  it('arquivo de entidade (não-metadado) continua vencendo local mesmo com remoto muito mais novo', () => {
+    const local = { [A]: loc({ hash: HASH_LOCAL_NOVO, mtime: 1000 }) }
+    const remoto = { [A]: rem({ hash: HASH_REMOTO_NOVO, versao: 'v1', modificadoEm: 999_999 }) }
+    expect(acoesDe(planejar(CONHECIDO, local, remoto)))
+      .toEqual([{ tipo: 'conflito', caminho: A, vencedor: 'local' }])
+  })
+})
+
 describe('matriz B — arquivo SEM entrada no manifesto', () => {
   const N = 'novo.json'
 

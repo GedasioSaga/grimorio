@@ -16,7 +16,7 @@ function personagem(versoes: VersaoPersonagem[], versaoAtivaId = versoes[0].id):
 function versaoC(over: Partial<VersaoCenario> = {}): VersaoCenario {
   return {
     id: 'v1', nome: 'Base', retrato: null, resumo: '',
-    descricao: '', informacao: '', historia: '', eventos: '', itens: '', anotacoes: '',
+    descricao: '', informacao: '', historia: '', eventos: '', itens: '', acervo: [], anotacoes: '',
     imagens: [], ...over,
   }
 }

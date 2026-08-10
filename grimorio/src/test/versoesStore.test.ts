@@ -5,7 +5,7 @@ import type { Cenario } from '../lib/types'
 function cen(): Cenario {
   return {
     id: 'c1', nome: 'Cidade', personagens: [],
-    versoes: [{ id: 'v1', nome: 'Base', retrato: null, resumo: 'dia', descricao: '', informacao: '', historia: '', eventos: '', itens: '', anotacoes: '', imagens: [] }],
+    versoes: [{ id: 'v1', nome: 'Base', retrato: null, resumo: 'dia', descricao: '', informacao: '', historia: '', eventos: '', itens: '', acervo: [], anotacoes: '', imagens: [] }],
     versaoAtivaId: 'v1', criadoEm: 'x', modificadoEm: 'y',
   }
 }

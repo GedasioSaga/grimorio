@@ -95,6 +95,19 @@ export function mexeuNoDiscoLocal(acoes: Acao[]): boolean {
   return acoes.some((a) => ACOES_QUE_ESCREVEM_LOCAL.has(a.tipo))
 }
 
+/**
+ * Um conflito que caiu em `falhas` também mexeu no disco, mesmo sem concluir.
+ *
+ * `resolverConflito` grava `preservarPerdedor` ANTES de tentar convergir (subir/baixar); se só a
+ * convergência falhar, o disco já mudou mas a ação inteira cai em `falhas`, fora de
+ * `resultado.concluidas`. Sem contar isso aqui, o app não relê o cofre, e o autosave seguinte
+ * grava o cache de vínculos em memória (pré-merge) por cima do que acabou de ser mesclado no
+ * disco. O custo do falso positivo — quando a preservação também falhou — é uma releitura à toa.
+ */
+function algumaFalhaFoiConflito(falhas: FalhaAcao[]): boolean {
+  return falhas.some((f) => f.acao.tipo === 'conflito')
+}
+
 export type ResultadoDoCiclo =
   /** O plano rodou. `falhas` vazio = ciclo completo; com falhas o manifesto guarda só o que deu certo. */
   | {
@@ -141,6 +154,9 @@ function estadoRemotoDe(conteudo: ConteudoRemoto): Map<string, EstadoRemoto> {
       // quem perde é o lado remoto. Deixar cair aqui não quebraria sync nenhum — só faria toda
       // cópia vinda do outro computador ficar assinada como "outro computador".
       deviceNome: item.deviceNome ?? undefined,
+      // `Date.parse` de um ISO inválido dá `NaN`, que `reconciliar` trata como "sem prova de
+      // quem é mais novo" (toda comparação com NaN é falsa) e cai no vencedor provisório.
+      modificadoEm: item.modificadoEm === null ? undefined : Date.parse(item.modificadoEm),
     },
   ]))
 }
@@ -204,7 +220,7 @@ export async function executarCiclo(deps: DependenciasDoSync): Promise<Resultado
     tipo: 'sincronizado',
     manifesto: resultado.manifesto,
     falhas: resultado.falhas,
-    // só o que CONCLUIU conta: uma descida que falhou não deixou nada novo no disco
-    mudouDisco: mexeuNoDiscoLocal(resultado.concluidas),
+    // conflito falho ainda mexeu no disco pela preservação — ver `algumaFalhaFoiConflito`
+    mudouDisco: mexeuNoDiscoLocal(resultado.concluidas) || algumaFalhaFoiConflito(resultado.falhas),
   }
 }

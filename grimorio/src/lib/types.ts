@@ -35,6 +35,18 @@ export interface Personagem {
   modificadoEm: string
 }
 
+/**
+ * Item do acervo presente numa versão de cenário.
+ *
+ * Fica na VERSÃO, não no cenário: a taverna intacta tem o barril de cerveja, a
+ * incendiada não. É a mesma razão pela qual `itens` (o texto livre) já é por versão.
+ * `qtd` ausente = item único — o chip mostra só o nome, sem contador.
+ */
+export interface ItemNoCenario {
+  itemId: string
+  qtd?: number
+}
+
 export interface VersaoCenario {
   id: string
   nome: string          // "Base", "Dia", "Noite", "Destruído"
@@ -45,7 +57,8 @@ export interface VersaoCenario {
   informacao: string // HTML (caixa "Informações" do card no canvas)
   historia: string   // HTML
   eventos: string    // HTML — v1 texto; vira entidade própria no futuro
-  itens: string      // HTML — idem
+  itens: string      // HTML — texto livre da aba Itens (convive com `acervo`)
+  acervo: ItemNoCenario[] // itens de verdade vinculados; texto livre continua em `itens`
   anotacoes: string  // HTML
   imagens: ImagemPersonagem[]
 }

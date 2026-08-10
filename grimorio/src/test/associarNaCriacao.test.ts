@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import { useApp } from '../state/store'
-import { associarNaCriacao, useDialogoCampanhas } from '../components/dialogoCampanhas'
+import { associarEscolhendoCampanhas, associarNaCriacao, useDialogoCampanhas } from '../components/dialogoCampanhas'
 import { campanhasDe } from '../lib/vinculos'
 import type { PastaCenarioNode, PastaNode, VaultTree, Vinculo } from '../lib/types'
 
@@ -60,5 +60,40 @@ describe('associarNaCriacao', () => {
     useDialogoCampanhas.getState().responder(null)
     await promessa
     expect(campanhasDe(useApp.getState().vinculos, 'p4')).toEqual([])
+  })
+})
+
+describe('associarEscolhendoCampanhas', () => {
+  it('herança da pasta vira pré-marcação, mas pergunta mesmo assim', async () => {
+    const promessa = associarEscolhendoCampanhas('item', 'i1', 'Caracol', 'personagens-soltos/viloes')
+    const pedido = useDialogoCampanhas.getState().pedido
+    expect(pedido?.titulo).toBe('Campanhas de "Caracol":')
+    expect(pedido?.marcadas).toEqual(['camp-1'])
+    useDialogoCampanhas.getState().responder(['camp-2'])
+    await promessa
+    expect(campanhasDe(useApp.getState().vinculos, 'i1')).toEqual(['camp-2'])
+  })
+
+  it('filtro ativo vira pré-marcação, não decisão automática', async () => {
+    useApp.setState({ campanhaFiltro: 'camp-2' })
+    const promessa = associarEscolhendoCampanhas('item', 'i2', 'Caracol')
+    expect(useDialogoCampanhas.getState().pedido?.marcadas).toEqual(['camp-2'])
+    useDialogoCampanhas.getState().responder(['camp-1', 'camp-2'])
+    await promessa
+    expect(campanhasDe(useApp.getState().vinculos, 'i2').sort()).toEqual(['camp-1', 'camp-2'])
+  })
+
+  it('cancelar não etiqueta nada', async () => {
+    const promessa = associarEscolhendoCampanhas('item', 'i3', 'Caracol', 'personagens-soltos/viloes')
+    useDialogoCampanhas.getState().responder(null)
+    await promessa
+    expect(campanhasDe(useApp.getState().vinculos, 'i3')).toEqual([])
+  })
+
+  it('cofre sem campanhas não abre o seletor', async () => {
+    useApp.setState({ tree: { ...tree, campanhas: [] } })
+    await associarEscolhendoCampanhas('item', 'i4', 'Caracol')
+    expect(useDialogoCampanhas.getState().pedido).toBeNull()
+    expect(campanhasDe(useApp.getState().vinculos, 'i4')).toEqual([])
   })
 })

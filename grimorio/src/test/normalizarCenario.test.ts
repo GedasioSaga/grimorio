@@ -41,13 +41,31 @@ describe('normalizarCenario', () => {
     const completo = {
       id: 'x', nome: 'N', personagens: ['p1', 'p2'],
       versoes: [
-        { id: 'va', nome: 'Base', retrato: 'imagens-cenarios/r.png', resumo: 'r', descricao: '<p>d</p>', informacao: '<p>i</p>', historia: '<p>h</p>', eventos: '<p>e</p>', itens: '<p>it</p>', anotacoes: '<p>a</p>', imagens: [{ rel: 'imagens-cenarios/g.png', legenda: 'l' }] },
-        { id: 'vb', nome: 'Noite', retrato: null, resumo: '', descricao: '', informacao: '', historia: '', eventos: '', itens: '', anotacoes: '', imagens: [] },
+        { id: 'va', nome: 'Base', retrato: 'imagens-cenarios/r.png', resumo: 'r', descricao: '<p>d</p>', informacao: '<p>i</p>', historia: '<p>h</p>', eventos: '<p>e</p>', itens: '<p>it</p>', acervo: [{ itemId: 'i1', qtd: 3 }], anotacoes: '<p>a</p>', imagens: [{ rel: 'imagens-cenarios/g.png', legenda: 'l' }] },
+        { id: 'vb', nome: 'Noite', retrato: null, resumo: '', descricao: '', informacao: '', historia: '', eventos: '', itens: '', acervo: [], anotacoes: '', imagens: [] },
       ],
       versaoAtivaId: 'vb',
       criadoEm: '2020-01-01T00:00:00.000Z', modificadoEm: '2020-01-02T00:00:00.000Z',
     }
     expect(normalizarCenario(completo)).toEqual(completo)
+  })
+
+  it('cofre antigo (sem acervo) abre com acervo vazio', () => {
+    expect(normalizarCenario({}).versoes[0].acervo).toEqual([])
+    expect(normalizarCenario({ id: 'a', itens: '<p>maçã</p>' }).versoes[0].acervo).toEqual([])
+  })
+
+  it('acervo corrompido é descartado item a item, sem derrubar o cenário', () => {
+    const c = normalizarCenario({
+      id: 'a',
+      versoes: [{ id: 'v', nome: 'Base', acervo: [{ itemId: 'ok' }, { qtd: 2 }, null, 'lixo'] }],
+    })
+    expect(c.versoes[0].acervo).toEqual([{ itemId: 'ok' }])
+  })
+
+  it('acervo não-array vira lista vazia', () => {
+    const c = normalizarCenario({ id: 'a', versoes: [{ id: 'v', nome: 'Base', acervo: 'nope' }] })
+    expect(c.versoes[0].acervo).toEqual([])
   })
 
   it('versoes vazio ou não-array cai na migração para Base', () => {

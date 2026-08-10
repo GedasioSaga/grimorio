@@ -3,7 +3,7 @@ import { versaoAtiva, versaoVizinha, aplicarPatchCenario, resumoAtivo, retratoAt
 import type { Cenario, VersaoCenario } from '../lib/types'
 
 function versao(id: string, nome: string, over: Partial<VersaoCenario> = {}): VersaoCenario {
-  return { id, nome, retrato: null, resumo: '', descricao: '', informacao: '', historia: '', eventos: '', itens: '', anotacoes: '', imagens: [], ...over }
+  return { id, nome, retrato: null, resumo: '', descricao: '', informacao: '', historia: '', eventos: '', itens: '', acervo: [], anotacoes: '', imagens: [], ...over }
 }
 function cenario(over: Partial<Cenario> = {}): Cenario {
   const vs = over.versoes ?? [versao('v1', 'Base'), versao('v2', 'Noite')]

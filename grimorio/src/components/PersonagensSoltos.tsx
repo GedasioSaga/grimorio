@@ -7,6 +7,12 @@ import { contarPersonagens } from '../lib/filtroCampanha'
 import { pedirTexto } from './dialogos'
 import { associarNaCriacao, editarCampanhas } from './dialogoCampanhas'
 import { CaixaBusca } from './CaixaBusca'
+import { CardRetrato } from './CardRetrato'
+import { urlRetrato } from '../lib/urlRetrato'
+import { versaoAtivaPersonagem } from '../lib/personagemVersao'
+import { useMiniaturas } from '../state/miniaturas'
+import { useAberto, useArvoreRail } from '../state/arvoreRail'
+import { BotaoArvore } from './BotaoArvore'
 
 const RAIZ = 'personagens-soltos'
 const MIME = 'application/x-grimorio-personagem'
@@ -82,6 +88,7 @@ export function PersonagensSoltos({ raiz, aoMudar, ocultos = 0, aoMostrarTodos }
       <div className="sidebar-section-header">
         <span>Personagens</span>
         <span>
+          <BotaoArvore secao="personagens" />
           <button className="btn-icon" title="Nova pasta" onClick={novaPasta}>📁+</button>
           <button className="btn-icon" title="Novo personagem" onClick={novoPersonagem}>+</button>
         </span>
@@ -114,7 +121,8 @@ export function PersonagensSoltos({ raiz, aoMudar, ocultos = 0, aoMostrarTodos }
 
 function PastaLinha({ pasta, nivel, aoMudar }: { pasta: PastaNode; nivel: number; aoMudar: () => Promise<void> }) {
   const repo = useApp((s) => s.repo)
-  const [aberta, setAberta] = useState(true)
+  const aberta = useAberto('personagens', pasta.caminho)
+  const alternar = useArvoreRail((s) => s.alternar)
 
   async function criar(tipo: 'pasta' | 'personagem') {
     const nome = await pedirTexto(tipo === 'pasta' ? 'Nome da subpasta:' : 'Nome do personagem:')
@@ -163,7 +171,7 @@ function PastaLinha({ pasta, nivel, aoMudar }: { pasta: PastaNode; nivel: number
       <div
         className="rail-linha"
         style={{ paddingLeft: 8 + nivel * 14 }}
-        onClick={() => setAberta(!aberta)}
+        onClick={() => alternar('personagens', pasta.caminho)}
         onDragOver={aceitaPersonagem}
         onDrop={(e) => { e.stopPropagation(); const id = e.dataTransfer.getData(MIME); if (id) void moverPara(pasta.caminho, id, aoMudar) }}
         title={pasta.nome}
@@ -196,7 +204,17 @@ function PersonagemLinha({ item, nivel, aoMudar, resultado }: {
   const repo = useApp((s) => s.repo)
   const abrirPerfil = useApp((s) => s.abrirPerfil)
   const caminhoPorId = useApp((s) => s.caminhoPorId)
-  const id = Object.entries(caminhoPorId).find(([, cam]) => cam === item.caminho)?.[0]
+  const id = item.id ?? Object.entries(caminhoPorId).find(([, cam]) => cam === item.caminho)?.[0]
+  const p = useApp((s) => (id ? s.personagens[id] : undefined))
+  const vaultPath = useApp((s) => s.vaultPath)
+  const miniaturas = useMiniaturas((s) => s.ligadas)
+  const retratoSrc = miniaturas
+    ? urlRetrato(
+        vaultPath,
+        p ? versaoAtivaPersonagem(p).retrato : null,
+        p ? `${p.modificadoEm}:${p.versaoAtivaId}` : '',
+      )
+    : null
 
   async function renomear(e: React.MouseEvent) {
     e.stopPropagation()
@@ -229,7 +247,8 @@ function PersonagemLinha({ item, nivel, aoMudar, resultado }: {
       title={item.erro ? 'Arquivo com erro' : item.nome}
     >
       <span className="chevron-vazio" />
-      <span className="rail-titulo">👤 {item.nome}{item.erro ? ' ⚠' : ''}</span>
+      <CardRetrato className="rail-icone" src={retratoSrc} alt="" fallback={<span>👤</span>} />
+      <span className="rail-titulo">{item.nome}{item.erro ? ' ⚠' : ''}</span>
       {resultado?.caminhoRotulo && <span className="rail-caminho">· {resultado.caminhoRotulo}</span>}
       <span className="rail-acoes" onClick={(e) => e.stopPropagation()}>
         {id && (

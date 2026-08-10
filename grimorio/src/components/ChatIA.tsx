@@ -5,7 +5,13 @@ import { useApp } from '../state/store'
 import type { NotebookRepo } from '../lib/notebookRepo'
 import type { CenarioCardShapeType } from './CenarioCardShape'
 import type { CharacterCardShapeType } from './CharacterCardShape'
-import { SYSTEM_MESTRE, janelaSalva, recortarJanela, type MensagemChat } from '../lib/chatIA'
+import {
+  SYSTEM_MESTRE,
+  janelaSalva,
+  mensagensComParcialInterrompido,
+  recortarJanela,
+  type MensagemChat,
+} from '../lib/chatIA'
 import { gerarConteudo, type ImagemIA } from '../lib/gemini'
 import { garantirChaves } from '../lib/chavesIA'
 import { modeloSalvo } from '../lib/modeloIA'
@@ -69,6 +75,9 @@ export function ChatIA({
   const { cortadas } = recortarJanela(mensagens, janela)
   const timerSalvar = useRef<ReturnType<typeof setTimeout> | null>(null)
   const fimRef = useRef<HTMLDivElement | null>(null)
+  // espelha `parcial` fora do fechamento de enviar(): o catch precisa do valor atual, não
+  // do que existia quando enviar() foi chamado (aoReceber roda depois, durante o await)
+  const parcialRef = useRef<string | null>(null)
   // false após o unmount: bloqueia o save da resposta de um enviar() em voo (evita
   // clobber da conversa de outra sessão se o usuário trocar de sessão durante o await)
   const montadoRef = useRef(true)
@@ -233,18 +242,25 @@ export function ChatIA({
         chaves: await garantirChaves(pedirTexto),
         modelo: modeloSalvo(),
         // desmontou no meio do stream: parar de pintar evita escrever na conversa de outra sessão
-        aoReceber: (p) => { if (montadoRef.current) setParcial(p) },
+        aoReceber: (p) => {
+          parcialRef.current = p
+          if (montadoRef.current) setParcial(p)
+        },
       })
       // desmontou durante o await (troca de sessão): a pergunta já foi persistida
       // por agendarSalvar(novas)/flush; descartar a resposta evita clobber da conversa nova
       if (!montadoRef.current) return
       agendarSalvar([...novas, { papel: 'model', texto: resposta, em: new Date().toISOString() }])
     } catch (e) {
-      if (montadoRef.current) setErro(e instanceof Error ? e.message : String(e))
+      if (!montadoRef.current) return
+      setErro(e instanceof Error ? e.message : String(e))
+      const comParcial = mensagensComParcialInterrompido(novas, parcialRef.current)
+      if (comParcial) agendarSalvar(comParcial)
     } finally {
       setAnexo(null)
       setPensando(false)
       setParcial(null)
+      parcialRef.current = null
     }
   }
 

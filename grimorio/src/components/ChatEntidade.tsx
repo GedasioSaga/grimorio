@@ -1,6 +1,6 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
 import { useApp } from '../state/store'
-import { janelaSalva, recortarJanela, type MensagemChat } from '../lib/chatIA'
+import { janelaSalva, mensagensComParcialInterrompido, recortarJanela, type MensagemChat } from '../lib/chatIA'
 import { gerarConteudo } from '../lib/gemini'
 import { garantirChaves } from '../lib/chavesIA'
 import { modeloSalvo } from '../lib/modeloIA'
@@ -44,6 +44,9 @@ export function ChatEntidade({ tipo, entidadeId, onFechar }: {
   const fimRef = useRef<HTMLDivElement | null>(null)
   // false após o unmount: descarta a resposta de um enviar() em voo (o drawer é efêmero)
   const montadoRef = useRef(true)
+  // espelha `parcial` fora do fechamento de enviar(): o catch precisa do valor atual, não
+  // do que existia quando enviar() foi chamado (aoReceber roda depois, durante o await)
+  const parcialRef = useRef<string | null>(null)
 
   useEffect(() => {
     montadoRef.current = true
@@ -78,16 +81,23 @@ export function ChatEntidade({ tipo, entidadeId, onFechar }: {
         historico: enviadas.map((m) => ({ papel: m.papel, texto: m.texto })),
         chaves: await garantirChaves(pedirTexto),
         modelo: modeloSalvo(),
-        aoReceber: (p) => { if (montadoRef.current) setParcial(p) },
+        aoReceber: (p) => {
+          parcialRef.current = p
+          if (montadoRef.current) setParcial(p)
+        },
       })
       if (!montadoRef.current) return
       setMensagens([...novas, { papel: 'model', texto: resposta, em: new Date().toISOString() }])
     } catch (e) {
-      if (montadoRef.current) setErro(e instanceof Error ? e.message : String(e))
+      if (!montadoRef.current) return
+      setErro(e instanceof Error ? e.message : String(e))
+      const comParcial = mensagensComParcialInterrompido(novas, parcialRef.current)
+      if (comParcial) setMensagens(comParcial)
     } finally {
       if (montadoRef.current) {
         setPensando(false)
         setParcial(null)
+        parcialRef.current = null
       }
     }
   }

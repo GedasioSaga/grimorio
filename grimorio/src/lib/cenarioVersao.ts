@@ -3,7 +3,7 @@ import type { Cenario, VersaoCenario } from './types'
 /** Campos de conteúdo que pertencem à VERSÃO ativa (não ao cenário). Mantenha em sincronia com VersaoCenario (todos os campos menos id/nome). */
 export const CHAVES_VERSAO = [
   'retrato', 'foco', 'resumo', 'descricao', 'informacao',
-  'historia', 'eventos', 'itens', 'anotacoes', 'imagens',
+  'historia', 'eventos', 'itens', 'acervo', 'anotacoes', 'imagens',
 ] as const
 
 /** Patch de salvarCenarioParcial/agendarSalvar: chaves de conteúdo vão pra versão ativa; o resto, pro cenário. */

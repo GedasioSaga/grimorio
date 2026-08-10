@@ -292,6 +292,27 @@ describe('executarCiclo', () => {
     expect(r.tipo === 'sincronizado' && r.mudouDisco).toBe(true)
   })
 
+  it('conflito com preservarPerdedor ok e convergência falha ainda pede recarga', async () => {
+    // `preservarPerdedor` (a cópia do perdedor) deu certo e escreveu no disco; só o `enviar` da
+    // convergência falhou depois. A ação inteira cai em `falhas`, mas o disco já mudou — sem
+    // contar isso, o app não relê o cofre e o autosave seguinte grava o cache velho por cima do
+    // que acabou de ser preservado (o cenário que este teste existe para prevenir).
+    const { deps, falhas } = montar({
+      local: { 'a.json': loc({ hash: 'H1' }) },
+      listagem: { arquivos: [item({ hash: 'H2' })] },
+    })
+    falhas.set('enviar:a.json', 'cota estourada')
+
+    const r = await executarCiclo(deps)
+
+    expect(r.tipo).toBe('sincronizado')
+    if (r.tipo !== 'sincronizado') return
+    expect(r.falhas).toEqual([
+      { acao: { tipo: 'conflito', caminho: 'a.json', vencedor: 'local' }, erro: 'cota estourada' },
+    ])
+    expect(r.mudouDisco).toBe(true)
+  })
+
   it('erro de rede na listagem sobe para quem orquestra', async () => {
     const { deps, falhas } = montar()
     falhas.set('listar:raizDrive', new Error('sem internet'))

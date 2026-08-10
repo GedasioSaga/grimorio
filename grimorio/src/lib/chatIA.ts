@@ -4,6 +4,8 @@ export interface MensagemChat {
   papel: 'user' | 'model'
   texto: string
   em: string // ISO-8601 ('' em registros antigos)
+  /** Resposta cortada no meio por falha/timeout na requisição (o texto é o que chegou até então). */
+  interrompida?: true
 }
 
 /**
@@ -67,7 +69,26 @@ export function normalizarChat(raw: unknown): MensagemChat[] {
     if (!m) continue
     if (m.papel !== 'user' && m.papel !== 'model') continue
     if (typeof m.texto !== 'string' || !m.texto) continue
-    out.push({ papel: m.papel, texto: m.texto, em: typeof m.em === 'string' ? m.em : '' })
+    out.push({
+      papel: m.papel,
+      texto: m.texto,
+      em: typeof m.em === 'string' ? m.em : '',
+      ...(m.interrompida === true ? { interrompida: true } : {}),
+    })
   }
   return out
+}
+
+/**
+ * Quando a requisição falha com texto parcial já entregue (stream cortado, timeout de
+ * inatividade), monta a mensagem que preserva esse texto em vez de descartá-lo. `null`
+ * quando não há nada a preservar (parcial vazio/ausente).
+ */
+export function mensagensComParcialInterrompido(
+  mensagens: MensagemChat[],
+  parcial: string | null,
+): MensagemChat[] | null {
+  const texto = parcial?.trim()
+  if (!texto) return null
+  return [...mensagens, { papel: 'model', texto, em: new Date().toISOString(), interrompida: true }]
 }

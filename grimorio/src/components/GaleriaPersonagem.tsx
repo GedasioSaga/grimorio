@@ -32,7 +32,8 @@ export function GaleriaPersonagem({
 
   useEffect(() => {
     if (!ampliadaRel) return
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setAmpliadaRel(null) }
+    // stopPropagation: sem ele o Escape borbulha até o listener do modal em window e fecha os dois de uma vez
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') { e.stopPropagation(); setAmpliadaRel(null) } }
     document.addEventListener('keydown', onKey)
     return () => document.removeEventListener('keydown', onKey)
   }, [ampliadaRel])

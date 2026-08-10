@@ -4,6 +4,7 @@ import { SeletorTema } from './SeletorTema'
 import { OpcoesCofre } from './OpcoesCofre'
 import { OpcoesIA } from './OpcoesIA'
 import { OpcoesNuvem } from './OpcoesNuvem'
+import { useMiniaturas } from '../state/miniaturas'
 
 export type AbaOpcoes = 'cofre' | 'nuvem' | 'aparencia' | 'ia'
 
@@ -29,6 +30,22 @@ const ABAS: { id: AbaOpcoes; rotulo: string }[] = [
   { id: 'aparencia', rotulo: 'Aparência' },
   { id: 'ia', rotulo: 'IA' },
 ]
+
+/** Liga/desliga a miniatura do retrato nas listas de itens, personagens e cenários. */
+function SeletorMiniaturas() {
+  const ligadas = useMiniaturas((s) => s.ligadas)
+  const alternar = useMiniaturas((s) => s.alternar)
+
+  return (
+    <label className="opcoes-alternador">
+      <input type="checkbox" checked={ligadas} onChange={(e) => alternar(e.target.checked)} />
+      <span>
+        Mostrar miniatura da imagem
+        <small>Desligado, cada linha volta ao ícone: 💎 itens, 🗺 cenários, 👤 personagens.</small>
+      </span>
+    </label>
+  )
+}
 
 /** Montado uma vez perto da raiz, como HostDialogos. */
 export function HostOpcoes() {
@@ -67,10 +84,16 @@ export function HostOpcoes() {
           {aba === 'cofre' && <OpcoesCofre onFechar={fechar} />}
           {aba === 'nuvem' && <OpcoesNuvem onFechar={fechar} />}
           {aba === 'aparencia' && (
-            <div className="opcoes-secao">
-              <h3>Tema</h3>
-              <SeletorTema />
-            </div>
+            <>
+              <div className="opcoes-secao">
+                <h3>Tema</h3>
+                <SeletorTema />
+              </div>
+              <div className="opcoes-secao">
+                <h3>Listas laterais</h3>
+                <SeletorMiniaturas />
+              </div>
+            </>
           )}
           {aba === 'ia' && <OpcoesIA />}
         </div>

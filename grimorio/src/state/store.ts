@@ -494,17 +494,21 @@ export const useApp = create<AppState>((set, get) => ({
     }
     daPasta(tree.personagensSoltos)
 
-    const personagens: Record<string, Personagem> = {}
-    const caminhoPorId: Record<string, string> = {}
-    for (const ref of refs) {
-      if (ref.erro) continue
+    const lidos = await Promise.all(refs.map(async (ref) => {
+      if (ref.erro) return null
       try {
-        const p = await repo.lerPersonagem(ref.caminho)
-        personagens[p.id] = p
-        caminhoPorId[p.id] = ref.caminho
+        return { caminho: ref.caminho, p: await repo.lerPersonagem(ref.caminho) }
       } catch {
         // ignora corrompido; sidebar já marca erro
+        return null
       }
+    }))
+    const personagens: Record<string, Personagem> = {}
+    const caminhoPorId: Record<string, string> = {}
+    for (const lido of lidos) {
+      if (!lido) continue
+      personagens[lido.p.id] = lido.p
+      caminhoPorId[lido.p.id] = lido.caminho
     }
     set({ personagens, caminhoPorId })
   },
@@ -578,18 +582,22 @@ export const useApp = create<AppState>((set, get) => ({
   async carregarCenarios() {
     const { repo, tree } = get()
     if (!repo || !tree) return
-    const cenarios: Record<string, Cenario> = {}
-    const caminhoCenarioPorId: Record<string, string> = {}
-    for (const ref of coletarCenarioRefs(tree.cenarios)) {
+    const lidos = await Promise.all(coletarCenarioRefs(tree.cenarios).map(async (ref) => {
       // id vazio = cenario.json sem id (normalização geraria id novo a cada load)
-      if (ref.erro || !ref.id) continue
+      if (ref.erro || !ref.id) return null
       try {
-        const c = await repo.lerCenario(ref.caminho)
-        cenarios[c.id] = c
-        caminhoCenarioPorId[c.id] = ref.caminho
+        return { caminho: ref.caminho, c: await repo.lerCenario(ref.caminho) }
       } catch {
         // ignora corrompido; sidebar já marca erro
+        return null
       }
+    }))
+    const cenarios: Record<string, Cenario> = {}
+    const caminhoCenarioPorId: Record<string, string> = {}
+    for (const lido of lidos) {
+      if (!lido) continue
+      cenarios[lido.c.id] = lido.c
+      caminhoCenarioPorId[lido.c.id] = lido.caminho
     }
     set({ cenarios, caminhoCenarioPorId })
   },
@@ -657,17 +665,21 @@ export const useApp = create<AppState>((set, get) => ({
     }
     daPasta(tree.itens)
 
-    const itens: Record<string, Item> = {}
-    const caminhoItemPorId: Record<string, string> = {}
-    for (const ref of refs) {
-      if (ref.erro) continue
+    const lidos = await Promise.all(refs.map(async (ref) => {
+      if (ref.erro) return null
       try {
-        const i = await repo.lerItem(ref.caminho)
-        itens[i.id] = i
-        caminhoItemPorId[i.id] = ref.caminho
+        return { caminho: ref.caminho, i: await repo.lerItem(ref.caminho) }
       } catch {
         // ignora corrompido; sidebar já marca erro
+        return null
       }
+    }))
+    const itens: Record<string, Item> = {}
+    const caminhoItemPorId: Record<string, string> = {}
+    for (const lido of lidos) {
+      if (!lido) continue
+      itens[lido.i.id] = lido.i
+      caminhoItemPorId[lido.i.id] = lido.caminho
     }
     set({ itens, caminhoItemPorId })
   },

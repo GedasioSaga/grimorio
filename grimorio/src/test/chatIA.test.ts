@@ -1,6 +1,14 @@
 // @vitest-environment jsdom
 import { describe, it, expect, beforeEach } from 'vitest'
-import { JANELAS, JANELA_PADRAO, janelaSalva, normalizarChat, recortarJanela, salvarJanela } from '../lib/chatIA'
+import {
+  JANELAS,
+  JANELA_PADRAO,
+  janelaSalva,
+  mensagensComParcialInterrompido,
+  normalizarChat,
+  recortarJanela,
+  salvarJanela,
+} from '../lib/chatIA'
 
 describe('normalizarChat', () => {
   it('aceita formato { mensagens: [...] }', () => {
@@ -14,6 +22,36 @@ describe('normalizarChat', () => {
   it('lixo → []', () => {
     expect(normalizarChat(null)).toEqual([])
     expect(normalizarChat('oi')).toEqual([])
+  })
+
+  it('preserva a marca de interrompida', () => {
+    const raw = { mensagens: [{ papel: 'model', texto: 'cortou', em: '2026-01-01', interrompida: true }] }
+    expect(normalizarChat(raw)).toEqual([{ papel: 'model', texto: 'cortou', em: '2026-01-01', interrompida: true }])
+  })
+})
+
+describe('mensagensComParcialInterrompido', () => {
+  const base = [{ papel: 'user' as const, texto: 'oi', em: '2026-01-01' }]
+
+  it('sem isso, o texto que já chegou some da conversa quando a requisição falha no meio', () => {
+    // reproduz o bug: nada persiste o `parcial` do state quando o catch é acionado
+    const parcialQueChegouAntesDeFalhar = 'Era uma vez um dragão que'
+    const conversaPersistidaNoCatchAtual = base // hoje: catch só faz setErro; nada é anexado
+    expect(conversaPersistidaNoCatchAtual).toHaveLength(1)
+    expect(mensagensComParcialInterrompido(base, parcialQueChegouAntesDeFalhar)).toHaveLength(2)
+  })
+
+  it('anexa o parcial como mensagem do modelo marcada como interrompida', () => {
+    const out = mensagensComParcialInterrompido(base, 'Era uma vez')
+    expect(out).not.toBeNull()
+    expect(out![1]).toMatchObject({ papel: 'model', texto: 'Era uma vez', interrompida: true })
+    expect(typeof out![1].em).toBe('string')
+  })
+
+  it('null ou vazio (nada chegou ainda) não gera mensagem', () => {
+    expect(mensagensComParcialInterrompido(base, null)).toBeNull()
+    expect(mensagensComParcialInterrompido(base, '')).toBeNull()
+    expect(mensagensComParcialInterrompido(base, '   ')).toBeNull()
   })
 })
 
