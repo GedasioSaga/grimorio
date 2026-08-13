@@ -1,3 +1,5 @@
+// @vitest-environment jsdom
+// (o contexto agora sai em Markdown, e `htmlParaMarkdown` lê o HTML com `DOMParser`)
 import { describe, expect, it } from 'vitest'
 import type { Cenario, Personagem, VersaoCenario, VersaoPersonagem } from '../lib/types'
 import { SYSTEM_ENTIDADE, textoDaEntidade } from '../lib/contextoEntidade'

@@ -10,11 +10,11 @@ import { AbaVinculos } from './AbaVinculos'
 import { AcervoCenario } from './AcervoCenario'
 import { AcoesIA, type AcaoIA } from './AcoesIA'
 import { ChatEntidade } from './ChatEntidade'
-import { SYSTEM_MESTRE } from '../lib/chatIA'
 import { contextoDeEntidade } from '../lib/contextoIA'
-import { htmlParaTexto, textoParaHtml } from '../lib/htmlTexto'
+import { htmlParaTexto } from '../lib/htmlTexto'
+import { htmlParaMarkdown, markdownParaHtml } from '../lib/markdownHtml'
 import { carregarImagensIA } from '../lib/imagensIA'
-import { promptDescreverImagemTopicos } from '../lib/promptsIA'
+import { promptDescreverImagemTopicos, SYSTEM_ESCRITOR } from '../lib/promptsIA'
 import { BarraVersoes } from './BarraVersoes'
 import { EnquadrarRetrato } from './EnquadrarRetrato'
 import { posicaoCss } from '../lib/focoRetrato'
@@ -191,7 +191,7 @@ export function CenarioModal({ cenarioId }: { cenarioId: string }) {
               onChange={(e) => agendarSalvar({ resumo: e.target.value })} />
           </div>
           <AcoesIA
-            system={SYSTEM_MESTRE}
+            system={SYSTEM_ESCRITOR}
             abaAtual={aba}
             rotuloAbaAtual={ABAS.find((a) => a.id === aba)?.rotulo ?? aba}
             abaEhTexto={aba !== 'imagens' && aba !== 'conteudo' && aba !== 'vinculos'}
@@ -203,7 +203,7 @@ export function CenarioModal({ cenarioId }: { cenarioId: string }) {
               const ehTexto = aba !== 'imagens' && aba !== 'conteudo' && aba !== 'vinculos'
               return {
                 dadosBase: `# Cenário\nNome: ${ent?.nome ?? ''}\nResumo: ${vEnt?.resumo ?? ''}`,
-                textoAtual: ehTexto && vEnt ? htmlParaTexto((vEnt as unknown as Record<string, string>)[aba] ?? '') : '',
+                textoAtual: ehTexto && vEnt ? htmlParaMarkdown((vEnt as unknown as Record<string, string>)[aba] ?? '') : '',
                 contexto: s.tree ? contextoDeEntidade(cenarioId, { ...s, tree: s.tree }) : '',
               }
             }}
@@ -221,7 +221,7 @@ export function CenarioModal({ cenarioId }: { cenarioId: string }) {
               return ent ? htmlParaTexto((versaoAtiva(ent) as unknown as Record<string, string>)[dest] ?? '') : ''
             }}
             onInserir={(abaDestino, textoCru, modo) => {
-              const html = textoParaHtml(textoCru)
+              const html = markdownParaHtml(textoCru)
               const atual = useApp.getState().cenarios[cenarioId]
               const base = atual ? (versaoAtiva(atual) as unknown as Record<string, string>)[abaDestino] ?? '' : ''
               const novo = modo === 'substituir' ? html : base + html

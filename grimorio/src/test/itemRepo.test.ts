@@ -1,3 +1,5 @@
+// @vitest-environment jsdom
+// (usa `textoDaEntidade`, que monta o contexto em Markdown via `DOMParser`)
 import { beforeEach, describe, expect, it } from 'vitest'
 import { criarFakeFs } from './fakeFs'
 import { VaultRepo, normalizarItem } from '../lib/vaultRepo'

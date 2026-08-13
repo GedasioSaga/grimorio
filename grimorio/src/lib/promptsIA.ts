@@ -22,26 +22,53 @@ export function promptMelhorar(rotuloAba: string): string {
   )
 }
 
-/** Descreve a imagem da entidade em tópicos curtos — só o que é visível (sem inventar). */
+/**
+ * Descreve a imagem da entidade em tópicos que o mestre usa para narrar na mesa.
+ *
+ * O alvo não é inventário do que está na foto: é matéria-prima de narração. Por isso a
+ * regra central é entregar o FATO e não a conclusão — "clima aconchegante" já é a leitura
+ * pronta da cena e não deixa nada para o mestre fazer, enquanto "luz vindo da lareira" diz
+ * onde tem sombra, e "seis camas de solteiro" responde a pergunta que o jogador vai fazer.
+ *
+ * O teto de 6 tópicos existe porque lista longa repete: sem ele o modelo cita a mesma
+ * tocha em dois pontos e enche o resto com sinônimo de "ambiente".
+ */
 export function promptDescreverImagemTopicos(): string {
   return (
-    'Observe a imagem e liste as principais características VISÍVEIS em tópicos. ' +
-    'Uma característica por linha, cada linha começando com "- ", em frases curtas. ' +
-    'Descreva apenas o que aparece na imagem (aparência, roupas, expressão, ambiente, ' +
-    'objetos, cores, clima); não invente nada que não esteja visível. ' +
-    'Responda só com a lista, sem título nem preâmbulo.'
+    'Observe a imagem e escreva de 4 a 6 tópicos para o mestre descrever esta cena na mesa. ' +
+    'Um por linha, cada linha começando com "- ".\n' +
+    'Cada tópico dá um fato CONCRETO e novo: o que é e quantos, de que material, onde está, ' +
+    'de onde vem a luz; num personagem, o que veste, o que carrega, marca no corpo, postura. ' +
+    'Nomeie a coisa ("lareira", "seis camas de solteiro"), não a categoria ("fogo", "algumas camas").\n' +
+    'NÃO entregue a sensação nem a conclusão pronta ("aconchegante", "luz quente", "clima pesado", ' +
+    '"estilo medieval"): provocar isso nos jogadores é o trabalho do mestre — dê a ele os fatos ' +
+    'que constroem a cena, não o resumo dela.\n' +
+    'NÃO repita o mesmo elemento em dois tópicos, e não deduza o que a imagem não mostra ' +
+    '(idade do lugar, se é subterrâneo, se está abandonado).\n' +
+    'Frase curta e direta, sem enchimento. Responda só com a lista, sem título nem preâmbulo.'
   )
 }
 
 /**
  * Persona da IA na escrita (worldbuilding). Irmã de `SYSTEM_MESTRE` (chatIA.ts):
  * aquela é de mesa (respostas curtas); esta é de texto trabalhado e organizado.
+ *
+ * Vale para a página de escrita E para o menu ✨ dos modais de entidade — tudo que sai
+ * dali é gravado numa aba do perfil, então é escrita, não conversa de mesa (o chat de
+ * mesa é o botão 💬, com `SYSTEM_ENTIDADE`).
+ *
+ * A lista de marcação permitida não é decorativa: ela é exatamente o que o editor sabe
+ * representar (ver `markdownParaHtml`). Tabela e bloco de código não têm nó no StarterKit
+ * e seriam gravados como texto cru, com os pipes e as crases à mostra.
  */
 export const SYSTEM_ESCRITOR = [
   'Você é um assistente de escrita e worldbuilding para RPG, em português do Brasil.',
   'Ajuda a desenvolver, revisar e organizar o material do mundo: enredo, mecânicas, lore e regras.',
   'Você recebe o contexto da campanha (personagens, cenários, vínculos); mantenha coerência e NUNCA contradiga esses fatos.',
-  'Escreva texto desenvolvido e claro; use Markdown (## títulos, listas, **negrito**) para organizar quando fizer sentido.',
+  'Escreva texto desenvolvido e claro; use Markdown para organizar quando fizer sentido.',
+  'A marcação disponível é: ## e ### para títulos, - e 1. para listas (que podem ser aninhadas),',
+  '**negrito**, *itálico*, > para citação e --- para separador.',
+  'NÃO use tabelas nem blocos de código: o editor não os representa e eles virariam texto cru na página.',
 ].join(' ')
 
 /** Reorganiza/formata o texto da página em seções, listas e títulos, sem mudar o sentido. */

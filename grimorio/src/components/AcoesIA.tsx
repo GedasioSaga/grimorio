@@ -5,6 +5,7 @@ import { modeloSalvo } from '../lib/modeloIA'
 import { garantirChaves } from '../lib/chavesIA'
 import { pedirTexto } from './dialogos'
 import { promptMelhorar, promptVersao } from '../lib/promptsIA'
+import { markdownParaHtml } from '../lib/markdownHtml'
 
 export interface AcaoIA {
   rotulo: string
@@ -35,7 +36,7 @@ interface Preview {
  * tab-aware (curta/longa/melhorar), ações específicas (via `acoes`) e pergunta livre;
  * preview antes de gravar. Agnóstico da origem: o pai injeta `system`, `contexto` e
  * `snapshot()`, e recebe o texto CRU em `onInserir` (a conversão para HTML é do pai —
- * `textoParaHtml` nos modais, Markdown + imagens na escrita).
+ * `markdownParaHtml` em todos, mais a reinserção de imagens na escrita).
  */
 export function AcoesIA({
   system,
@@ -194,7 +195,15 @@ export function AcoesIA({
         <div className="acoes-ia-overlay" onClick={() => setPreview(null)}>
           <div className="acoes-ia-preview" onClick={(e) => e.stopPropagation()}>
             <div className="acoes-ia-preview-titulo">{preview.rotulo}</div>
-            <div className="acoes-ia-preview-texto">{preview.texto}</div>
+            {/* Mostra o texto como ele VAI ficar na página, não o Markdown cru: o preview
+                existe para decidir se aceita, e decidir lendo `**` é decidir às cegas.
+                `dangerouslySetInnerHTML` é seguro pelo mesmo motivo que na BolhaChat —
+                `markdownParaHtml` escapa `&`, `<` e `>` antes de aplicar qualquer ênfase,
+                então a única marcação que sobrevive é a que ele mesmo gera. */}
+            <div
+              className="acoes-ia-preview-texto texto-md"
+              dangerouslySetInnerHTML={{ __html: markdownParaHtml(preview.texto) }}
+            />
             <div className="acoes-ia-preview-acoes">
               <button onClick={() => setPreview(null)}>Descartar</button>
               <button

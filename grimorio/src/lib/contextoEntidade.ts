@@ -1,12 +1,17 @@
 /**
  * Texto que descreve uma entidade (personagem/cenário) para o chat de IA escopado:
- * a versão ATIVA em texto plano. Lógica pura (sem UI/store/Tauri) — a camada de
- * componentes injeta a entidade; aqui só formatamos. Testável sem DOM.
+ * a versão ATIVA em Markdown. Sem UI/store/Tauri — a camada de componentes injeta a
+ * entidade; aqui só formatamos.
+ *
+ * Precisa de DOM (`htmlParaMarkdown` usa `DOMParser`), então o teste roda em jsdom. O
+ * texto plano de antes achatava as abas: a IA via a lista de equipamento como frases
+ * soltas e os subtítulos como linhas quaisquer.
  */
 import type { Cenario, Item, Personagem } from './types'
 import { versaoAtivaPersonagem } from './personagemVersao'
 import { versaoAtiva } from './cenarioVersao'
-import { htmlParaTexto, temConteudo } from './htmlTexto'
+import { temConteudo } from './htmlTexto'
+import { htmlParaMarkdown } from './markdownHtml'
 
 export type TipoEntidade = 'personagem' | 'cenario' | 'item'
 
@@ -31,7 +36,7 @@ export function SYSTEM_ENTIDADE(tipo: TipoEntidade): string {
 function montar(cabecalho: string, resumo: string, campos: [rotulo: string, html: string][]): string {
   const partes: string[] = [resumo.trim() ? `${cabecalho}\nResumo: ${resumo.trim()}` : cabecalho]
   for (const [rotulo, html] of campos) {
-    if (temConteudo(html)) partes.push(`## ${rotulo}\n${htmlParaTexto(html)}`)
+    if (temConteudo(html)) partes.push(`## ${rotulo}\n${htmlParaMarkdown(html)}`)
   }
   return partes.join('\n\n')
 }

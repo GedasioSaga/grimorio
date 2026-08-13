@@ -9,7 +9,7 @@ import { uint8ParaBase64 } from '../lib/bin'
 import { useApp } from '../state/store'
 import { AcoesIA, type AcaoIA, type ModoInserir } from './AcoesIA'
 import { SYSTEM_ESCRITOR, promptEstruturar, REGRA_MARCADORES } from '../lib/promptsIA'
-import { markdownParaHtml } from '../lib/markdownHtml'
+import { htmlParaMarkdown, markdownParaHtml } from '../lib/markdownHtml'
 import { extrairImagens, reinserirImagens } from '../lib/imagensMarcador'
 import { htmlParaTexto } from '../lib/htmlTexto'
 import { contextoDoCaminho } from '../lib/contextoIA'
@@ -202,7 +202,10 @@ function EditorInterno({ repo, slug, corpoInicial, titulo, cadernoDirRel }: {
               const s = useApp.getState()
               return {
                 dadosBase: `# Página de escrita\nTítulo: ${titulo}`,
-                textoAtual: htmlParaTexto(html),
+                // Markdown, não texto plano: "Estruturar" pede à IA para organizar em
+                // títulos e listas, e antes disto ela recebia a página com os títulos e
+                // as listas já apagados na ida. Os marcadores {{IMG:n}} passam intactos.
+                textoAtual: htmlParaMarkdown(html),
                 contexto: s.tree ? contextoDoCaminho(cadernoDirRel, { ...s, tree: s.tree }) : '',
               }
             }}

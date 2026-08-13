@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import {
+  promptDescreverImagemTopicos,
   promptEstruturar,
   promptMelhorar,
   promptVersao,
@@ -48,6 +49,46 @@ describe('SYSTEM_ESCRITOR', () => {
   })
   it('exige coerência com o contexto', () => {
     expect(SYSTEM_ESCRITOR).toMatch(/coer|contradiga|contexto/i)
+  })
+  /** Tabela e bloco de código não têm nó no StarterKit: chegariam à página como texto cru. */
+  it('proíbe a marcação que o editor não representa', () => {
+    expect(SYSTEM_ESCRITOR).toMatch(/tabela/i)
+    expect(SYSTEM_ESCRITOR).toMatch(/código/i)
+  })
+})
+
+describe('promptDescreverImagemTopicos', () => {
+  const p = promptDescreverImagemTopicos()
+
+  it('fixa a faixa de 4 a 6 tópicos', () => {
+    expect(p).toMatch(/4 a 6/)
+  })
+
+  it('pede lista com "- "', () => {
+    expect(p).toContain('"- "')
+  })
+
+  /** O defeito central: entregar a leitura pronta da cena rouba a narração do mestre. */
+  it('barra sensação e conclusão pronta', () => {
+    expect(p).toMatch(/aconchegante/i)
+    expect(p).toMatch(/sensação|conclusão/i)
+  })
+
+  it('barra repetir o mesmo elemento em dois tópicos', () => {
+    expect(p).toMatch(/não repita|NÃO repita/i)
+  })
+
+  it('barra deduzir o que a imagem não mostra', () => {
+    expect(p).toMatch(/não deduza|NÃO deduza/i)
+  })
+
+  it('pede o concreto sobre a categoria', () => {
+    expect(p).toMatch(/concreto/i)
+    expect(p).toMatch(/lareira/i)
+  })
+
+  it('pede só a lista, sem preâmbulo', () => {
+    expect(p).toMatch(/sem título nem preâmbulo/i)
   })
 })
 

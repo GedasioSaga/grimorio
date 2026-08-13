@@ -20,7 +20,7 @@ export function BolhaChat({ mensagem }: { mensagem: MensagemChat }) {
     return <div className="chat-msg chat-msg-user">{mensagem.texto}</div>
   }
   return (
-    <div className="chat-msg chat-msg-model chat-msg-md">
+    <div className="chat-msg chat-msg-model texto-md">
       <span dangerouslySetInnerHTML={{ __html: markdownParaHtml(mensagem.texto) }} />
       {mensagem.interrompida && <div className="chat-msg-interrompida">— resposta interrompida</div>}
     </div>

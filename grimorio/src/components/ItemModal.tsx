@@ -7,11 +7,11 @@ import { EditorTexto } from './EditorTexto'
 import { AbaVinculos } from './AbaVinculos'
 import { AcoesIA, type AcaoIA } from './AcoesIA'
 import { ChatEntidade } from './ChatEntidade'
-import { SYSTEM_MESTRE } from '../lib/chatIA'
 import { contextoDeEntidade } from '../lib/contextoIA'
-import { htmlParaTexto, textoParaHtml } from '../lib/htmlTexto'
+import { htmlParaTexto } from '../lib/htmlTexto'
+import { htmlParaMarkdown, markdownParaHtml } from '../lib/markdownHtml'
 import { carregarImagensIA } from '../lib/imagensIA'
-import { promptDescreverImagemTopicos } from '../lib/promptsIA'
+import { promptDescreverImagemTopicos, SYSTEM_ESCRITOR } from '../lib/promptsIA'
 import { EnquadrarRetrato } from './EnquadrarRetrato'
 import { posicaoCss } from '../lib/focoRetrato'
 
@@ -174,7 +174,7 @@ export function ItemModal({ itemId }: { itemId: string }) {
               onChange={(e) => agendarSalvar({ resumo: e.target.value })} />
           </div>
           <AcoesIA
-            system={SYSTEM_MESTRE}
+            system={SYSTEM_ESCRITOR}
             abaAtual={aba}
             rotuloAbaAtual={ABAS.find((a) => a.id === aba)?.rotulo ?? aba}
             abaEhTexto={aba !== 'vinculos'}
@@ -185,7 +185,7 @@ export function ItemModal({ itemId }: { itemId: string }) {
               const ehTexto = aba !== 'vinculos'
               return {
                 dadosBase: `# Item\nNome: ${ent?.nome ?? ''}\nResumo: ${ent?.resumo ?? ''}`,
-                textoAtual: ehTexto && ent ? htmlParaTexto((ent as unknown as Record<string, string>)[aba] ?? '') : '',
+                textoAtual: ehTexto && ent ? htmlParaMarkdown((ent as unknown as Record<string, string>)[aba] ?? '') : '',
                 contexto: s.tree ? contextoDeEntidade(itemId, { ...s, tree: s.tree }) : '',
               }
             }}
@@ -200,7 +200,7 @@ export function ItemModal({ itemId }: { itemId: string }) {
               return ent ? htmlParaTexto((ent as unknown as Record<string, string>)[dest] ?? '') : ''
             }}
             onInserir={(abaDestino, textoCru, modo) => {
-              const html = textoParaHtml(textoCru)
+              const html = markdownParaHtml(textoCru)
               const atual = useApp.getState().itens[itemId]
               const base = atual ? (atual as unknown as Record<string, string>)[abaDestino] ?? '' : ''
               agendarSalvar({ [abaDestino]: modo === 'substituir' ? html : base + html } as Partial<Item>)

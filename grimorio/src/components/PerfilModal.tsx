@@ -7,10 +7,10 @@ import { GaleriaPersonagem } from './GaleriaPersonagem'
 import { AbaVinculos } from './AbaVinculos'
 import { AcoesIA, type AcaoIA } from './AcoesIA'
 import { ChatEntidade } from './ChatEntidade'
-import { SYSTEM_MESTRE } from '../lib/chatIA'
 import { contextoDeEntidade } from '../lib/contextoIA'
-import { htmlParaTexto, textoParaHtml } from '../lib/htmlTexto'
-import { promptDescreverImagemTopicos } from '../lib/promptsIA'
+import { htmlParaTexto } from '../lib/htmlTexto'
+import { htmlParaMarkdown, markdownParaHtml } from '../lib/markdownHtml'
+import { promptDescreverImagemTopicos, SYSTEM_ESCRITOR } from '../lib/promptsIA'
 import { carregarImagensIA } from '../lib/imagensIA'
 import { BarraVersoesPersonagem } from './BarraVersoesPersonagem'
 import { EnquadrarRetrato } from './EnquadrarRetrato'
@@ -183,7 +183,7 @@ export function PerfilModal({ personagemId }: { personagemId: string }) {
               onChange={(e) => agendarSalvar({ resumo: e.target.value })} />
           </div>
           <AcoesIA
-            system={SYSTEM_MESTRE}
+            system={SYSTEM_ESCRITOR}
             abaAtual={aba}
             rotuloAbaAtual={ABAS.find((a) => a.id === aba)?.rotulo ?? aba}
             abaEhTexto={aba !== 'imagens' && aba !== 'vinculos'}
@@ -195,7 +195,7 @@ export function PerfilModal({ personagemId }: { personagemId: string }) {
               const ehTexto = aba !== 'imagens' && aba !== 'vinculos'
               return {
                 dadosBase: `# Personagem\nNome: ${ent?.nome ?? ''}\nResumo: ${vEnt?.resumo ?? ''}`,
-                textoAtual: ehTexto && vEnt ? htmlParaTexto((vEnt as unknown as Record<string, string>)[aba] ?? '') : '',
+                textoAtual: ehTexto && vEnt ? htmlParaMarkdown((vEnt as unknown as Record<string, string>)[aba] ?? '') : '',
                 contexto: s.tree ? contextoDeEntidade(personagemId, { ...s, tree: s.tree }) : '',
               }
             }}
@@ -213,7 +213,7 @@ export function PerfilModal({ personagemId }: { personagemId: string }) {
               return ent ? htmlParaTexto((versaoAtivaPersonagem(ent) as unknown as Record<string, string>)[dest] ?? '') : ''
             }}
             onInserir={(abaDestino, textoCru, modo) => {
-              const html = textoParaHtml(textoCru)
+              const html = markdownParaHtml(textoCru)
               const atual = useApp.getState().personagens[personagemId]
               const base = atual ? (versaoAtivaPersonagem(atual) as unknown as Record<string, string>)[abaDestino] ?? '' : ''
               const novo = modo === 'substituir' ? html : base + html

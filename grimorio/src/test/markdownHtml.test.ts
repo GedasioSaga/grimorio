@@ -60,6 +60,57 @@ describe('markdownParaHtml — inline', () => {
   })
 })
 
+/**
+ * O aninhamento sai da indentação RELATIVA porque o modelo não é consistente: a mesma
+ * conversa manda 2 espaços numa resposta e 4 na seguinte. Contar espaço fixo faria a
+ * sublista virar item irmão em metade dos casos — que era o comportamento antigo.
+ */
+describe('markdownParaHtml — listas aninhadas', () => {
+  it('aninha sublista com 2 espaços', () => {
+    expect(markdownParaHtml('- pai\n  - filho')).toBe('<ul><li>pai<ul><li>filho</li></ul></li></ul>')
+  })
+
+  it('aninha igual com 4 espaços', () => {
+    expect(markdownParaHtml('- pai\n    - filho')).toBe('<ul><li>pai<ul><li>filho</li></ul></li></ul>')
+  })
+
+  it('aninha com tab', () => {
+    expect(markdownParaHtml('- pai\n\t- filho')).toBe('<ul><li>pai<ul><li>filho</li></ul></li></ul>')
+  })
+
+  it('volta ao nível do pai depois da sublista', () => {
+    expect(markdownParaHtml('- a\n  - a1\n- b')).toBe(
+      '<ul><li>a<ul><li>a1</li></ul></li><li>b</li></ul>',
+    )
+  })
+
+  it('aninha três níveis', () => {
+    expect(markdownParaHtml('- a\n  - b\n    - c')).toBe(
+      '<ul><li>a<ul><li>b<ul><li>c</li></ul></li></ul></li></ul>',
+    )
+  })
+
+  it('sublista numerada dentro de lista com marcador', () => {
+    expect(markdownParaHtml('- equipamento\n  1. espada\n  2. escudo')).toBe(
+      '<ul><li>equipamento<ol><li>espada</li><li>escudo</li></ol></li></ul>',
+    )
+  })
+
+  it('lista plana continua plana (nada de aninhamento acidental)', () => {
+    expect(markdownParaHtml('- a\n- b\n- c')).toBe('<ul><li>a</li><li>b</li><li>c</li></ul>')
+  })
+
+  it('bloco inteiro indentado por igual não vira aninhamento', () => {
+    expect(markdownParaHtml('  - a\n  - b')).toBe('<ul><li>a</li><li>b</li></ul>')
+  })
+
+  it('aplica ênfase dentro do item aninhado', () => {
+    expect(markdownParaHtml('- pai\n  - **forte**')).toBe(
+      '<ul><li>pai<ul><li><strong>forte</strong></li></ul></li></ul>',
+    )
+  })
+})
+
 describe('markdownParaHtml — segurança e marcadores', () => {
   it('escapa &, < e > do texto', () => {
     expect(markdownParaHtml('a < b & c > d')).toBe('<p>a &lt; b &amp; c &gt; d</p>')
@@ -90,6 +141,7 @@ describe('markdownParaHtml — invariante de injeção', () => {
     '<img src=x onerror=alert(1)>',
     '# <img src=x onerror=alert(1)>',
     '- <iframe src="javascript:alert(1)"></iframe>',
+    '- ok\n  - <iframe src="javascript:alert(1)"></iframe>', // item aninhado passa por outro caminho
     '> <svg onload=alert(1)>',
     '[clique](javascript:alert(1))',
     '**<a href="javascript:alert(1)">x</a>**',

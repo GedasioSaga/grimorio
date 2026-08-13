@@ -28,7 +28,7 @@ import { filtrarArvoreCenarios } from '../lib/filtroCampanha'
 import { idsDaCampanha } from '../lib/vinculos'
 import { resumoAtivo, versaoAtiva } from '../lib/cenarioVersao'
 import { resumoAtivoPersonagem, versaoAtivaPersonagem } from '../lib/personagemVersao'
-import { htmlParaTexto } from '../lib/htmlTexto'
+import { htmlParaMarkdown } from '../lib/markdownHtml'
 import { editorAtivo } from '../lib/canvasAtivo'
 import { mimeDaImagem, uint8ParaBase64 } from '../lib/bin'
 
@@ -160,7 +160,7 @@ export function ChatIA({
     let notas = ''
     if (slugAtivo) {
       try {
-        notas = htmlParaTexto((await repoNotas.lerPagina(slugAtivo)).corpo)
+        notas = htmlParaMarkdown((await repoNotas.lerPagina(slugAtivo)).corpo)
       } catch {
         // página ilegível: segue sem notas
       }
@@ -193,14 +193,14 @@ export function ChatIA({
       const vp = versaoAtivaPersonagem(p)
       nome = p.nome
       retratoRel = vp.retrato
-      bloco = `Card anexado — Personagem: ${p.nome}\nResumo: ${vp.resumo}\nDescrição: ${htmlParaTexto(vp.descricao)}`
+      bloco = `Card anexado — Personagem: ${p.nome}\nResumo: ${vp.resumo}\nDescrição: ${htmlParaMarkdown(vp.descricao)}`
     } else if (shape.type === 'cenario-card') {
       const c = cenarios[(shape as CenarioCardShapeType).props.cenarioId]
       if (!c) { setErro('Entidade do card não encontrada.'); return }
       const v = versaoAtiva(c)
       nome = c.nome
       retratoRel = v.retrato
-      bloco = `Card anexado — Cenário: ${c.nome}\nResumo: ${v.resumo}\nDescrição: ${htmlParaTexto(v.descricao)}`
+      bloco = `Card anexado — Cenário: ${c.nome}\nResumo: ${v.resumo}\nDescrição: ${htmlParaMarkdown(v.descricao)}`
     } else {
       setErro('Selecione um card de personagem ou cenário.')
       return
