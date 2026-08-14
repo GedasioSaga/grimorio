@@ -12,6 +12,7 @@ import { HostDialogos } from './components/dialogos'
 import { HostDialogoCampanhas } from './components/dialogoCampanhas'
 import { HostDialogoTransformar } from './components/dialogoTransformar'
 import { HostOpcoes } from './components/Opcoes'
+import { MapaView } from './components/MapaView'
 import { checarAtualizacao } from './lib/atualizador'
 import { dirNotasDoMapa } from './lib/caminhos'
 import { CHAVE_VAULT, migrarDoLegado, migrarFiltroLegado } from './lib/cofres'
@@ -78,7 +79,11 @@ export default function App() {
           um documento, e conviver com o workspace no mesmo espaço só disputaria pixels */}
       <main className="app-main">
         {grafoAberto && <GrafoVinculos />}
-        {!grafoAberto && !aberto && <div className="app-empty">Selecione uma sessão, canvas ou a Escrita na barra lateral</div>}
+        {!grafoAberto && !aberto && <div className="app-empty">Selecione uma sessão, canvas, mapa ou a Escrita na barra lateral</div>}
+
+        {!grafoAberto && aberto?.tipo === 'mapa' && (
+          <MapaView key={aberto.caminho} caminho={aberto.caminho} nome={aberto.nome} />
+        )}
 
         {!grafoAberto && aberto?.tipo === 'canvas' && vaultPath && (
           <Workspace
