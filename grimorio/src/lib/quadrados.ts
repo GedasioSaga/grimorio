@@ -29,6 +29,27 @@ export function medidaDeCaixa(wPx: number, hPx: number, quadradoPx: number): str
   return `${emQuadrados(wPx, quadradoPx)}×${emQuadrados(hPx, quadradoPx)}`
 }
 
+/**
+ * Parseia o texto digitado no painel de propriedades (X/Y/L/A) para um número de
+ * quadrados. Aceita vírgula ou ponto como separador decimal ("6", "6,5", "6.5").
+ * Rejeita vazio, negativo e não-numérico devolvendo `null` — quem chama decide o
+ * que fazer (reverter pro valor atual sem aplicar).
+ */
+export function parseQuadrados(texto: string): number | null {
+  const limpo = texto.trim()
+  if (limpo === '') return null
+  const normalizado = limpo.replace(',', '.')
+  if (!/^\d+(\.\d+)?$/.test(normalizado)) return null
+  const valor = Number(normalizado)
+  if (!Number.isFinite(valor)) return null
+  return valor
+}
+
+/** Converte quadrados em px de página (inverso de `emQuadrados`). */
+export function quadradosParaPx(quadrados: number, quadradoPx: number): number {
+  return quadrados * quadradoPx
+}
+
 /** Distância entre as bordas mais próximas de duas caixas, em px; 0 quando sobrepõem/encostam. */
 export function distanciaEntreCaixas(a: Caixa, b: Caixa): number {
   const dx = Math.max(a.x - (b.x + b.w), b.x - (a.x + a.w), 0)

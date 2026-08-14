@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { atom, Tldraw, useValue, defaultShapeUtils, type Editor, type TLComponents, type TLEditorOptions } from 'tldraw'
+import { atom, Tldraw, useValue, defaultShapeUtils, type Editor, type TLComponents, type TLEditorOptions, type TLShapeId } from 'tldraw'
 import 'tldraw/tldraw.css'
 import { useApp } from '../state/store'
 import { useDocumentoTldraw } from './canvasDoc'
@@ -13,8 +13,14 @@ import { MedidasMapa } from './MedidasMapa'
 import { ReguasMapa } from './ReguasMapa'
 import { MapaToolbar } from './MapaToolbar'
 import { PainelCamadas } from './PainelCamadas'
+import {
+  PainelPropriedades,
+  ProvedorSelecaoPropriedades,
+  SelecaoPropriedadesBridge,
+  type SelecaoPropriedades,
+} from './PainelPropriedades'
 import { registrarEditor, desregistrarEditor } from '../lib/canvasAtivo'
-import { QUADRADO_PX } from '../lib/quadrados'
+import { QUADRADO_PX, quadradosParaPx } from '../lib/quadrados'
 import {
   alternarOculta,
   alternarTravada,
@@ -38,12 +44,17 @@ function MapaOverlay() {
     <>
       <MedidasMapa />
       <ReguasMapa />
+      <SelecaoPropriedadesBridge />
     </>
   )
 }
 
 // constante de módulo: não recriar o objeto de components a cada render
 const componentsMapa: TLComponents = { InFrontOfTheCanvas: MapaOverlay, Toolbar: MapaToolbar }
+
+// altura aproximada do PainelPropriedades (cabeçalho + 4 campos + paddings), pra empurrar
+// o PainelCamadas pra baixo sem sobrepor quando os dois estão visíveis na mesma coluna.
+const ALTURA_PAINEL_PROPRIEDADES_PX = 184
 
 export function MapaView({ caminho, nome }: { caminho: string; nome: string }) {
   const repo = useApp((s) => s.repo)
@@ -73,6 +84,11 @@ export function MapaView({ caminho, nome }: { caminho: string; nome: string }) {
   const [camadaAtivaId, setCamadaAtivaId] = useState('base')
   const camadaAtivaIdRef = useRef(camadaAtivaId)
   camadaAtivaIdRef.current = camadaAtivaId
+
+  // seleção pro PainelPropriedades: chega via SelecaoPropriedadesBridge (dentro do
+  // <Tldraw>, único lugar com useEditor/useValue) através de contexto — ver
+  // PainelPropriedades.tsx para o porquê de não dar pra passar como prop direta.
+  const [selecaoProp, setSelecaoProp] = useState<SelecaoPropriedades>(null)
 
   // identidade estável (mesmo motivo do atom acima): fica fora do componente-render,
   // criada uma única vez via useRef, e ainda reage porque lê `camadasAtom.get()` por dentro.
@@ -160,6 +176,61 @@ export function MapaView({ caminho, nome }: { caminho: string; nome: string }) {
     atualizarCamadas(moverCamada(camadasAtom.get(), id, direcao))
   }
 
+  /**
+   * Mover (X/Y): `editor.updateShape({x,y})` espera coordenadas do PARENT space do
+   * shape, não do page space — dentro de um grupo os dois divergem. Conversão feita
+   * com `editor.getPointInParentSpace(id, pagePoint)`, verificado em
+   * node_modules/@tldraw/editor/src/lib/editor/Editor.ts:5611-5620: aplica a inversa
+   * da `getShapePageTransform` do PAI, ou devolve o ponto intacto quando o pai é a
+   * própria página (`isPageId(freshShape.parentId)`) — caso simples sem grupo dá
+   * exatamente o ponto de página, então X/Y aplicam sem desvio.
+   */
+  function aoAplicarX(id: TLShapeId, quadrados: number) {
+    const editor = editorRef.current
+    if (!editor) return
+    const shape = editor.getShape(id)
+    const bounds = editor.getShapePageBounds(id)
+    if (!shape || !bounds) return
+    const local = editor.getPointInParentSpace(id, { x: quadradosParaPx(quadrados, QUADRADO_PX), y: bounds.y })
+    editor.updateShape({ id, type: shape.type, x: local.x, y: local.y })
+  }
+
+  function aoAplicarY(id: TLShapeId, quadrados: number) {
+    const editor = editorRef.current
+    if (!editor) return
+    const shape = editor.getShape(id)
+    const bounds = editor.getShapePageBounds(id)
+    if (!shape || !bounds) return
+    const local = editor.getPointInParentSpace(id, { x: bounds.x, y: quadradosParaPx(quadrados, QUADRADO_PX) })
+    editor.updateShape({ id, type: shape.type, x: local.x, y: local.y })
+  }
+
+  /**
+   * Redimensionar (L/A): não existe "setar w/h" genérico — `props.w/h` só existe em
+   * `geo`. A API real é `editor.resizeShape(id, scale, { scaleOrigin })`, verificada
+   * em Editor.ts:7568-7620 + `_scalePagePoint` (Editor.ts:7735-7752): o ponto igual a
+   * `scaleOrigin` fica fixo sob a escala. Usando `scaleOrigin` = topo-esquerda ATUAL
+   * dos page bounds, o canto superior-esquerdo não se move — só L/A mudam, X/Y ficam
+   * intocados.
+   */
+  function aoAplicarL(id: TLShapeId, quadrados: number) {
+    const editor = editorRef.current
+    if (!editor) return
+    const bounds = editor.getShapePageBounds(id)
+    if (!bounds || bounds.w <= 0) return
+    const larguraAlvoPx = quadradosParaPx(quadrados, QUADRADO_PX)
+    editor.resizeShape(id, { x: larguraAlvoPx / bounds.w, y: 1 }, { scaleOrigin: { x: bounds.x, y: bounds.y } })
+  }
+
+  function aoAplicarA(id: TLShapeId, quadrados: number) {
+    const editor = editorRef.current
+    if (!editor) return
+    const bounds = editor.getShapePageBounds(id)
+    if (!bounds || bounds.h <= 0) return
+    const alturaAlvoPx = quadradosParaPx(quadrados, QUADRADO_PX)
+    editor.resizeShape(id, { x: 1, y: alturaAlvoPx / bounds.h }, { scaleOrigin: { x: bounds.x, y: bounds.y } })
+  }
+
   async function exportar(formato: 'png' | 'svg') {
     const editor = editorRef.current
     if (!editor || !repo) return
@@ -184,6 +255,7 @@ export function MapaView({ caminho, nome }: { caminho: string; nome: string }) {
         <button onClick={() => void exportar('png')}>Exportar PNG</button>
         <button onClick={() => void exportar('svg')}>Exportar SVG</button>
       </div>
+      <ProvedorSelecaoPropriedades value={setSelecaoProp}>
       <Tldraw
         store={store}
         shapeUtils={shapeUtilsCustom}
@@ -235,6 +307,14 @@ export function MapaView({ caminho, nome }: { caminho: string; nome: string }) {
           }
         }}
       />
+      </ProvedorSelecaoPropriedades>
+      <PainelPropriedades
+        selecao={selecaoProp}
+        aoAplicarX={aoAplicarX}
+        aoAplicarY={aoAplicarY}
+        aoAplicarL={aoAplicarL}
+        aoAplicarA={aoAplicarA}
+      />
       <PainelCamadas
         camadas={camadas}
         ativaId={camadaAtivaId}
@@ -245,6 +325,7 @@ export function MapaView({ caminho, nome }: { caminho: string; nome: string }) {
         aoAlternarOculta={aoAlternarOcultaCamada}
         aoAlternarTravada={aoAlternarTravadaCamada}
         aoMover={aoMoverCamada}
+        topPx={selecaoProp ? 8 + ALTURA_PAINEL_PROPRIEDADES_PX : 8}
       />
       <div className="canvas-banners">
         {salvandoErro && <div className="canvas-salvar-erro">Falha ao salvar: {salvandoErro}</div>}

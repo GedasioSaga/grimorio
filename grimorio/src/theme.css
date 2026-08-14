@@ -221,6 +221,35 @@ button:hover { border-color: var(--dourado); color: var(--dourado-claro); }
 .mapa-toolbar .btn-icon.ativo { border-color: var(--dourado); color: var(--dourado-claro); background: var(--fundo-elevado); }
 .mapa-toolbar-divisor { width: 1px; align-self: stretch; margin: 4px 2px; background: var(--borda); }
 
+/* painel de propriedades (X/Y/L/A em quadrados): coluna direita do .mapa-wrap, fora
+   do tldraw, ACIMA do painel de camadas (mesmo padrão de layout/colapso). `top` vem
+   inline (fixo, 8px — nunca se move) e o PainelCamadas recebe `topPx` calculado no
+   MapaView pra não sobrepor quando os dois estão visíveis ao mesmo tempo. */
+.painel-propriedades {
+  position: absolute; top: 8px; right: 8px; z-index: 300;
+  width: 200px; display: flex; flex-direction: column;
+  background: var(--fundo-painel); border: 1px solid var(--borda); border-radius: 6px;
+  padding: 8px; gap: 8px;
+}
+.painel-propriedades-cabecalho {
+  display: flex; align-items: center; justify-content: space-between;
+  color: var(--dourado-claro); font-size: 12px; text-transform: uppercase; letter-spacing: 1px;
+}
+.painel-propriedades-grade { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.painel-propriedades-campo { display: flex; flex-direction: column; gap: 2px; font-size: 11px; color: var(--texto-fraco); }
+.painel-propriedades-label { padding-left: 2px; }
+.painel-propriedades-input {
+  background: var(--fundo); border: 1px solid var(--borda); border-radius: 4px;
+  color: var(--texto); padding: 4px 6px; font-size: 13px; outline: none; width: 100%;
+}
+.painel-propriedades-input:focus { border-color: var(--dourado); }
+.painel-propriedades-multi { font-size: 13px; color: var(--texto-fraco); text-align: center; padding: 4px; }
+.painel-propriedades-reabrir {
+  position: absolute; top: 8px; right: 8px; z-index: 300;
+  background: var(--fundo-painel); border: 1px solid var(--borda); border-radius: 6px;
+  padding: 6px 8px; font-size: 15px;
+}
+
 /* painel de camadas: coluna direita do .mapa-wrap, fora do tldraw */
 .painel-camadas {
   position: absolute; top: 8px; right: 8px; bottom: 8px; z-index: 300;

@@ -18,6 +18,7 @@ export function PainelCamadas({
   aoAlternarOculta,
   aoAlternarTravada,
   aoMover,
+  topPx = 8,
 }: {
   camadas: CamadaMapa[]
   ativaId: string
@@ -28,6 +29,8 @@ export function PainelCamadas({
   aoAlternarOculta: (id: string) => void
   aoAlternarTravada: (id: string) => void
   aoMover: (id: string, direcao: 'cima' | 'baixo') => void
+  /** Empurra o painel pra baixo quando o PainelPropriedades está mostrando acima (mesma coluna). */
+  topPx?: number
 }) {
   const [colapsado, setColapsado] = useState(false)
 
@@ -55,6 +58,7 @@ export function PainelCamadas({
         type="button"
         className="painel-camadas-reabrir"
         title="Mostrar camadas"
+        style={{ top: topPx }}
         onClick={() => setColapsado(false)}
       >
         🗂
@@ -63,7 +67,7 @@ export function PainelCamadas({
   }
 
   return (
-    <div className="painel-camadas">
+    <div className="painel-camadas" style={{ top: topPx }}>
       <div className="painel-camadas-cabecalho">
         <span>Camadas</span>
         <button type="button" className="btn-icon" title="Esconder painel" onClick={() => setColapsado(true)}>»</button>

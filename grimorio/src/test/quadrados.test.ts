@@ -1,5 +1,13 @@
 import { describe, expect, it } from 'vitest'
-import { distanciaEntreCaixas, emQuadrados, medidaDeCaixa, passoDaRegua, type Caixa } from '../lib/quadrados'
+import {
+  distanciaEntreCaixas,
+  emQuadrados,
+  medidaDeCaixa,
+  parseQuadrados,
+  passoDaRegua,
+  quadradosParaPx,
+  type Caixa,
+} from '../lib/quadrados'
 
 describe('emQuadrados', () => {
   it('converte px inteiro em quadrados inteiros', () => {
@@ -66,6 +74,70 @@ describe('distanciaEntreCaixas', () => {
     const a: Caixa = { x: 0, y: 0, w: 10, h: 10 }
     const b: Caixa = { x: 13, y: 14, w: 10, h: 10 }
     expect(distanciaEntreCaixas(a, b)).toBe(distanciaEntreCaixas(b, a))
+  })
+})
+
+describe('parseQuadrados', () => {
+  it('aceita número inteiro', () => {
+    expect(parseQuadrados('6')).toBe(6)
+  })
+
+  it('aceita vírgula como separador decimal', () => {
+    expect(parseQuadrados('6,5')).toBe(6.5)
+  })
+
+  it('aceita ponto como separador decimal', () => {
+    expect(parseQuadrados('6.5')).toBe(6.5)
+  })
+
+  it('aceita zero', () => {
+    expect(parseQuadrados('0')).toBe(0)
+  })
+
+  it('ignora espaços nas pontas', () => {
+    expect(parseQuadrados('  6,5  ')).toBe(6.5)
+  })
+
+  it('rejeita string vazia', () => {
+    expect(parseQuadrados('')).toBeNull()
+  })
+
+  it('rejeita string só com espaços', () => {
+    expect(parseQuadrados('   ')).toBeNull()
+  })
+
+  it('rejeita negativo', () => {
+    expect(parseQuadrados('-2')).toBeNull()
+  })
+
+  it('rejeita texto que não é número', () => {
+    expect(parseQuadrados('abc')).toBeNull()
+  })
+
+  it('aceita mais de uma casa decimal (arredondamento é responsabilidade de exibição, não do parser)', () => {
+    expect(parseQuadrados('6,55')).toBe(6.55)
+  })
+
+  it('rejeita duas vírgulas', () => {
+    expect(parseQuadrados('6,5,5')).toBeNull()
+  })
+
+  it('rejeita NaN literal', () => {
+    expect(parseQuadrados('NaN')).toBeNull()
+  })
+})
+
+describe('quadradosParaPx', () => {
+  it('converte quadrados inteiros em px', () => {
+    expect(quadradosParaPx(6, 32)).toBe(192)
+  })
+
+  it('converte quadrados fracionários em px', () => {
+    expect(quadradosParaPx(6.5, 32)).toBe(208)
+  })
+
+  it('converte zero', () => {
+    expect(quadradosParaPx(0, 32)).toBe(0)
   })
 })
 
