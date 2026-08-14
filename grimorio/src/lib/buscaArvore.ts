@@ -73,6 +73,21 @@ function ordenar<T extends { nome: string }>(achados: Achado<T>[]): Achado<T>[] 
     a.item.nome.localeCompare(b.item.nome, 'pt-BR'))
 }
 
+/**
+ * Filtra e ordena uma lista já achatada (fora da árvore da sidebar) pelo nome — usado por
+ * diálogos que escolhem uma entidade existente (ex.: nova transformação num personagem/
+ * cenário já criado, ou o cenário-pai de um subcenário novo).
+ */
+export function filtrarPorNome<T extends { nome: string }>(itens: T[], termo: string): T[] {
+  if (!normalizar(termo)) return []
+  const achados: Achado<T>[] = []
+  for (const item of itens) {
+    const pontuacao = pontuar(item.nome, termo)
+    if (pontuacao) achados.push({ item, caminhoRotulo: '', pontuacao })
+  }
+  return ordenar(achados).map((a) => a.item)
+}
+
 /** Personagens da árvore cujo nome casa com o termo, do mais parecido pro menos. */
 export function buscarPersonagens(raiz: PastaNode, termo: string): Achado<ItemRef>[] {
   if (!normalizar(termo)) return []

@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import {
   CLASSE_MEIO, CLASSE_PALAVRA, CLASSE_PREFIXO,
-  buscarCenarios, buscarPersonagens, normalizar, pontuar,
+  buscarCenarios, buscarPersonagens, filtrarPorNome, normalizar, pontuar,
 } from '../lib/buscaArvore'
 import type { CenarioNode, PastaCenarioNode, PastaNode } from '../lib/types'
 
@@ -100,6 +100,31 @@ describe('buscarPersonagens', () => {
     expect(buscarPersonagens(arvoreP, '')).toEqual([])
     expect(buscarPersonagens(arvoreP, '  ')).toEqual([])
     expect(buscarPersonagens(arvoreP, 'zzz')).toEqual([])
+  })
+})
+
+describe('filtrarPorNome', () => {
+  const itens = [{ id: '1', nome: 'Castelo Velho' }, { id: '2', nome: 'Reino de Goa: Castelo' }, { id: '3', nome: 'Alcaste' }]
+
+  it('ordena prefixo antes de palavra, e palavra antes de meio', () => {
+    expect(filtrarPorNome(itens, 'cast').map((i) => i.nome)).toEqual([
+      'Castelo Velho', 'Reino de Goa: Castelo', 'Alcaste',
+    ])
+  })
+
+  it('termo vazio devolve lista vazia', () => {
+    expect(filtrarPorNome(itens, '')).toEqual([])
+    expect(filtrarPorNome(itens, '   ')).toEqual([])
+  })
+
+  it('sem match devolve lista vazia', () => {
+    expect(filtrarPorNome(itens, 'zzz')).toEqual([])
+  })
+
+  it('não muta a lista original', () => {
+    const copia = [...itens]
+    filtrarPorNome(itens, 'cast')
+    expect(itens).toEqual(copia)
   })
 })
 
