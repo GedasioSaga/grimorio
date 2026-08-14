@@ -123,6 +123,12 @@ describe('removerCamada', () => {
     expect(r.camadas).toEqual([base])
     expect(r.idHerdeira).toBe('base')
   })
+
+  it('id inexistente é no-op (lista intacta, herdeira é a primeira)', () => {
+    const r = removerCamada(duas, 'fantasma')
+    expect(r.camadas).toEqual(duas)
+    expect(r.idHerdeira).toBe('base')
+  })
 })
 
 describe('alternarOculta / alternarTravada', () => {
@@ -166,5 +172,10 @@ describe('moverCamada', () => {
   it('mover a última para baixo é no-op', () => {
     const r = moverCamada(tres, 'rotulos', 'baixo')
     expect(r.map((c) => c.id)).toEqual(['base', 'paredes', 'rotulos'])
+  })
+
+  it('id inexistente é no-op (mesma referência de lista)', () => {
+    const r = moverCamada(tres, 'fantasma', 'cima')
+    expect(r).toBe(tres)
   })
 })

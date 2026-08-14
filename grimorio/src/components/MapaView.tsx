@@ -158,6 +158,14 @@ export function MapaView({ caminho, nome }: { caminho: string; nome: string }) {
    * shapes da camada via `editor.updateShapes([{id, type, isLocked}])` — o MESMO
    * mecanismo que `editor.toggleLock` usa por trás (verificado em
    * node_modules/@tldraw/editor/src/lib/editor/Editor.ts:6660-6671).
+   *
+   * FIX (review): destravar em massa não pode reverter um travamento MANUAL que o
+   * usuário fez num shape individual (cadeado do próprio tldraw, fora do painel de
+   * camadas). Por isso `meta.travadoPelaCamada: true` marca só os shapes que ESTE
+   * toggle travou (os que já chegaram travados ficam sem marca — preservados como
+   * estão); destravar só mexe em quem tem a marca, e a remove ao destravar. A mesma
+   * marca é carimbada no side-effect de criação (`onMount`, abaixo) quando a forma
+   * nasce numa camada já travada — senão ela ficaria travada "sem dono" para sempre.
    */
   function aoAlternarTravadaCamada(id: string) {
     const novo = alternarTravada(camadasAtom.get(), id)
@@ -165,8 +173,32 @@ export function MapaView({ caminho, nome }: { caminho: string; nome: string }) {
     const editor = editorRef.current
     if (editor && camada) {
       const daCamada = editor.getCurrentPageShapes().filter((s) => camadaDoShape(s.meta, novo).id === id)
-      if (daCamada.length) {
-        editor.updateShapes(daCamada.map((s) => ({ id: s.id, type: s.type, isLocked: camada.travada })))
+      if (camada.travada) {
+        const aTravar = daCamada.filter((s) => !s.isLocked)
+        if (aTravar.length) {
+          editor.updateShapes(
+            aTravar.map((s) => ({
+              id: s.id,
+              type: s.type,
+              isLocked: true,
+              meta: { ...s.meta, travadoPelaCamada: true },
+            })),
+          )
+        }
+      } else {
+        const aDestravar = daCamada.filter((s) => (s.meta as Record<string, unknown>).travadoPelaCamada === true)
+        if (aDestravar.length) {
+          editor.updateShapes(
+            aDestravar.map((s) => {
+              // `delete` via cast local só pra tirar a marca; `metaRestante` continua
+              // tipado como `s.meta` (JsonObject) — sem isso o updateShapes recusa o
+              // objeto (meta vira Record<string, unknown>, incompatível com JsonObject).
+              const metaRestante = { ...s.meta }
+              delete (metaRestante as Record<string, unknown>).travadoPelaCamada
+              return { id: s.id, type: s.type, isLocked: false, meta: metaRestante }
+            }),
+          )
+        }
       }
     }
     atualizarCamadas(novo)
@@ -286,7 +318,10 @@ export function MapaView({ caminho, nome }: { caminho: string; nome: string }) {
            * só reage). Shapes coladas/remotas já com `meta.camada` não são sobrescritas.
            * Também carimba `isLocked` de saída quando a camada ativa já está travada —
            * sem isso, uma forma criada numa camada travada nasceria destravada até o
-           * próximo travar/destravar.
+           * próximo travar/destravar. Ganha também `meta.travadoPelaCamada: true` nesse
+           * caso — mesma marca de `aoAlternarTravadaCamada` — senão o destravar em
+           * massa não saberia que foi a camada (e não um travamento manual do usuário)
+           * quem travou essa forma, e ela ficaria presa travada para sempre.
            */
           const cancelarSideEffect = editor.sideEffects.registerBeforeCreateHandler('shape', (shape, source) => {
             if (source !== 'user') return shape
@@ -294,10 +329,11 @@ export function MapaView({ caminho, nome }: { caminho: string; nome: string }) {
             if (typeof metaAtual.camada === 'string') return shape
             const ativa = camadaAtivaIdRef.current
             const camadaAtiva = camadasAtom.get().find((c) => c.id === ativa)
+            const travadaPelaCamada = !!camadaAtiva?.travada
             return {
               ...shape,
-              meta: { ...shape.meta, camada: ativa },
-              isLocked: camadaAtiva?.travada ? true : shape.isLocked,
+              meta: { ...shape.meta, camada: ativa, ...(travadaPelaCamada ? { travadoPelaCamada: true } : {}) },
+              isLocked: travadaPelaCamada ? true : shape.isLocked,
             }
           })
           return () => {
