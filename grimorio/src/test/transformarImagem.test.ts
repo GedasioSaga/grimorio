@@ -157,6 +157,12 @@ describe('novaVersaoPersonagemComRetrato', () => {
     novaVersaoPersonagemComRetrato(p, 'Forma X', 'x.png')
     expect(p.versoes).toHaveLength(2)
   })
+
+  it('aceita id de versão fixado pelo chamador (retrato já foi copiado com esse id no nome)', () => {
+    const r = novaVersaoPersonagemComRetrato(personagem(), 'Forma X', 'x.png', 'id-fixo')
+    expect(r.versoes[2].id).toBe('id-fixo')
+    expect(r.versaoAtivaId).toBe('id-fixo')
+  })
 })
 
 describe('novaVersaoCenarioComRetrato', () => {
@@ -194,5 +200,11 @@ describe('novaVersaoCenarioComRetrato', () => {
     const c = cenario()
     novaVersaoCenarioComRetrato(c, 'Noite', 'x.png')
     expect(c.versoes).toHaveLength(2)
+  })
+
+  it('aceita id de versão fixado pelo chamador', () => {
+    const r = novaVersaoCenarioComRetrato(cenario(), 'Noite', 'x.png', 'id-fixo')
+    expect(r.versoes[2].id).toBe('id-fixo')
+    expect(r.versaoAtivaId).toBe('id-fixo')
   })
 })

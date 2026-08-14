@@ -70,12 +70,19 @@ export function destinoRetrato(
  * nome e retrato novos, e a torna ativa. Espelha `adicionarVersaoPersonagem` do store
  * (mesmo padrão de clone), mas o retrato já nasce setado — o fluxo de "transformar
  * imagem" não tem um segundo passo para preenchê-lo depois. Pura: não lê/grava disco.
+ *
+ * `idVersao` é opcional (default aleatório) para o caso comum, mas o chamador pode
+ * fixá-lo: `destinoRetrato` embute o id da versão no nome do arquivo, então quem copia a
+ * imagem pro cofre precisa saber o id ANTES de chamar esta função (senão o retrato salvo
+ * não bate com o id gerado aqui).
  */
-export function novaVersaoPersonagemComRetrato(p: Personagem, nomeVersao: string, retrato: string): Personagem {
+export function novaVersaoPersonagemComRetrato(
+  p: Personagem, nomeVersao: string, retrato: string, idVersao: string = crypto.randomUUID(),
+): Personagem {
   const base = versaoAtivaPersonagem(p)
   const nova: VersaoPersonagem = {
     ...base,
-    id: crypto.randomUUID(),
+    id: idVersao,
     nome: nomeVersao,
     retrato,
     imagens: base.imagens.map((i) => ({ ...i })), // cópia por valor: a versão nova não deve arrastar a lista da base
@@ -87,11 +94,13 @@ export function novaVersaoPersonagemComRetrato(p: Personagem, nomeVersao: string
  * Como `novaVersaoPersonagemComRetrato`, para CENÁRIO — sem espelho de nome no topo:
  * versão de cenário tem nome próprio (ex. "Noite"), não é a mesma forma que o personagem.
  */
-export function novaVersaoCenarioComRetrato(c: Cenario, nomeVersao: string, retrato: string): Cenario {
+export function novaVersaoCenarioComRetrato(
+  c: Cenario, nomeVersao: string, retrato: string, idVersao: string = crypto.randomUUID(),
+): Cenario {
   const base = versaoAtiva(c)
   const nova: VersaoCenario = {
     ...base,
-    id: crypto.randomUUID(),
+    id: idVersao,
     nome: nomeVersao,
     retrato,
     imagens: base.imagens.map((i) => ({ ...i })),
