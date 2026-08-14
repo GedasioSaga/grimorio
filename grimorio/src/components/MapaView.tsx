@@ -1,10 +1,11 @@
-import { useRef } from 'react'
+import { useRef, useState } from 'react'
 import { Tldraw, defaultShapeUtils, type Editor, type TLComponents } from 'tldraw'
 import 'tldraw/tldraw.css'
 import { useApp } from '../state/store'
 import { useDocumentoTldraw } from './canvasDoc'
 import { criarHandlersDeDrop } from './dropsDeEntidade'
 import { exportarCanvas } from './exportarCanvas'
+import { registrarAtalhos } from './atalhosCanvas'
 import { CharacterCardShapeUtil } from './CharacterCardShape'
 import { CenarioCardShapeUtil } from './CenarioCardShape'
 import { ItemCardShapeUtil } from './ItemCardShape'
@@ -26,6 +27,8 @@ export function MapaView({ caminho, nome }: { caminho: string; nome: string }) {
   const editorRef = useRef<Editor | null>(null)
   const { store, erro, salvandoErro } = useDocumentoTldraw(caminho, shapeUtilsDoStore)
   const { aoArrastarSobre, aoSoltar } = criarHandlersDeDrop(editorRef, vaultPath)
+  const [copiaOk, setCopiaOk] = useState(false)
+  const [copiaErro, setCopiaErro] = useState<string | null>(null)
 
   async function exportar(formato: 'png' | 'svg') {
     const editor = editorRef.current
@@ -62,11 +65,26 @@ export function MapaView({ caminho, nome }: { caminho: string; nome: string }) {
           // grade ligada por padrão: é a régua do mapa (1 quadrado = QUADRADO_PX)
           editor.updateInstanceState({ isGridMode: true })
           editor.updateDocumentSettings({ gridSize: QUADRADO_PX })
-          return () => desregistrarEditor(editor)
+          const cancelarAtalhos = registrarAtalhos(editor, {
+            aoCopiar() {
+              setCopiaOk(true)
+              setTimeout(() => setCopiaOk(false), 1500)
+            },
+            aoFalharCopia(erro) {
+              setCopiaErro(erro)
+              setTimeout(() => setCopiaErro(null), 4000)
+            },
+          })
+          return () => {
+            desregistrarEditor(editor)
+            cancelarAtalhos()
+          }
         }}
       />
       <div className="canvas-banners">
         {salvandoErro && <div className="canvas-salvar-erro">Falha ao salvar: {salvandoErro}</div>}
+        {copiaOk && <div className="canvas-copia-ok">Imagem copiada</div>}
+        {copiaErro && <div className="canvas-salvar-erro">Falha ao copiar: {copiaErro}</div>}
       </div>
     </div>
   )
