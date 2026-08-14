@@ -219,13 +219,32 @@ button:hover { border-color: var(--dourado); color: var(--dourado-claro); }
 .char-card-sem-descricao { font-size: calc(13px * var(--card-fe, 1)); color: var(--texto-fraco); font-style: italic; }
 .char-card-descricao { font-size: calc(14px * var(--card-fe, 1)); color: var(--texto); line-height: 1.45; }
 .char-card-descricao p { margin: 0 0 5px; }
-.char-card-descricao ul, .char-card-descricao ol { margin: 0 0 5px; padding-left: 18px; }
+/* mesmo marcador "-" do modal (.perfil-corpo): o CSS do tldraw reseta o marcador nativo
+   do browser dentro do card, e a lista aparecia sem traço nenhum — item colado no texto */
+.char-card-descricao ul, .char-card-descricao ol { list-style: none; margin: 0 0 5px; padding-left: 0; }
+.char-card-descricao li { position: relative; padding-left: 1.1em; }
+.char-card-descricao ul > li::before { content: "-"; position: absolute; left: 0; color: var(--texto-fraco); }
+/* numerada mantém o número: lá a ordem é a informação */
+.char-card-descricao ol { counter-reset: item-ol; }
+.char-card-descricao ol > li { counter-increment: item-ol; }
+.char-card-descricao ol > li::before { content: counter(item-ol) "."; position: absolute; left: 0; color: var(--texto-fraco); }
+/* sublista recua a partir do texto do pai */
+.char-card-descricao li > ul, .char-card-descricao li > ol { margin: 3px 0 0; padding-left: 1.1em; }
+.char-card-descricao li p { margin: 0; }
 .char-card-descricao h2, .char-card-descricao h3 { font-family: var(--serif); font-size: calc(15px * var(--card-fe, 1)); color: var(--dourado-claro); margin: 5px 0 3px; }
 /* edição inline no card: mesma tipografia da leitura + moldura sutil indicando modo edição */
 .char-card-editor { border: 1px solid var(--dourado); border-radius: 4px; padding: 4px 6px; cursor: text; }
 .char-card-editor .tiptap { outline: none; font-size: calc(14px * var(--card-fe, 1)); color: var(--texto); line-height: 1.45; min-height: 40px; }
 .char-card-editor .tiptap p { margin: 0 0 5px; }
-.char-card-editor .tiptap ul, .char-card-editor .tiptap ol { margin: 0 0 5px; padding-left: 18px; }
+/* leitura e edição com o mesmo marcador: entrar no editor não pode trocar "-" por nada */
+.char-card-editor .tiptap ul, .char-card-editor .tiptap ol { list-style: none; margin: 0 0 5px; padding-left: 0; }
+.char-card-editor .tiptap li { position: relative; padding-left: 1.1em; }
+.char-card-editor .tiptap ul > li::before { content: "-"; position: absolute; left: 0; color: var(--texto-fraco); }
+.char-card-editor .tiptap ol { counter-reset: item-ol; }
+.char-card-editor .tiptap ol > li { counter-increment: item-ol; }
+.char-card-editor .tiptap ol > li::before { content: counter(item-ol) "."; position: absolute; left: 0; color: var(--texto-fraco); }
+.char-card-editor .tiptap li > ul, .char-card-editor .tiptap li > ol { margin: 3px 0 0; padding-left: 1.1em; }
+.char-card-editor .tiptap li p { margin: 0; }
 .char-card-editor .tiptap h2, .char-card-editor .tiptap h3 { font-family: var(--serif); font-size: calc(15px * var(--card-fe, 1)); color: var(--dourado-claro); margin: 5px 0 3px; }
 
 .card-fonte-ctrl { display: inline-flex; gap: 4px; margin-top: 6px; }
