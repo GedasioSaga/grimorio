@@ -1,5 +1,5 @@
 import { useRef } from 'react'
-import { Tldraw, defaultShapeUtils, type Editor } from 'tldraw'
+import { Tldraw, defaultShapeUtils, type Editor, type TLComponents } from 'tldraw'
 import 'tldraw/tldraw.css'
 import { useApp } from '../state/store'
 import { useDocumentoTldraw } from './canvasDoc'
@@ -8,6 +8,7 @@ import { exportarCanvas } from './exportarCanvas'
 import { CharacterCardShapeUtil } from './CharacterCardShape'
 import { CenarioCardShapeUtil } from './CenarioCardShape'
 import { ItemCardShapeUtil } from './ItemCardShape'
+import { MedidasMapa } from './MedidasMapa'
 import { registrarEditor, desregistrarEditor } from '../lib/canvasAtivo'
 
 /** Lado do quadrado da grade, em px de página. 1 quadrado = 1 célula de mapa de mesa. */
@@ -16,6 +17,9 @@ export const QUADRADO_PX = 32
 // mesmos card-shapes do canvas: mapa aceita drop de personagem/cenário/item
 const shapeUtilsCustom = [CharacterCardShapeUtil, CenarioCardShapeUtil, ItemCardShapeUtil]
 const shapeUtilsDoStore = [...defaultShapeUtils, ...shapeUtilsCustom]
+
+// constante de módulo: não recriar o objeto de components a cada render
+const componentsMapa: TLComponents = { InFrontOfTheCanvas: MedidasMapa }
 
 export function MapaView({ caminho, nome }: { caminho: string; nome: string }) {
   const repo = useApp((s) => s.repo)
@@ -51,6 +55,7 @@ export function MapaView({ caminho, nome }: { caminho: string; nome: string }) {
       <Tldraw
         store={store}
         shapeUtils={shapeUtilsCustom}
+        components={componentsMapa}
         onMount={(editor) => {
           registrarEditor(editor)
           editorRef.current = editor

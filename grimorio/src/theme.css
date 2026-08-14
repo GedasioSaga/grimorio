@@ -168,6 +168,13 @@ button:hover { border-color: var(--dourado); color: var(--dourado-claro); }
   background: var(--fundo-painel); border: 1px solid var(--dourado); color: var(--dourado-claro);
   border-radius: 6px; padding: 6px 12px; font-size: 12px;
 }
+.mapa-medida {
+  position: absolute; z-index: 300;
+  font-size: 12px; color: var(--texto);
+  background: color-mix(in srgb, var(--fundo) 85%, transparent);
+  border: 1px solid var(--borda); border-radius: 4px; padding: 2px 6px;
+  pointer-events: none; white-space: nowrap;
+}
 
 /* ---- cartão de personagem ---- */
 .char-card {
