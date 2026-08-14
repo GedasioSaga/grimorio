@@ -11,15 +11,14 @@ interface Tique {
 }
 
 /**
- * Réguas graduadas em quadrados (topo + esquerda) do mapa, com botão de
- * liga/desliga da grade no canto onde elas se cruzam.
+ * Réguas graduadas em quadrados (topo + esquerda) do mapa. O liga/desliga da
+ * grade mora na `MapaToolbar` (fix da revisão — ver JSDoc do canto abaixo).
  *
  * Renderizado via `components.InFrontOfTheCanvas` (mesmo slot do
  * `MedidasMapa`, combinados em `MapaOverlay` no MapaView) — esse slot vive
  * em espaço de tela (`.tl-canvas__in-front`, `pointer-events: none` no
  * container; verificado em node_modules/@tldraw/editor/editor.css:317-322),
- * por isso as posições dos tiques usam `editor.pageToViewport(...)` e o
- * botão da grade precisa de `pointer-events: auto` explícito.
+ * por isso as posições dos tiques usam `editor.pageToViewport(...)`.
  */
 export function ReguasMapa() {
   const editor = useEditor()
@@ -30,7 +29,6 @@ export function ReguasMapa() {
       const zoom = editor.getZoomLevel()
       const bounds = editor.getViewportPageBounds()
       const { tique, rotulo } = passoDaRegua(zoom)
-      const isGridMode = editor.getInstanceState().isGridMode
 
       function tiquesDoEixo(min: number, max: number): Tique[] {
         const primeiro = Math.floor(min / QUADRADO_PX / tique) * tique
@@ -51,7 +49,7 @@ export function ReguasMapa() {
         posTela: editor.pageToViewport({ x: 0, y: t.quadrado * QUADRADO_PX }).y,
       }))
 
-      return { tiquesX, tiquesY, isGridMode }
+      return { tiquesX, tiquesY }
     },
     [editor],
   )
@@ -63,7 +61,11 @@ export function ReguasMapa() {
           <div
             key={t.quadrado}
             className={`mapa-regua-tique${t.rotulo ? ' com-rotulo' : ''}`}
-            style={{ left: t.posTela }}
+            // a barra começa em screen-x = ESPESSURA_PX (`left: ESPESSURA_PX` acima), e
+            // `left` aqui é relativo à PRÓPRIA barra (ancestral posicionado mais próximo)
+            // — sem subtrair o offset, todo tique nasce ESPESSURA_PX à direita da posição
+            // real (fix da revisão: tiques ~20px desalinhados da grade).
+            style={{ left: t.posTela - ESPESSURA_PX }}
           >
             {t.rotulo && <span className="mapa-regua-rotulo">{t.quadrado}</span>}
           </div>
@@ -74,21 +76,17 @@ export function ReguasMapa() {
           <div
             key={t.quadrado}
             className={`mapa-regua-tique vertical${t.rotulo ? ' com-rotulo' : ''}`}
-            style={{ top: t.posTela }}
+            style={{ top: t.posTela - ESPESSURA_PX }}
           >
             {t.rotulo && <span className="mapa-regua-rotulo">{t.quadrado}</span>}
           </div>
         ))}
       </div>
-      <button
-        type="button"
-        className="mapa-regua-canto"
-        style={{ width: ESPESSURA_PX, height: ESPESSURA_PX }}
-        title={dados.isGridMode ? 'Esconder grade' : 'Mostrar grade'}
-        onClick={() => editor.updateInstanceState({ isGridMode: !dados.isGridMode })}
-      >
-        {dados.isGridMode ? '▦' : '▢'}
-      </button>
+      {/* canto de interseção das réguas: só preenchimento passivo agora — o botão de
+          liga/desliga da grade mudou pra MapaToolbar.tsx (fix da revisão: aqui ele ficava
+          atrás do MainMenu nativo do tldraw, `.tlui-menu-zone` em top:0/left:0 com
+          z-index maior que o da régua). */}
+      <div className="mapa-regua-canto" style={{ width: ESPESSURA_PX, height: ESPESSURA_PX }} aria-hidden="true" />
     </>
   )
 }

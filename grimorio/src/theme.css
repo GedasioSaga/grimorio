@@ -200,13 +200,12 @@ button:hover { border-color: var(--dourado); color: var(--dourado-claro); }
 .mapa-regua-tique.vertical .mapa-regua-rotulo {
   top: 3px; left: 2px; transform: rotate(-90deg); transform-origin: left top;
 }
+/* preenchimento passivo da junção das réguas — o liga/desliga da grade mudou pra
+   MapaToolbar (fix da revisão: aqui ficava atrás do MainMenu nativo do tldraw). */
 .mapa-regua-canto {
   position: absolute; top: 0; left: 0; z-index: 260;
-  pointer-events: auto;
   background: var(--fundo); border: 1px solid var(--borda); border-radius: 0 0 4px 0;
-  color: var(--texto-fraco); font-size: 11px; line-height: 1; padding: 0;
 }
-.mapa-regua-canto:hover { color: var(--dourado-claro); border-color: var(--dourado); }
 
 /* toolbar própria do mapa (slot components.Toolbar): o pai (.tlui-layout__bottom__main)
    já centraliza embaixo com display:flex — só falta reativar pointer-events, que o

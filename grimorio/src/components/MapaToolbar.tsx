@@ -68,6 +68,16 @@ const STYLE_PROPS_POR_NOME: Record<string, StyleProp<string>> = {
  * decisão documentada em `src/lib/paletaMapa.ts`). `groupShapes` só agrupa quando a
  * ferramenta corrente é `select` (`Editor.ts:8287-8288` — "Only group when the
  * select tool is active"), por isso o `run` troca para `select` antes de agrupar.
+ *
+ * ## Liga/desliga da grade (fix de review — Fatia 3, Task B)
+ *
+ * Morava num botão no canto de interseção das réguas (`ReguasMapa.tsx`), mas esse
+ * canto fica em `top:0; left:0` com `z-index:260` — ATRÁS do MainMenu nativo do
+ * tldraw (`.tlui-menu-zone`, mesmo canto, `z-index:300`), que capturava o clique
+ * primeiro. Movido pra cá: botão de AÇÃO (não muda ferramenta), estado espelhado de
+ * `editor.getInstanceState().isGridMode` via `useValue` (mesmo padrão de `toolId`/
+ * `geoAtual` acima), alternado com `editor.updateInstanceState({ isGridMode: !atual })`
+ * — a mesma chamada que `MapaView.tsx` usa para ligar a grade por padrão no `onMount`.
  */
 export function MapaToolbar() {
   const editor = useEditor()
@@ -78,6 +88,7 @@ export function MapaToolbar() {
     () => editor.getStyleForNextShape(GeoShapeGeoStyle),
     [editor],
   )
+  const isGridMode = useValue('mapa-toolbar-grade', () => editor.getInstanceState().isGridMode, [editor])
   // Elemento da paleta cujo estado corrente bate POR INTEIRO (geo + todos os estilos).
   // Tem precedência sobre Retângulo/Elipse — ver JSDoc "Colisão entre grupos".
   const elementoPaletaAtivo = useValue(
@@ -99,6 +110,10 @@ export function MapaToolbar() {
 
   function selecionarFerramenta(id: string) {
     editor.setCurrentTool(id)
+  }
+
+  function alternarGrade() {
+    editor.updateInstanceState({ isGridMode: !editor.getInstanceState().isGridMode })
   }
 
   function selecionarGeo(geo: 'rectangle' | 'ellipse') {
@@ -191,6 +206,14 @@ export function MapaToolbar() {
           {b.icone}
         </button>
       ))}
+      <button
+        type="button"
+        className={`btn-icon${isGridMode ? ' ativo' : ''}`}
+        title={isGridMode ? 'Esconder grade' : 'Mostrar grade'}
+        onClick={alternarGrade}
+      >
+        ⊞
+      </button>
       <div className="mapa-toolbar-divisor" aria-hidden="true" />
       {ELEMENTOS_PALETA.map((elemento) => (
         <button
