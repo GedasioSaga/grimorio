@@ -342,6 +342,52 @@ describe('arquivo local mudou durante o ciclo', () => {
     expect(resultado.falhas).toEqual([])
     expect(await fs.readText(`${RAIZ}/${A}`)).toBe(conteudoDe('f1'))
   })
+
+  it('subir não envia o arquivo divergente: vira falha', async () => {
+    // Sem a guarda, o envio sobe os bytes NOVOS do disco com o hash VELHO da varredura no
+    // manifesto. O ciclo seguinte lê "local mudou × remoto mudou" num arquivo que ninguém
+    // editou em outra máquina e fabrica uma cópia de conflito — a cada ciclo, enquanto o
+    // usuário estiver editando (o autosave do canvas grava fora de `descarregarFilas`).
+    const { fs, fake, executar } = montar({
+      anterior: manifesto({ arquivos: { [A]: ent() } }),
+      local: { [A]: loc({ hash: shaDe(SNAPSHOT) }) },
+      remoto: { [A]: rem() },
+    })
+    await fs.writeTextAtomic(`${RAIZ}/${A}`, EDICAO_DURANTE_O_CICLO)
+
+    const resultado = await executar([{ tipo: 'subir', caminho: A }])
+
+    expect(fake.enviados).toEqual([])
+    expect(resultado.falhas[0]?.erro).toContain('mudou no disco durante o ciclo')
+    // a entrada anterior sobrevive: o próximo ciclo varre de novo e sobe o conteúdo assentado
+    expect(resultado.manifesto.arquivos[A]).toEqual(ent())
+  })
+
+  it('subir com arquivo intacto no disco segue normal', async () => {
+    const { fs, fake, executar } = montar({ local: { [A]: loc({ hash: shaDe(SNAPSHOT) }) } })
+    await fs.writeTextAtomic(`${RAIZ}/${A}`, SNAPSHOT)
+
+    const resultado = await executar([{ tipo: 'subir', caminho: A }])
+
+    expect(resultado.falhas).toEqual([])
+    expect(fake.enviados).toHaveLength(1)
+  })
+
+  it('conflito com arquivo divergente adia ANTES de preservar: nenhuma cópia nasce', async () => {
+    // A ordem importa: preservar primeiro e desistir na transferência deixava o conflito de
+    // pé E uma cópia nova no cofre a cada ciclo — a fileira de "(conflito) …" na sidebar.
+    const { fs, fake, conflitos, executar } = montar({
+      local: { [A]: loc({ hash: shaDe(SNAPSHOT) }) },
+      remoto: { [A]: rem() },
+    })
+    await fs.writeTextAtomic(`${RAIZ}/${A}`, EDICAO_DURANTE_O_CICLO)
+
+    const resultado = await executar([{ tipo: 'conflito', caminho: A, vencedor: 'local' }])
+
+    expect(conflitos.preservados).toEqual([])
+    expect(fake.chamadas).toEqual([])
+    expect(resultado.falhas[0]?.erro).toContain('mudou no disco durante o ciclo')
+  })
 })
 
 describe('registrar', () => {

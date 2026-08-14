@@ -344,12 +344,17 @@ async function transformarImagemEmEntidade(editor: Editor, shape: TLImageShape) 
 export function CanvasView({ caminho, nome }: { caminho: string; nome: string }) {
   const repo = useApp((s) => s.repo)
   const vaultPath = useApp((s) => s.vaultPath)
+  const recargasDoDisco = useApp((s) => s.recargasDoDisco)
   const [store, setStore] = useState<TLStore | null>(null)
   const [erro, setErro] = useState<string | null>(null)
   const [salvandoErro, setSalvandoErro] = useState<string | null>(null)
   const [copiaOk, setCopiaOk] = useState(false)
   const [copiaErro, setCopiaErro] = useState<string | null>(null)
   const editorRef = useRef<Editor | null>(null)
+  // Ref e não `let` do efeito: o efeito de releitura precisa saber se há gravação pendente.
+  const timerAutosaveRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  // Valor do mount, para a releitura ignorar a primeira rodada do efeito (o load inicial já leu).
+  const recargasVistasRef = useRef(recargasDoDisco)
 
   // carrega o snapshot do arquivo e monta o store
   useEffect(() => {
@@ -377,7 +382,6 @@ export function CanvasView({ caminho, nome }: { caminho: string; nome: string })
     if (!store || !repo) return
     const storeAtual = store
     const repoAtual = repo
-    let timer: ReturnType<typeof setTimeout> | null = null
 
     async function salvar() {
       const { document, session } = getSnapshot(storeAtual)
@@ -391,9 +395,9 @@ export function CanvasView({ caminho, nome }: { caminho: string; nome: string })
 
     const unlisten = store.listen(
       () => {
-        if (timer) clearTimeout(timer)
-        timer = setTimeout(() => {
-          timer = null
+        if (timerAutosaveRef.current) clearTimeout(timerAutosaveRef.current)
+        timerAutosaveRef.current = setTimeout(() => {
+          timerAutosaveRef.current = null
           void salvar()
         }, AUTOSAVE_DEBOUNCE_MS)
       },
@@ -402,15 +406,48 @@ export function CanvasView({ caminho, nome }: { caminho: string; nome: string })
 
     return () => {
       unlisten()
-      if (timer) {
+      if (timerAutosaveRef.current) {
         // havia gravação pendente: cancela o debounce e grava já.
         // VaultRepo serializa escritas por caminho, então fire-and-forget é seguro.
-        clearTimeout(timer)
-        timer = null
+        clearTimeout(timerAutosaveRef.current)
+        timerAutosaveRef.current = null
         salvar().catch((e) => console.error('Falha no save final do canvas:', e))
       }
     }
   }, [store, repo, caminho])
+
+  /**
+   * Relê o arquivo quando o sync escreveu no cofre (`recargasDoDisco` subiu). O snapshot vive
+   * num store do tldraw que `recarregarDoDisco` não alcança: sem isto, o canvas aberto continua
+   * mostrando o retrato de antes do download, e a PRÓXIMA edição grava esse retrato velho por
+   * cima do arquivo baixado — divergência real, que vira cópia de conflito.
+   *
+   * Com autosave pendente a releitura é pulada: a edição do usuário ainda não chegou ao disco,
+   * e reler agora a descartaria. Local vence — a mesma escolha de `recarregarDoDisco` para as
+   * entidades, e o motor de sync trata a divergência honestamente no ciclo seguinte.
+   *
+   * `mergeRemoteChanges` marca a carga como `source: 'remote'`: o listener do autosave (acima,
+   * `source: 'user'`) não dispara, senão cada releitura regravaria o arquivo recém-baixado.
+   */
+  useEffect(() => {
+    if (recargasDoDisco === recargasVistasRef.current) return
+    recargasVistasRef.current = recargasDoDisco
+    if (!store || !repo || timerAutosaveRef.current !== null) return
+    const storeAtual = store
+    let ativo = true
+    repo
+      .lerCanvasDoc(caminho)
+      .then((doc) => {
+        if (!ativo || !doc.documento) return
+        storeAtual.mergeRemoteChanges(() => {
+          loadSnapshot(storeAtual, doc.documento as Partial<TLEditorSnapshot>)
+        })
+      })
+      .catch((e) => console.warn('Canvas: o cofre mudou no disco mas não deu para reler:', e))
+    return () => {
+      ativo = false
+    }
+  }, [recargasDoDisco, store, repo, caminho])
 
   async function exportar(formato: 'png' | 'svg') {
     const editor = editorRef.current
