@@ -9,6 +9,7 @@ import { CharacterCardShapeUtil } from './CharacterCardShape'
 import { CenarioCardShapeUtil } from './CenarioCardShape'
 import { ItemCardShapeUtil } from './ItemCardShape'
 import { MedidasMapa } from './MedidasMapa'
+import { MapaToolbar } from './MapaToolbar'
 import { registrarEditor, desregistrarEditor } from '../lib/canvasAtivo'
 
 /** Lado do quadrado da grade, em px de página. 1 quadrado = 1 célula de mapa de mesa. */
@@ -19,7 +20,7 @@ const shapeUtilsCustom = [CharacterCardShapeUtil, CenarioCardShapeUtil, ItemCard
 const shapeUtilsDoStore = [...defaultShapeUtils, ...shapeUtilsCustom]
 
 // constante de módulo: não recriar o objeto de components a cada render
-const componentsMapa: TLComponents = { InFrontOfTheCanvas: MedidasMapa }
+const componentsMapa: TLComponents = { InFrontOfTheCanvas: MedidasMapa, Toolbar: MapaToolbar }
 
 export function MapaView({ caminho, nome }: { caminho: string; nome: string }) {
   const repo = useApp((s) => s.repo)
