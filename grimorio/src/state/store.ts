@@ -8,7 +8,7 @@ import { aplicarPatchCenario, versaoAtiva, type PatchCenario } from '../lib/cena
 import { aplicarPatchPersonagem, versaoAtivaPersonagem, comNomeEspelho, type PatchPersonagem } from '../lib/personagemVersao'
 import { CHAVE_FILTRO, CHAVE_VAULT, chaveDeCofre, normalizarCaminho, registrar as registrarCofre } from '../lib/cofres'
 
-export type TipoAberto = 'sessao' | 'canvas' | 'escrita'
+export type TipoAberto = 'sessao' | 'canvas' | 'escrita' | 'mapa'
 
 const SALVAR_PARCIAL_DEBOUNCE_MS = 800
 
