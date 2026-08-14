@@ -7,6 +7,9 @@
  * chip de medida da seleção quanto na distância entre duas formas.
  */
 
+/** Lado do quadrado da grade, em px de página. 1 quadrado = 1 célula de mapa de mesa. */
+export const QUADRADO_PX = 32
+
 export interface Caixa {
   x: number
   y: number

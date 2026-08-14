@@ -11,9 +11,7 @@ import { ItemCardShapeUtil } from './ItemCardShape'
 import { MedidasMapa } from './MedidasMapa'
 import { MapaToolbar } from './MapaToolbar'
 import { registrarEditor, desregistrarEditor } from '../lib/canvasAtivo'
-
-/** Lado do quadrado da grade, em px de página. 1 quadrado = 1 célula de mapa de mesa. */
-export const QUADRADO_PX = 32
+import { QUADRADO_PX } from '../lib/quadrados'
 
 // mesmos card-shapes do canvas: mapa aceita drop de personagem/cenário/item
 const shapeUtilsCustom = [CharacterCardShapeUtil, CenarioCardShapeUtil, ItemCardShapeUtil]

@@ -1,6 +1,5 @@
 import { useEditor, useValue } from 'tldraw'
-import { distanciaEntreCaixas, medidaDeCaixa, emQuadrados } from '../lib/quadrados'
-import { QUADRADO_PX } from './MapaView'
+import { QUADRADO_PX, distanciaEntreCaixas, medidaDeCaixa, emQuadrados } from '../lib/quadrados'
 
 /**
  * Overlay do mapa: mostra o tamanho da seleção em quadrados da grade e,

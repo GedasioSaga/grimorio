@@ -17,6 +17,14 @@ describe('emQuadrados', () => {
   it('trata zero', () => {
     expect(emQuadrados(0, 32)).toBe('0')
   })
+
+  it('mantém o zero antes da vírgula em frações menores que 1', () => {
+    expect(emQuadrados(9, 32)).toBe('0,3')
+  })
+
+  it('não formata "6,0" quando o arredondamento cai em valor inteiro', () => {
+    expect(emQuadrados(191, 32)).toBe('6')
+  })
 })
 
 describe('medidaDeCaixa', () => {
