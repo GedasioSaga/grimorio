@@ -81,7 +81,7 @@ export default function App() {
         {grafoAberto && <GrafoVinculos />}
         {!grafoAberto && !aberto && <div className="app-empty">Selecione uma sessão, canvas, mapa ou a Escrita na barra lateral</div>}
 
-        {!grafoAberto && aberto?.tipo === 'mapa' && (
+        {!grafoAberto && aberto?.tipo === 'mapa' && vaultPath && (
           <MapaView key={aberto.caminho} caminho={aberto.caminho} nome={aberto.nome} />
         )}
 

@@ -61,11 +61,9 @@ export function MapaView({ caminho, nome }: { caminho: string; nome: string }) {
           return () => desregistrarEditor(editor)
         }}
       />
-      {salvandoErro && (
-        <div className="canvas-banners">
-          <div className="canvas-salvar-erro">Falha ao salvar: {salvandoErro}</div>
-        </div>
-      )}
+      <div className="canvas-banners">
+        {salvandoErro && <div className="canvas-salvar-erro">Falha ao salvar: {salvandoErro}</div>}
+      </div>
     </div>
   )
 }
