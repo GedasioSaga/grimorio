@@ -47,11 +47,11 @@ const STYLE_PROPS_POR_NOME: Record<string, StyleProp<string>> = {
  * Parede/Porta/Janela usam o MESMO mecanismo geo acima: `editor.run(() => {
  * setStyleForNextShapes(cada style do elemento); setCurrentTool('geo') })`.
  *
- * Botão ativo da paleta (simplificação documentada, pedida na task): só compara
- * `toolId === 'geo' && corAtual === elemento.estilos.color`. Não compara fill/dash/
- * size também porque cor já é suficiente para diferenciar os 3 elementos entre si
- * na UX (nenhum dois usa a mesma cor) e porque comparar todos os styles com
- * `useValue` seria 1 hook por style — desnecessário para o que a task pede.
+ * Botão ativo da paleta: compara `geo` E TODOS os `estilos` do elemento contra o
+ * estado corrente, num único `useValue` (as leituras de `getStyleForNextShape`
+ * dentro do computed são todas rastreadas). Comparar só a cor acendia "Porta"
+ * quando o usuário escolhia laranja à mão no painel de estilos sem nunca tocar na
+ * paleta — e, pela precedência abaixo, ainda apagava "Retângulo" por tabela.
  *
  * Colisão entre grupos (fix de review): Parede/Porta/Janela pré-estilam
  * `GeoShapeGeoStyle` como `'rectangle'`, então sem tratamento os botões genéricos
@@ -78,9 +78,22 @@ export function MapaToolbar() {
     () => editor.getStyleForNextShape(GeoShapeGeoStyle),
     [editor],
   )
-  const corAtual = useValue(
-    'mapa-toolbar-cor-atual',
-    () => editor.getStyleForNextShape(DefaultColorStyle),
+  // Elemento da paleta cujo estado corrente bate POR INTEIRO (geo + todos os estilos).
+  // Tem precedência sobre Retângulo/Elipse — ver JSDoc "Colisão entre grupos".
+  const elementoPaletaAtivo = useValue(
+    'mapa-toolbar-paleta-ativa',
+    () => {
+      if (editor.getCurrentToolId() !== 'geo') return undefined
+      const geo = editor.getStyleForNextShape(GeoShapeGeoStyle)
+      return ELEMENTOS_PALETA.find(
+        (e) =>
+          e.geo === geo &&
+          Object.entries(e.estilos).every(([nome, valor]) => {
+            const style = STYLE_PROPS_POR_NOME[nome]
+            return style !== undefined && editor.getStyleForNextShape(style) === valor
+          }),
+      )
+    },
     [editor],
   )
 
@@ -143,12 +156,6 @@ export function MapaToolbar() {
       editor.groupShapes(ids)
     })
   }
-
-  // Elemento da paleta cuja cor bate com o estilo corrente (tem precedência sobre
-  // Retângulo/Elipse — ver JSDoc "Colisão entre grupos" acima).
-  const elementoPaletaAtivo = ELEMENTOS_PALETA.find(
-    (e) => e.geo && toolId === 'geo' && corAtual === e.estilos.color,
-  )
 
   const botoes: Array<{ titulo: string; icone: string; ativo: boolean; aoClicar: () => void }> = [
     { titulo: 'Selecionar', icone: '↖', ativo: toolId === 'select', aoClicar: () => selecionarFerramenta('select') },
