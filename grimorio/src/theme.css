@@ -388,6 +388,24 @@ button:hover { border-color: var(--dourado); color: var(--dourado-claro); }
 .dialogo-lista-item input { accent-color: var(--dourado); cursor: pointer; }
 .dialogo-lista:empty::after { content: 'Nenhuma campanha ainda.'; color: var(--texto-fraco); font-size: 13px; }
 
+/* transformar imagem v2: escolher entidade EXISTENTE — item de lista que é <button>
+   (clicar já resolve, não precisa de rádio/checkbox), com retrato em miniatura */
+.dialogo-lista-item-clicavel { width: 100%; background: none; border: none; font: inherit; text-align: left; }
+.dialogo-retrato-mini {
+  width: 24px; height: 24px; border-radius: 50%; overflow: hidden; flex-shrink: 0;
+  background: var(--fundo); display: flex; align-items: center; justify-content: center; font-size: 12px;
+}
+.dialogo-retrato-mini img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.dialogo-vazio { color: var(--texto-fraco); font-size: 13px; padding: 6px 8px; }
+/* campo opcional "Dentro do cenário" no fluxo "novo": nasce como subcenário do escolhido */
+.dialogo-subcenario { display: flex; flex-direction: column; gap: 6px; }
+.dialogo-titulo-sub { color: var(--texto-fraco); font-size: 12px; }
+.dialogo-pai-escolhido {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  font-size: 12px; color: var(--dourado-claro);
+}
+.dialogo-pai-escolhido button { background: none; border: none; color: var(--texto-fraco); cursor: pointer; }
+
 /* aviso de itens escondidos pelo filtro de campanha (sidebar) */
 .filtro-ocultos {
   display: block; width: calc(100% - 16px); margin: 2px 8px; padding: 4px 8px;
