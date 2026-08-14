@@ -23,7 +23,8 @@ import { associarEscolhendoCampanhas } from './dialogoCampanhas'
 import { pedirTransformacao } from './dialogoTransformar'
 import { registrarEditor, desregistrarEditor } from '../lib/canvasAtivo'
 import { useDocumentoTldraw } from './canvasDoc'
-import { cardsPorEntidade, criarHandlersDeDrop, ligarCenarioNoCanvas, ligarRelacoesNoCanvas } from './dropsDeEntidade'
+import { criarHandlersDeDrop } from './dropsDeEntidade'
+import { cardsPorEntidade, ligarCenarioNoCanvas, ligarRelacoesNoCanvas } from './ligacoesCanvas'
 import { exportarCanvas } from './exportarCanvas'
 
 // Constantes em nível de módulo: arrays recriados a cada render remontam o editor.
