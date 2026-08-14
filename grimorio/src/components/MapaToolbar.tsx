@@ -53,6 +53,14 @@ const STYLE_PROPS_POR_NOME: Record<string, StyleProp<string>> = {
  * na UX (nenhum dois usa a mesma cor) e porque comparar todos os styles com
  * `useValue` seria 1 hook por style — desnecessário para o que a task pede.
  *
+ * Colisão entre grupos (fix de review): Parede/Porta/Janela pré-estilam
+ * `GeoShapeGeoStyle` como `'rectangle'`, então sem tratamento os botões genéricos
+ * "Retângulo"/"Elipse" acendiam junto com o elemento da paleta sempre que a
+ * ferramenta corrente é `geo` + `rectangle` (mesmo estado que qualquer um dos 3
+ * elementos deixa). Regra escolhida: a paleta tem precedência — `elementoAtivo`
+ * (primeiro elemento da paleta cuja cor bate) é calculado uma vez, e o botão
+ * "Retângulo"/"Elipse" só acende quando NENHUM elemento da paleta está ativo.
+ *
  * Escada é um botão de AÇÃO, não de ferramenta: ela cria na hora um grupo de
  * `DEGRAUS_ESCADA` retângulos finos e paralelos centrados na viewport, via
  * `editor.createShapes` + `editor.groupShapes` (verificado em
@@ -93,6 +101,7 @@ export function MapaToolbar() {
       return
     }
     editor.run(() => {
+      if (elemento.geo) editor.setStyleForNextShapes(GeoShapeGeoStyle, elemento.geo)
       for (const [nomeStyle, valor] of Object.entries(elemento.estilos)) {
         const style = STYLE_PROPS_POR_NOME[nomeStyle]
         if (style) editor.setStyleForNextShapes(style, valor)
@@ -135,6 +144,12 @@ export function MapaToolbar() {
     })
   }
 
+  // Elemento da paleta cuja cor bate com o estilo corrente (tem precedência sobre
+  // Retângulo/Elipse — ver JSDoc "Colisão entre grupos" acima).
+  const elementoPaletaAtivo = ELEMENTOS_PALETA.find(
+    (e) => e.geo && toolId === 'geo' && corAtual === e.estilos.color,
+  )
+
   const botoes: Array<{ titulo: string; icone: string; ativo: boolean; aoClicar: () => void }> = [
     { titulo: 'Selecionar', icone: '↖', ativo: toolId === 'select', aoClicar: () => selecionarFerramenta('select') },
     { titulo: 'Mão', icone: '✋', ativo: toolId === 'hand', aoClicar: () => selecionarFerramenta('hand') },
@@ -142,13 +157,13 @@ export function MapaToolbar() {
     {
       titulo: 'Retângulo',
       icone: '▭',
-      ativo: toolId === 'geo' && geoAtual === 'rectangle',
+      ativo: toolId === 'geo' && geoAtual === 'rectangle' && !elementoPaletaAtivo,
       aoClicar: () => selecionarGeo('rectangle'),
     },
     {
       titulo: 'Elipse',
       icone: '◯',
-      ativo: toolId === 'geo' && geoAtual === 'ellipse',
+      ativo: toolId === 'geo' && geoAtual === 'ellipse' && !elementoPaletaAtivo,
       aoClicar: () => selecionarGeo('ellipse'),
     },
     { titulo: 'Linha', icone: '／', ativo: toolId === 'line', aoClicar: () => selecionarFerramenta('line') },
@@ -174,7 +189,7 @@ export function MapaToolbar() {
         <button
           key={elemento.id}
           type="button"
-          className={`btn-icon${toolId === 'geo' && corAtual === elemento.estilos.color ? ' ativo' : ''}`}
+          className={`btn-icon${elementoPaletaAtivo?.id === elemento.id ? ' ativo' : ''}`}
           title={elemento.rotulo}
           onClick={() => aplicarElementoPaleta(elemento)}
         >

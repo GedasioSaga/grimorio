@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest'
-import { DefaultColorStyle, DefaultDashStyle, DefaultFillStyle, DefaultSizeStyle } from 'tldraw'
+import {
+  DefaultColorStyle,
+  DefaultDashStyle,
+  DefaultFillStyle,
+  DefaultSizeStyle,
+  GeoShapeGeoStyle,
+} from 'tldraw'
 import { ELEMENTOS_PALETA } from '../lib/paletaMapa'
 
 // Listas de valores válidos direto do tlschema real (StyleProp.defineEnum expõe `.values`,
@@ -9,6 +15,7 @@ const CORES_VALIDAS = new Set<string>(DefaultColorStyle.values)
 const FILLS_VALIDOS = new Set<string>(DefaultFillStyle.values)
 const DASHES_VALIDOS = new Set<string>(DefaultDashStyle.values)
 const SIZES_VALIDOS = new Set<string>(DefaultSizeStyle.values)
+const GEOS_VALIDOS = new Set<string>(GeoShapeGeoStyle.values)
 
 describe('ELEMENTOS_PALETA', () => {
   it('tem os 4 elementos da paleta RPG', () => {
@@ -89,6 +96,21 @@ describe('ELEMENTOS_PALETA', () => {
     for (const el of ELEMENTOS_PALETA) {
       if (el.estilos.size) {
         expect(SIZES_VALIDOS.has(el.estilos.size)).toBe(true)
+      }
+    }
+  })
+
+  // Fix de review: MapaToolbar.tsx aplicarElementoPaleta() precisa setar
+  // GeoShapeGeoStyle (elemento.geo), não só os estilos — o bug era o loop cobrir
+  // só `estilos` e nunca aplicar `elemento.geo`. Aqui validamos o dado (todo `geo`
+  // usado é um valor real de GeoShapeGeoStyle.values, node_modules/@tldraw/tlschema/
+  // src/shapes/TLGeoShape.ts:40-51); a APLICAÇÃO em si (`editor.setStyleForNextShapes
+  // (GeoShapeGeoStyle, elemento.geo)`) só existe como efeito num `Editor` real do
+  // tldraw, sem harness de componente com editor no projeto — não coberto aqui.
+  it('todo valor de geo usado pertence à lista real do tlschema (GeoShapeGeoStyle.values)', () => {
+    for (const el of ELEMENTOS_PALETA) {
+      if (el.geo) {
+        expect(GEOS_VALIDOS.has(el.geo)).toBe(true)
       }
     }
   })
