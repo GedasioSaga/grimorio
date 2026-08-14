@@ -219,6 +219,58 @@ describe('HostDialogoTransformar', () => {
     expect(await p).toEqual({ modo: 'novo', tipo: 'cenario', dir: 'cenarios', novaPasta: undefined })
   })
 
+  it('CRÍTICO: Cenário → Existente → Voltar → Voltar → Item não trava em branco (modo stale resetado)', async () => {
+    // Regressão: "Voltar" do passo 'modo' fazia só setTipo(null), deixando `modo` velho
+    // ('existente') vivo. tipo='item' + modo='existente' não bate NENHUM bloco JSX (item
+    // sempre pula pro passo 'novo' — não existe passo 'existente' pra item) e o modal
+    // renderizava em branco (soft-lock: nenhum botão pra sair).
+    await montar()
+    const { p } = await abrir()
+    await act(async () => { clicar(botaoComTexto('Cenário')) })
+    await act(async () => { clicar(botaoComTexto('Existente (nova transformação)')) })
+    await act(async () => { clicar(botaoComTexto('Voltar')) }) // existente -> modo
+    await act(async () => { clicar(botaoComTexto('Voltar')) }) // modo -> tipo
+    await act(async () => { clicar(botaoComTexto('Item')) })
+
+    expect(container.textContent).toContain('Onde criar o item?')
+    expect(container.querySelector('.dialogo-caixa')?.children.length).toBeGreaterThan(0)
+
+    await act(async () => { clicar(botaoComTexto('Cancelar')) })
+    expect(await p).toBeNull()
+  })
+
+  it('MÉDIO: dir escolhido em Cenário não vaza pro fluxo de Personagem depois de Voltar duas vezes', async () => {
+    // Regressão: "Voltar" não limpava dir/paiId/buscaPai/novaPasta/criandoPasta. dir de
+    // Cenário sobrevivia à troca de tipo, e "Criar" ficava habilitado com o caminho de
+    // OUTRA seção — a entidade nasceria na pasta errada do cofre.
+    await montar()
+    const { p } = await abrir()
+    await act(async () => { clicar(botaoComTexto('Cenário')) })
+    await act(async () => { clicar(botaoComTexto('Criar novo')) })
+
+    // escolhe a pasta organizacional "Mundos" (cenarios/mundos) — não o "Dentro do
+    // cenário" (subcenário), que é um campo à parte
+    const radioMundos = Array.from(container.querySelectorAll('input[name="pasta-transformar"]'))
+      .find((el) => el.closest('.dialogo-lista-item')?.textContent?.includes('Mundos'))
+    await act(async () => { clicar(radioMundos ?? null) })
+    expect(container.querySelectorAll<HTMLInputElement>('input[name="pasta-transformar"]:checked')[0]?.closest('.dialogo-lista-item')?.textContent)
+      .toContain('Mundos')
+
+    await act(async () => { clicar(botaoComTexto('Voltar')) }) // novo -> modo (reseta dir)
+    await act(async () => { clicar(botaoComTexto('Voltar')) }) // modo -> tipo
+    await act(async () => { clicar(botaoComTexto('Personagem')) })
+    await act(async () => { clicar(botaoComTexto('Criar novo')) })
+
+    // "Mundos" (pasta de CENÁRIO) não aparece nem escondido no passo de Personagem
+    expect(container.textContent).not.toContain('Mundos')
+
+    // dirAtual cai no default (raiz da seção de Personagem) — v1 já pré-seleciona a raiz
+    // quando nada foi escolhido, então "Criar" fica habilitado; o que prova a correção é o
+    // DIR resolvido, que tem que ser o default de Personagem, nunca o de Cenário
+    await act(async () => { clicar(botaoComTexto('Criar')) })
+    expect(await p).toEqual({ modo: 'novo', tipo: 'personagem', dir: 'personagens-soltos', novaPasta: undefined })
+  })
+
   it('Escape fecha o diálogo com null', async () => {
     await montar()
     const { p } = await abrir()

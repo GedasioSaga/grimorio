@@ -114,17 +114,26 @@ export function HostDialogoTransformar() {
   const [buscaPai, setBuscaPai] = useState('')
   const [paiId, setPaiId] = useState<string | null>(null)
 
+  // Estado de TODOS os passos depois de "tipo" — chamado sempre que `tipo` muda (inclusive
+  // voltando pra escolha de tipo) e nos "Voltar" de cada passo seguinte. Sem isso, estado de
+  // uma escolha anterior (dir de cenário, modo, busca) sobrevive à troca e ou trava o modal
+  // num passo que não bate com o tipo atual, ou vaza pra pasta errada do cofre.
+  function resetarPassosSeguintes() {
+    setModo(null)
+    setBuscaExistente('')
+    setDir(null)
+    setCriandoPasta(false)
+    setNovaPasta('')
+    setBuscaPai('')
+    setPaiId(null)
+  }
+
   useEffect(() => {
     if (pedido) {
       setTipo(null)
-      setModo(null)
-      setBuscaExistente('')
-      setDir(null)
-      setCriandoPasta(false)
-      setNovaPasta('')
-      setBuscaPai('')
-      setPaiId(null)
+      resetarPassosSeguintes()
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pedido])
 
   useEffect(() => {
@@ -167,7 +176,7 @@ export function HostDialogoTransformar() {
             <label className="dialogo-titulo">Transformar imagem em:</label>
             <div className="dialogo-botoes">
               {TIPOS.map((t) => (
-                <button key={t} className="dialogo-ok" onClick={() => setTipo(t)}>
+                <button key={t} className="dialogo-ok" onClick={() => { resetarPassosSeguintes(); setTipo(t) }}>
                   {ROTULO_TIPO[t]}
                 </button>
               ))}
@@ -188,7 +197,7 @@ export function HostDialogoTransformar() {
               </button>
             </div>
             <div className="dialogo-botoes">
-              <button onClick={() => setTipo(null)}>Voltar</button>
+              <button onClick={() => { resetarPassosSeguintes(); setTipo(null) }}>Voltar</button>
               <button onClick={() => responder(null)}>Cancelar</button>
             </div>
           </>
@@ -228,7 +237,7 @@ export function HostDialogoTransformar() {
               )}
             </div>
             <div className="dialogo-botoes">
-              <button onClick={() => setModo(null)}>Voltar</button>
+              <button onClick={() => resetarPassosSeguintes()}>Voltar</button>
               <button onClick={() => responder(null)}>Cancelar</button>
             </div>
           </>
@@ -312,7 +321,7 @@ export function HostDialogoTransformar() {
               </div>
             )}
             <div className="dialogo-botoes">
-              <button onClick={() => { if (tipo !== 'item') setModo(null); else setTipo(null) }}>Voltar</button>
+              <button onClick={() => { resetarPassosSeguintes(); if (tipo === 'item') setTipo(null) }}>Voltar</button>
               <button onClick={() => responder(null)}>Cancelar</button>
               <button className="dialogo-ok" disabled={!dirFinal} onClick={submeterNovo}>
                 Criar
