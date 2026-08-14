@@ -175,6 +175,39 @@ button:hover { border-color: var(--dourado); color: var(--dourado-claro); }
   border: 1px solid var(--borda); border-radius: 4px; padding: 2px 6px;
   pointer-events: none; white-space: nowrap;
 }
+/* réguas graduadas em quadrados (topo + esquerda), canto de interseção com botão de grade.
+   Vivem no mesmo slot InFrontOfTheCanvas do .mapa-medida: pointer-events:none no
+   container (herdado de .tl-canvas__in-front), então só o botão do canto reativa. */
+.mapa-regua {
+  position: absolute; z-index: 250;
+  background: var(--fundo); pointer-events: none;
+  overflow: hidden;
+}
+.mapa-regua-topo { top: 0; right: 0; height: 20px; }
+.mapa-regua-esquerda { left: 0; bottom: 0; width: 20px; }
+.mapa-regua-tique {
+  position: absolute;
+  background: var(--borda);
+}
+.mapa-regua-tique:not(.vertical) { top: 0; bottom: 0; width: 1px; }
+.mapa-regua-tique.vertical { left: 0; right: 0; height: 1px; }
+.mapa-regua-tique.com-rotulo:not(.vertical) { background: var(--texto-fraco); }
+.mapa-regua-tique.vertical.com-rotulo { background: var(--texto-fraco); }
+.mapa-regua-rotulo {
+  position: absolute; top: 2px; left: 3px;
+  font-size: 10px; color: var(--texto-fraco); white-space: nowrap;
+}
+.mapa-regua-tique.vertical .mapa-regua-rotulo {
+  top: 3px; left: 2px; transform: rotate(-90deg); transform-origin: left top;
+}
+.mapa-regua-canto {
+  position: absolute; top: 0; left: 0; z-index: 260;
+  pointer-events: auto;
+  background: var(--fundo); border: 1px solid var(--borda); border-radius: 0 0 4px 0;
+  color: var(--texto-fraco); font-size: 11px; line-height: 1; padding: 0;
+}
+.mapa-regua-canto:hover { color: var(--dourado-claro); border-color: var(--dourado); }
+
 /* toolbar própria do mapa (slot components.Toolbar): o pai (.tlui-layout__bottom__main)
    já centraliza embaixo com display:flex — só falta reativar pointer-events, que o
    ancestral .tlui-layout zera para o resto da tela não ficar bloqueada. */

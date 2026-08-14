@@ -35,3 +35,25 @@ export function distanciaEntreCaixas(a: Caixa, b: Caixa): number {
   const dy = Math.max(a.y - (b.y + b.h), b.y - (a.y + a.h), 0)
   return Math.sqrt(dx * dx + dy * dy)
 }
+
+/** Passos "redondos" de quadrado disponíveis pra régua, do mais denso ao mais esparso. */
+const PASSOS_REGUA = [1, 2, 5, 10, 20, 50, 100, 200, 500, 1000, 2000, 5000, 10000]
+
+/** Espaço mínimo em px de tela entre dois tiques, pra não virar borrão em zoom baixo. */
+const TIQUE_MIN_PX = 8
+
+/**
+ * Passo da régua do mapa em quadrados, dado o zoom atual do editor.
+ *
+ * `tique`: de quantos em quantos quadrados desenhar um traço menor.
+ * `rotulo`: de quantos em quantos quadrados escrever o número (sempre 5×tique,
+ * então nunca fica mais denso que o tique nem sobrepõe o vizinho).
+ *
+ * Pega o menor passo da lista cujo espaçamento em tela (passo × zoom × QUADRADO_PX)
+ * já alcança `TIQUE_MIN_PX` — em zoom alto isso cai em 1 quadrado por tique; em zoom
+ * baixo, sobe pros múltiplos redondos seguintes.
+ */
+export function passoDaRegua(zoom: number): { tique: number; rotulo: number } {
+  const tique = PASSOS_REGUA.find((passo) => passo * zoom * QUADRADO_PX >= TIQUE_MIN_PX) ?? PASSOS_REGUA[PASSOS_REGUA.length - 1]
+  return { tique, rotulo: tique * 5 }
+}

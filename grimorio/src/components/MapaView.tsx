@@ -10,6 +10,7 @@ import { CharacterCardShapeUtil } from './CharacterCardShape'
 import { CenarioCardShapeUtil } from './CenarioCardShape'
 import { ItemCardShapeUtil } from './ItemCardShape'
 import { MedidasMapa } from './MedidasMapa'
+import { ReguasMapa } from './ReguasMapa'
 import { MapaToolbar } from './MapaToolbar'
 import { PainelCamadas } from './PainelCamadas'
 import { registrarEditor, desregistrarEditor } from '../lib/canvasAtivo'
@@ -31,8 +32,18 @@ import type { CamadaMapa } from '../lib/types'
 const shapeUtilsCustom = [CharacterCardShapeUtil, CenarioCardShapeUtil, ItemCardShapeUtil]
 const shapeUtilsDoStore = [...defaultShapeUtils, ...shapeUtilsCustom]
 
+// combina os overlays de espaço-de-tela num só slot (InFrontOfTheCanvas aceita 1 componente)
+function MapaOverlay() {
+  return (
+    <>
+      <MedidasMapa />
+      <ReguasMapa />
+    </>
+  )
+}
+
 // constante de módulo: não recriar o objeto de components a cada render
-const componentsMapa: TLComponents = { InFrontOfTheCanvas: MedidasMapa, Toolbar: MapaToolbar }
+const componentsMapa: TLComponents = { InFrontOfTheCanvas: MapaOverlay, Toolbar: MapaToolbar }
 
 export function MapaView({ caminho, nome }: { caminho: string; nome: string }) {
   const repo = useApp((s) => s.repo)
