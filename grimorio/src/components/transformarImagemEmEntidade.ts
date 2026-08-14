@@ -4,7 +4,15 @@ import { useApp } from '../state/store'
 import { caminhoAbsolutoImagem } from '../lib/caminhos'
 import { CARD_ALTURA_PADRAO, CARD_LARGURA_PADRAO } from './CharacterCardShape'
 import { cardsPorEntidade, ligarCenarioNoCanvas, ligarRelacoesNoCanvas } from './ligacoesCanvas'
-import { ROTULO_TIPO, destinoRetrato, extensaoDe, sugestaoDeNome } from '../lib/transformarImagem'
+import {
+  ROTULO_TIPO,
+  destinoRetrato,
+  extensaoDe,
+  novaVersaoCenarioComRetrato,
+  novaVersaoPersonagemComRetrato,
+  sugestaoDeNome,
+  type TipoTransformacao,
+} from '../lib/transformarImagem'
 import { versaoAtiva } from '../lib/cenarioVersao'
 import { versaoAtivaPersonagem } from '../lib/personagemVersao'
 import { pedirTexto } from './dialogos'
@@ -31,59 +39,103 @@ export async function transformarImagemEmEntidade(editor: Editor, shape: TLImage
   }
   const escolha = await pedirTransformacao()
   if (!escolha) return
-  const { tipo, dir: dirEscolhido, novaPasta } = escolha
-  const nome = await pedirTexto(
-    `Nome do ${ROTULO_TIPO[tipo].toLowerCase()}:`,
-    sugestaoDeNome(asset?.type === 'image' ? asset.props.name : ''),
-    'Criar',
-  )
-  if (!nome) return
+  const ext = extensaoDe(rel)
+  const origem = caminhoAbsolutoImagem(vaultPath, rel)
 
   try {
-    // pasta nova só nasce depois do nome confirmado: cancelar não deixa pasta órfã
-    const dir = novaPasta ? (await repo.criarPasta(dirEscolhido, novaPasta)).caminho : dirEscolhido
-    const ext = extensaoDe(rel)
-    const origem = caminhoAbsolutoImagem(vaultPath, rel)
     let entidadeId: string
     let cardTipo: 'character-card' | 'cenario-card' | 'item-card'
     let propId: 'personagemId' | 'cenarioId' | 'itemId'
+    let tipo: TipoTransformacao
 
-    if (tipo === 'personagem') {
-      const ref = await repo.criarPersonagemEm(dir, nome)
-      const p = await repo.lerPersonagem(ref.caminho)
-      const destino = destinoRetrato(tipo, { id: ref.id, caminho: ref.caminho, versaoAtivaId: p.versaoAtivaId }, ext)
-      await repo.copiarParaCofre(origem, destino)
-      versaoAtivaPersonagem(p).retrato = destino
-      p.modificadoEm = new Date().toISOString()
-      await repo.salvarPersonagem(ref.caminho, p)
-      await associarEscolhendoCampanhas('personagem', ref.id, nome, dirEscolhido)
-      entidadeId = ref.id
-      cardTipo = 'character-card'
-      propId = 'personagemId'
-    } else if (tipo === 'cenario') {
-      const ref = await repo.criarCenarioEm(dir, nome)
-      const c = await repo.lerCenario(ref.caminho)
-      const destino = destinoRetrato(tipo, { id: ref.id, caminho: ref.caminho, versaoAtivaId: c.versaoAtivaId }, ext)
-      await repo.copiarParaCofre(origem, destino)
-      versaoAtiva(c).retrato = destino
-      c.modificadoEm = new Date().toISOString()
-      await repo.salvarCenario(ref.caminho, c)
-      await associarEscolhendoCampanhas('cenario', ref.id, nome, dirEscolhido)
-      entidadeId = ref.id
-      cardTipo = 'cenario-card'
-      propId = 'cenarioId'
+    if (escolha.modo === 'existente') {
+      // Nova transformação numa entidade já criada: clona a versão ativa (nome + retrato
+      // novos), sem passar pelo diálogo de pasta — a entidade já mora em algum lugar.
+      tipo = escolha.tipo
+      const nomeVersao = await pedirTexto(
+        'Nome da transformação:',
+        sugestaoDeNome(asset?.type === 'image' ? asset.props.name : ''),
+        'Criar',
+      )
+      if (!nomeVersao) return
+      // id da versão precisa existir ANTES de copiar o arquivo: destinoRetrato embute o
+      // id no nome, e a versão só nasce depois que o arquivo já está no destino final.
+      const idVersao = crypto.randomUUID()
+
+      if (tipo === 'personagem') {
+        const p = useApp.getState().personagens[escolha.id]
+        const caminho = useApp.getState().caminhoPorId[escolha.id]
+        if (!p || !caminho) throw new Error(`Personagem "${escolha.id}" não encontrado.`)
+        const destino = destinoRetrato('personagem', { id: p.id, caminho, versaoAtivaId: idVersao }, ext)
+        await repo.copiarParaCofre(origem, destino)
+        const atualizado = novaVersaoPersonagemComRetrato(p, nomeVersao, destino, idVersao)
+        atualizado.modificadoEm = new Date().toISOString()
+        await repo.salvarPersonagem(caminho, atualizado)
+        entidadeId = p.id
+        cardTipo = 'character-card'
+        propId = 'personagemId'
+      } else {
+        const c = useApp.getState().cenarios[escolha.id]
+        const caminho = useApp.getState().caminhoCenarioPorId[escolha.id]
+        if (!c || !caminho) throw new Error(`Cenário "${escolha.id}" não encontrado.`)
+        const destino = destinoRetrato('cenario', { id: c.id, caminho, versaoAtivaId: idVersao }, ext)
+        await repo.copiarParaCofre(origem, destino)
+        const atualizado = novaVersaoCenarioComRetrato(c, nomeVersao, destino, idVersao)
+        atualizado.modificadoEm = new Date().toISOString()
+        await repo.salvarCenario(caminho, atualizado)
+        entidadeId = c.id
+        cardTipo = 'cenario-card'
+        propId = 'cenarioId'
+      }
     } else {
-      const ref = await repo.criarItemEm(dir, nome)
-      const item = await repo.lerItem(ref.caminho)
-      const destino = destinoRetrato(tipo, { id: ref.id, caminho: ref.caminho }, ext)
-      await repo.copiarParaCofre(origem, destino)
-      item.retrato = destino
-      item.modificadoEm = new Date().toISOString()
-      await repo.salvarItem(ref.caminho, item)
-      await associarEscolhendoCampanhas('item', ref.id, nome, dirEscolhido)
-      entidadeId = ref.id
-      cardTipo = 'item-card'
-      propId = 'itemId'
+      const { tipo: tipoNovo, dir: dirEscolhido, novaPasta } = escolha
+      tipo = tipoNovo
+      const nome = await pedirTexto(
+        `Nome do ${ROTULO_TIPO[tipo].toLowerCase()}:`,
+        sugestaoDeNome(asset?.type === 'image' ? asset.props.name : ''),
+        'Criar',
+      )
+      if (!nome) return
+      // pasta nova só nasce depois do nome confirmado: cancelar não deixa pasta órfã
+      const dir = novaPasta ? (await repo.criarPasta(dirEscolhido, novaPasta)).caminho : dirEscolhido
+
+      if (tipo === 'personagem') {
+        const ref = await repo.criarPersonagemEm(dir, nome)
+        const p = await repo.lerPersonagem(ref.caminho)
+        const destino = destinoRetrato(tipo, { id: ref.id, caminho: ref.caminho, versaoAtivaId: p.versaoAtivaId }, ext)
+        await repo.copiarParaCofre(origem, destino)
+        versaoAtivaPersonagem(p).retrato = destino
+        p.modificadoEm = new Date().toISOString()
+        await repo.salvarPersonagem(ref.caminho, p)
+        await associarEscolhendoCampanhas('personagem', ref.id, nome, dirEscolhido)
+        entidadeId = ref.id
+        cardTipo = 'character-card'
+        propId = 'personagemId'
+      } else if (tipo === 'cenario') {
+        const ref = await repo.criarCenarioEm(dir, nome)
+        const c = await repo.lerCenario(ref.caminho)
+        const destino = destinoRetrato(tipo, { id: ref.id, caminho: ref.caminho, versaoAtivaId: c.versaoAtivaId }, ext)
+        await repo.copiarParaCofre(origem, destino)
+        versaoAtiva(c).retrato = destino
+        c.modificadoEm = new Date().toISOString()
+        await repo.salvarCenario(ref.caminho, c)
+        await associarEscolhendoCampanhas('cenario', ref.id, nome, dirEscolhido)
+        entidadeId = ref.id
+        cardTipo = 'cenario-card'
+        propId = 'cenarioId'
+      } else {
+        const ref = await repo.criarItemEm(dir, nome)
+        const item = await repo.lerItem(ref.caminho)
+        const destino = destinoRetrato(tipo, { id: ref.id, caminho: ref.caminho }, ext)
+        await repo.copiarParaCofre(origem, destino)
+        item.retrato = destino
+        item.modificadoEm = new Date().toISOString()
+        await repo.salvarItem(ref.caminho, item)
+        await associarEscolhendoCampanhas('item', ref.id, nome, dirEscolhido)
+        entidadeId = ref.id
+        cardTipo = 'item-card'
+        propId = 'itemId'
+      }
     }
 
     // card lê a entidade do cache do store: recarregar ANTES de criar o shape.

@@ -1,4 +1,6 @@
-import type { VaultTree } from './types'
+import type { Cenario, Personagem, VaultTree, VersaoCenario, VersaoPersonagem } from './types'
+import { comNomeEspelho, versaoAtivaPersonagem } from './personagemVersao'
+import { versaoAtiva } from './cenarioVersao'
 
 export type TipoTransformacao = 'personagem' | 'cenario' | 'item'
 
@@ -61,4 +63,47 @@ export function destinoRetrato(
   }
   if (tipo === 'cenario') return `imagens-cenarios/retrato-${ent.id}-${ent.versaoAtivaId}.${ext}`
   return `imagens-itens/retrato-${ent.id}.${ext}`
+}
+
+/**
+ * Nova versão (transformação) de um PERSONAGEM já existente: clona a versão ativa com
+ * nome e retrato novos, e a torna ativa. Espelha `adicionarVersaoPersonagem` do store
+ * (mesmo padrão de clone), mas o retrato já nasce setado — o fluxo de "transformar
+ * imagem" não tem um segundo passo para preenchê-lo depois. Pura: não lê/grava disco.
+ *
+ * `idVersao` é opcional (default aleatório) para o caso comum, mas o chamador pode
+ * fixá-lo: `destinoRetrato` embute o id da versão no nome do arquivo, então quem copia a
+ * imagem pro cofre precisa saber o id ANTES de chamar esta função (senão o retrato salvo
+ * não bate com o id gerado aqui).
+ */
+export function novaVersaoPersonagemComRetrato(
+  p: Personagem, nomeVersao: string, retrato: string, idVersao: string = crypto.randomUUID(),
+): Personagem {
+  const base = versaoAtivaPersonagem(p)
+  const nova: VersaoPersonagem = {
+    ...base,
+    id: idVersao,
+    nome: nomeVersao,
+    retrato,
+    imagens: base.imagens.map((i) => ({ ...i })), // cópia por valor: a versão nova não deve arrastar a lista da base
+  }
+  return comNomeEspelho({ ...p, versoes: [...p.versoes, nova], versaoAtivaId: nova.id })
+}
+
+/**
+ * Como `novaVersaoPersonagemComRetrato`, para CENÁRIO — sem espelho de nome no topo:
+ * versão de cenário tem nome próprio (ex. "Noite"), não é a mesma forma que o personagem.
+ */
+export function novaVersaoCenarioComRetrato(
+  c: Cenario, nomeVersao: string, retrato: string, idVersao: string = crypto.randomUUID(),
+): Cenario {
+  const base = versaoAtiva(c)
+  const nova: VersaoCenario = {
+    ...base,
+    id: idVersao,
+    nome: nomeVersao,
+    retrato,
+    imagens: base.imagens.map((i) => ({ ...i })),
+  }
+  return { ...c, versoes: [...c.versoes, nova], versaoAtivaId: nova.id }
 }
