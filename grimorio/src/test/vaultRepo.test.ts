@@ -188,6 +188,22 @@ describe('VaultRepo', () => {
     expect(doc.documento).toEqual({ document: {}, session: {} })
   })
 
+  it('salvarCamadasMapa preserva documento e nome renomeado concorrentemente', async () => {
+    await repo.inicializar()
+    const ref = await repo.criarCanvasDoc('mapas-soltos', 'Castelo L1')
+    await repo.salvarDocumentoCanvas(ref.caminho, { document: { x: 1 }, session: {} })
+    await repo.renomearItem(ref.caminho, 'Castelo L1 — Renomeado')
+    const camadas = [
+      { id: 'base', nome: 'Base', oculta: false, travada: false },
+      { id: 'paredes', nome: 'Paredes', oculta: false, travada: true },
+    ]
+    await repo.salvarCamadasMapa(ref.caminho, camadas)
+    const doc = await repo.lerCanvasDoc(ref.caminho)
+    expect(doc.camadas).toEqual(camadas)
+    expect(doc.nome).toBe('Castelo L1 — Renomeado')
+    expect(doc.documento).toEqual({ document: { x: 1 }, session: {} })
+  })
+
   it('copia arquivo externo para dentro do cofre', async () => {
     await repo.inicializar()
     fs.arquivos.set('C:/Downloads/foto.png', '<bin>')

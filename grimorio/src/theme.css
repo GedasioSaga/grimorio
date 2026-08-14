@@ -188,6 +188,38 @@ button:hover { border-color: var(--dourado); color: var(--dourado-claro); }
 .mapa-toolbar .btn-icon.ativo { border-color: var(--dourado); color: var(--dourado-claro); background: var(--fundo-elevado); }
 .mapa-toolbar-divisor { width: 1px; align-self: stretch; margin: 4px 2px; background: var(--borda); }
 
+/* painel de camadas: coluna direita do .mapa-wrap, fora do tldraw */
+.painel-camadas {
+  position: absolute; top: 8px; right: 8px; bottom: 8px; z-index: 300;
+  width: 200px; display: flex; flex-direction: column;
+  background: var(--fundo-painel); border: 1px solid var(--borda); border-radius: 6px;
+  padding: 8px; gap: 6px; overflow: hidden;
+}
+.painel-camadas-cabecalho {
+  display: flex; align-items: center; justify-content: space-between;
+  color: var(--dourado-claro); font-size: 12px; text-transform: uppercase; letter-spacing: 1px;
+}
+.painel-camadas-lista { list-style: none; margin: 0; padding: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 2px; }
+.painel-camadas-item {
+  display: flex; align-items: center; justify-content: space-between; gap: 4px;
+  padding: 4px 6px; border-radius: 4px; cursor: pointer; font-size: 13px;
+}
+.painel-camadas-item:hover { background: var(--fundo-elevado); }
+.painel-camadas-item.ativa { background: var(--fundo-elevado); border: 1px solid var(--dourado); }
+.painel-camadas-nome { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; }
+.painel-camadas-acoes { display: flex; align-items: center; gap: 1px; }
+.painel-camadas-acoes .btn-icon { font-size: 11px; padding: 2px 4px; }
+.painel-camadas-add {
+  align-self: stretch; padding: 5px; border-radius: 4px; border: 1px dashed var(--borda);
+  color: var(--texto-fraco); background: transparent;
+}
+.painel-camadas-add:hover { color: var(--dourado-claro); border-color: var(--dourado); }
+.painel-camadas-reabrir {
+  position: absolute; top: 8px; right: 8px; z-index: 300;
+  background: var(--fundo-painel); border: 1px solid var(--borda); border-radius: 6px;
+  padding: 6px 8px; font-size: 15px;
+}
+
 /* ---- cartão de personagem ---- */
 .char-card {
   display: flex; gap: 10px; width: 100%; height: 100%;

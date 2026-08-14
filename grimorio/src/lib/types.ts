@@ -120,8 +120,17 @@ export interface CanvasDoc {
   id: string
   nome: string
   documento: unknown | null // snapshot tldraw { document, session }
+  /** só em mapa (fatia 3); ausente em canvas comum e em mapa criado antes desta fatia. */
+  camadas?: CamadaMapa[]
   criadoEm: string
   modificadoEm: string
+}
+
+export interface CamadaMapa {
+  id: string
+  nome: string // "Base", "Paredes", "Rótulos"…
+  oculta: boolean
+  travada: boolean
 }
 
 export interface Campanha {

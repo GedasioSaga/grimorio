@@ -1,5 +1,5 @@
 import type { FsBridge } from './fsBridge'
-import type { Campanha, CampanhaNode, CanvasDoc, Cenario, CenarioNode, CenarioRef, Item, ItemRef, PastaCenarioNode, PastaItemNode, PastaNode, Personagem, VaultTree, VersaoCenario, VersaoPersonagem, Vinculo } from './types'
+import type { CamadaMapa, Campanha, CampanhaNode, CanvasDoc, Cenario, CenarioNode, CenarioRef, Item, ItemRef, PastaCenarioNode, PastaItemNode, PastaNode, Personagem, VaultTree, VersaoCenario, VersaoPersonagem, Vinculo } from './types'
 
 /** Forma comum das seções "pastas aninhadas com arquivos .json" (personagens e itens). */
 interface ArvoreDeArquivos {
@@ -336,6 +336,15 @@ export class VaultRepo {
     return this.naFila(caminho, async () => {
       const atual: CanvasDoc = JSON.parse(await this.fs.readText(this.abs(caminho)))
       const salvo = { ...atual, documento, modificadoEm: agora() }
+      await this.fs.writeTextAtomic(this.abs(caminho), JSON.stringify(salvo, null, 2))
+    })
+  }
+
+  /** Atualiza só as camadas do mapa (read-modify-write na fila do caminho — mesmo padrão de `salvarDocumentoCanvas`). */
+  async salvarCamadasMapa(caminho: string, camadas: CamadaMapa[]): Promise<void> {
+    return this.naFila(caminho, async () => {
+      const atual: CanvasDoc = JSON.parse(await this.fs.readText(this.abs(caminho)))
+      const salvo = { ...atual, camadas, modificadoEm: agora() }
       await this.fs.writeTextAtomic(this.abs(caminho), JSON.stringify(salvo, null, 2))
     })
   }
