@@ -33,11 +33,14 @@ import { Sidebar } from '../components/Sidebar'
 let container: HTMLDivElement
 let root: Root
 
+// nomes escolhidos para testar a ORDEM alfabética de verdade: "Abismo" (mapa) vem antes
+// de "Zona morta" (canvas) — um teste que não ordenasse nada ainda passaria com nomes
+// que já saíssem na ordem "certa" por acaso da inserção
 function arvoreComCanvasEMapa(): VaultTree {
   return {
     campanhas: [],
-    canvasesSoltos: [{ nome: 'Anotações da mesa', caminho: 'canvases-soltos/anotacoes-da-mesa.json', slug: 'anotacoes-da-mesa', id: 'c1' }],
-    mapasSoltos: [{ nome: 'Castelo L1', caminho: 'mapas-soltos/castelo-l1.json', slug: 'castelo-l1', id: 'm1' }],
+    canvasesSoltos: [{ nome: 'Zona morta', caminho: 'canvases-soltos/zona-morta.json', slug: 'zona-morta', id: 'c1' }],
+    mapasSoltos: [{ nome: 'Abismo', caminho: 'mapas-soltos/abismo.json', slug: 'abismo', id: 'm1' }],
     personagensSoltos: { slug: 'personagens-soltos', nome: 'Personagens soltos', caminho: 'personagens-soltos', subpastas: [], personagens: [] },
     cenarios: { slug: 'cenarios', nome: 'Cenários', caminho: 'cenarios', subpastas: [], cenarios: [] },
     itens: { slug: 'itens', nome: 'Itens', caminho: 'itens', subpastas: [], itens: [] },
@@ -99,39 +102,54 @@ afterEach(() => {
   container.remove()
 })
 
+function botaoNovo(): HTMLButtonElement {
+  const botao = secaoCanvasEMapa().querySelector<HTMLButtonElement>('button[title="Novo canvas ou mapa"]')
+  if (!botao) throw new Error('botão "Novo canvas ou mapa" não encontrado')
+  return botao
+}
+
 describe('Sidebar: seção "Canvas e Mapa"', () => {
-  it('lista canvas e mapa juntos, cada um com o ícone certo', async () => {
+  it('lista canvas e mapa juntos, cada um com o ícone certo, ordenados por nome', async () => {
     await montar()
 
-    const secao = secaoCanvasEMapa()
-    expect(itemComTexto('Anotações da mesa').textContent).toContain('▦')
-    expect(itemComTexto('Castelo L1').textContent).toContain('🗺')
+    expect(itemComTexto('Zona morta').textContent).toContain('▦')
+    expect(itemComTexto('Abismo').textContent).toContain('🗺')
+
+    // ordem real no DOM: "Abismo" (mapa) vem antes de "Zona morta" (canvas) —
+    // sem o sort, a ordem de inserção (canvas primeiro) deixaria "Zona morta" na frente
+    const nomes = Array.from(secaoCanvasEMapa().querySelectorAll('.item-linha .item-nome'))
+      .map((el) => el.textContent ?? '')
+    const iAbismo = nomes.findIndex((t) => t.includes('Abismo'))
+    const iZonaMorta = nomes.findIndex((t) => t.includes('Zona morta'))
+    expect(iAbismo).toBeGreaterThanOrEqual(0)
+    expect(iZonaMorta).toBeGreaterThan(iAbismo)
+
     // não sobrou seção "Mapas" separada
-    expect(Array.from(secao.parentElement!.querySelectorAll('.sidebar-section-header span')).map((s) => s.textContent))
+    expect(Array.from(container.querySelectorAll('.sidebar-section-header span')).map((s) => s.textContent))
       .not.toContain('Mapas')
   })
 
   it('clicar no mapa abre o documento como mapa', async () => {
     await montar()
 
-    await act(async () => { clicar(itemComTexto('Castelo L1')) })
+    await act(async () => { clicar(itemComTexto('Abismo')) })
 
     expect(useApp.getState().aberto).toEqual({
       tipo: 'mapa',
-      caminho: 'mapas-soltos/castelo-l1.json',
-      nome: 'Castelo L1',
+      caminho: 'mapas-soltos/abismo.json',
+      nome: 'Abismo',
     })
   })
 
   it('clicar no canvas abre o documento como canvas', async () => {
     await montar()
 
-    await act(async () => { clicar(itemComTexto('Anotações da mesa')) })
+    await act(async () => { clicar(itemComTexto('Zona morta')) })
 
     expect(useApp.getState().aberto).toEqual({
       tipo: 'canvas',
-      caminho: 'canvases-soltos/anotacoes-da-mesa.json',
-      nome: 'Anotações da mesa',
+      caminho: 'canvases-soltos/zona-morta.json',
+      nome: 'Zona morta',
     })
   })
 
@@ -140,10 +158,7 @@ describe('Sidebar: seção "Canvas e Mapa"', () => {
     h.pedirTexto.mockResolvedValue('Novo Mapa')
     await montar()
 
-    const botaoNovo = secaoCanvasEMapa().querySelector<HTMLButtonElement>('button.btn-icon')
-    if (!botaoNovo) throw new Error('botão "+" não encontrado')
-
-    await act(async () => { clicar(botaoNovo) })
+    await act(async () => { clicar(botaoNovo()) })
 
     const repo = useApp.getState().repo as unknown as { criarCanvasDoc: ReturnType<typeof vi.fn> }
     expect(repo.criarCanvasDoc).toHaveBeenCalledWith('mapas-soltos', 'Novo Mapa')
@@ -154,25 +169,30 @@ describe('Sidebar: seção "Canvas e Mapa"', () => {
     h.pedirTexto.mockResolvedValue('Novo Canvas')
     await montar()
 
-    const botaoNovo = secaoCanvasEMapa().querySelector<HTMLButtonElement>('button.btn-icon')
-    if (!botaoNovo) throw new Error('botão "+" não encontrado')
-
-    await act(async () => { clicar(botaoNovo) })
+    await act(async () => { clicar(botaoNovo()) })
 
     const repo = useApp.getState().repo as unknown as { criarCanvasDoc: ReturnType<typeof vi.fn> }
     expect(repo.criarCanvasDoc).toHaveBeenCalledWith('canvases-soltos', 'Novo Canvas')
   })
 
-  it('cancelar a escolha de tipo não cria nada', async () => {
+  it('cancelar a escolha de tipo não cria nada, e nem chega a perguntar o nome', async () => {
     h.pedirEscolha.mockResolvedValue(null)
     await montar()
 
-    const botaoNovo = secaoCanvasEMapa().querySelector<HTMLButtonElement>('button.btn-icon')
-    if (!botaoNovo) throw new Error('botão "+" não encontrado')
-
-    await act(async () => { clicar(botaoNovo) })
+    await act(async () => { clicar(botaoNovo()) })
 
     expect(h.pedirTexto).not.toHaveBeenCalled()
+    const repo = useApp.getState().repo as unknown as { criarCanvasDoc: ReturnType<typeof vi.fn> }
+    expect(repo.criarCanvasDoc).not.toHaveBeenCalled()
+  })
+
+  it('escolher o tipo mas cancelar o nome não cria nada', async () => {
+    h.pedirEscolha.mockResolvedValue('mapa')
+    h.pedirTexto.mockResolvedValue(null)
+    await montar()
+
+    await act(async () => { clicar(botaoNovo()) })
+
     const repo = useApp.getState().repo as unknown as { criarCanvasDoc: ReturnType<typeof vi.fn> }
     expect(repo.criarCanvasDoc).not.toHaveBeenCalled()
   })

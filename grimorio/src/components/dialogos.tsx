@@ -98,16 +98,41 @@ export function pedirEscolha(titulo: string, opcoes: OpcaoEscolha[]): Promise<st
 export function HostEscolha() {
   const pedido = useEscolha((s) => s.pedido)
   const responder = useEscolha((s) => s.responder)
+  const primeiroBotaoRef = useRef<HTMLButtonElement>(null)
+
+  useEffect(() => {
+    if (!pedido) return
+    // autofoco na primeira opção — mesmo motivo do HostDialogos: dá pra confirmar
+    // com o teclado sem tocar no mouse
+    const id = requestAnimationFrame(() => primeiroBotaoRef.current?.focus())
+    return () => cancelAnimationFrame(id)
+  }, [pedido])
 
   if (!pedido) return null
 
   return (
     <div className="modal-overlay" onClick={() => responder(null)}>
-      <div className="dialogo-caixa" onClick={(e) => e.stopPropagation()}>
+      <div
+        className="dialogo-caixa"
+        onClick={(e) => e.stopPropagation()}
+        onKeyDown={(e) => {
+          // stopPropagation: sem ele o Escape sobe até a window, onde o HostOpcoes
+          // escuta, e um único toque cancelaria este diálogo E fecharia as Opções
+          if (e.key === 'Enter') { e.preventDefault(); e.stopPropagation(); responder(pedido.opcoes[0]?.valor ?? null) }
+          else if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); responder(null) }
+        }}
+      >
         <label className="dialogo-titulo">{pedido.titulo}</label>
         <div className="dialogo-botoes">
-          {pedido.opcoes.map((o) => (
-            <button key={o.valor} className="dialogo-ok" onClick={() => responder(o.valor)}>{o.rotulo}</button>
+          {pedido.opcoes.map((o, i) => (
+            <button
+              key={o.valor}
+              ref={i === 0 ? primeiroBotaoRef : undefined}
+              className="dialogo-ok"
+              onClick={() => responder(o.valor)}
+            >
+              {o.rotulo}
+            </button>
           ))}
         </div>
         <div className="dialogo-botoes">
