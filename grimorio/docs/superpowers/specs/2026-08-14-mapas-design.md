@@ -16,7 +16,7 @@ traço-branco-sobre-preto que ele já usa.
 |---|---|
 | Natureza do editor | **Vetorial** (formas editáveis), não raster nem tile-based |
 | Motor | **tldraw reaproveitado** — mesmo do canvas atual; nada de segundo motor |
-| Onde vive | **Novo tipo de documento "Mapa"**, seção própria "Mapas" na sidebar |
+| Onde vive | **Novo tipo de documento "Mapa"**, na seção única "Canvas e Mapa" da sidebar — o "+" pergunta o tipo (Canvas ou Mapa) ao criar (decisão do usuário em 14/08, pós-fatia 1; revoga a seção "Mapas" separada cogitada antes) |
 | Organização | Lista **plana** (como Canvases Soltos); pastas ficam para depois |
 | Integração | Aceita **cards de entidade** (drop de personagem/cenário/item) além do desenho |
 | Unidade de medida | **Quadrados da grade** (1 quadrado = 1 célula; padrão RPG de mesa) |
@@ -83,8 +83,8 @@ continuam passando — extração é refactor puro.
   genérico; criar mapa = mesmo doc com `camadas: [base]` no dir novo). `montarArvore`
   ganha `mapas: ItemRef[]`.
 - `TipoAberto` ganha `'mapa'`; `Workspace` roteia para `MapaView`.
-- `MapasSoltos.tsx` na sidebar: listar, criar, renomear, excluir, abrir (espelho de
-  `CanvasesSoltos`).
+- `Sidebar.tsx`: seção única "Canvas e Mapa" — listar canvas e mapa juntos (ordenados por
+  nome), criar (o "+" pergunta o tipo via `pedirEscolha`), renomear, excluir, abrir.
 - `MapaView.tsx`: tldraw com toolbar própria (selecionar, retângulo, elipse, linha,
   caneta, texto, borracha), grade ligada por padrão (`QUADRADO_PX = 32`), snap à grade,
   tema escuro (fundo preto, traço branco — o estilo do desenho do usuário), drops de
@@ -127,14 +127,15 @@ parede não seleciona; fechar/reabrir mantém tudo.
 - **Unit (vitest):** árvore com `mapas-soltos`; px↔quadrados (formatação de medida);
   lógica pura de camadas (visibilidade, trava, camada de shape sem meta, remoção de
   camada); store (`TipoAberto 'mapa'`, abrir/fechar).
-- **Component (jsdom):** seção Mapas na sidebar (criar/renomear/excluir), como os testes
-  de `PainelSync` fazem.
+- **Component (jsdom):** seção "Canvas e Mapa" na sidebar (listar os dois juntos e
+  ordenados, escolher tipo ao criar, renomear, excluir), como os testes de `PainelSync`
+  fazem.
 - **Manual (app de verdade):** editor tldraw não roda em jsdom — desenho, snap, drops,
   export e camadas serão verificados no app e o resultado reportado explicitamente.
 
 ## Fora de escopo (v1)
 
-- Pastas/subpastas na seção Mapas
+- Pastas/subpastas na seção "Canvas e Mapa"
 - Migração automática canvas→mapa (copiar/colar resolve)
 - Balde de tinta raster / borracha parcial de traço (mundo vetor: preenchimento é
   propriedade da forma; borracha apaga forma inteira)

@@ -19,6 +19,7 @@ function participa(deId: string, paraId: string): Vinculo {
 const tree: VaultTree = {
   campanhas: [],
   canvasesSoltos: [],
+  mapasSoltos: [],
   personagensSoltos: pasta('personagens-soltos', undefined, [
     pasta('personagens-soltos/viloes', 'pasta-viloes', [
       pasta('personagens-soltos/viloes/chefes', 'pasta-chefes'),

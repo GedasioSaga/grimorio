@@ -11,6 +11,7 @@ function mkPart(id: string, deTipo: TipoEntidadeVinculo, deId: string, campId: s
 const tree: VaultTree = {
   campanhas: [{ id: 'c1', slug: 'c1', nome: 'Aventura', sessoes: [], personagens: [], canvases: [], escritas: [] }],
   canvasesSoltos: [],
+  mapasSoltos: [],
   personagensSoltos: { slug: '', nome: '', caminho: 'personagens-soltos', subpastas: [], personagens: [] },
   cenarios: { slug: '', nome: '', caminho: 'cenarios', subpastas: [], cenarios: [] },
   itens: { slug: 'itens', nome: 'itens', caminho: 'itens', subpastas: [], itens: [] },

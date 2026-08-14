@@ -50,6 +50,99 @@ export function pedirTexto(
   return useDialogo.getState().pedir(titulo, valorInicial, confirmar, sugestao)
 }
 
+// Diálogo de escolha entre opções (ex.: "Canvas ou Mapa?"). Mesmo padrão de pedirTexto
+// acima: resolução vive num store à parte (testável sem DOM), Host só renderiza, mesmo
+// overlay/estilos do dialogo-caixa.
+
+export interface OpcaoEscolha {
+  valor: string
+  rotulo: string
+}
+
+interface PedidoEscolha {
+  titulo: string
+  opcoes: OpcaoEscolha[]
+  resolver: (valor: string | null) => void
+}
+
+interface EscolhaState {
+  pedido: PedidoEscolha | null
+  pedir(titulo: string, opcoes: OpcaoEscolha[]): Promise<string | null>
+  responder(valor: string | null): void
+}
+
+export const useEscolha = create<EscolhaState>((set, get) => ({
+  pedido: null,
+  pedir: (titulo, opcoes) =>
+    new Promise<string | null>((resolver) => {
+      // pedido pendente (não deveria: modal bloqueia) resolve como cancelado antes
+      // de abrir o novo — evita promise pendurada
+      const anterior = get().pedido
+      if (anterior) anterior.resolver(null)
+      set({ pedido: { titulo, opcoes, resolver } })
+    }),
+  responder: (valor) => {
+    const pedido = get().pedido
+    if (!pedido) return
+    set({ pedido: null })
+    pedido.resolver(valor)
+  },
+}))
+
+/** Pede uma escolha entre opções via modal in-app. Resolve com o `valor` escolhido ou null se cancelar. */
+export function pedirEscolha(titulo: string, opcoes: OpcaoEscolha[]): Promise<string | null> {
+  return useEscolha.getState().pedir(titulo, opcoes)
+}
+
+/** Montado uma vez perto da raiz. Renderiza o modal de escolha quando há um pedido aberto. */
+export function HostEscolha() {
+  const pedido = useEscolha((s) => s.pedido)
+  const responder = useEscolha((s) => s.responder)
+  const primeiroBotaoRef = useRef<HTMLButtonElement>(null)
+
+  useEffect(() => {
+    if (!pedido) return
+    // autofoco na primeira opção — mesmo motivo do HostDialogos: dá pra confirmar
+    // com o teclado sem tocar no mouse
+    const id = requestAnimationFrame(() => primeiroBotaoRef.current?.focus())
+    return () => cancelAnimationFrame(id)
+  }, [pedido])
+
+  if (!pedido) return null
+
+  return (
+    <div className="modal-overlay" onClick={() => responder(null)}>
+      <div
+        className="dialogo-caixa"
+        onClick={(e) => e.stopPropagation()}
+        onKeyDown={(e) => {
+          // stopPropagation: sem ele o Escape sobe até a window, onde o HostOpcoes
+          // escuta, e um único toque cancelaria este diálogo E fecharia as Opções
+          if (e.key === 'Enter') { e.preventDefault(); e.stopPropagation(); responder(pedido.opcoes[0]?.valor ?? null) }
+          else if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); responder(null) }
+        }}
+      >
+        <label className="dialogo-titulo">{pedido.titulo}</label>
+        <div className="dialogo-botoes">
+          {pedido.opcoes.map((o, i) => (
+            <button
+              key={o.valor}
+              ref={i === 0 ? primeiroBotaoRef : undefined}
+              className="dialogo-ok"
+              onClick={() => responder(o.valor)}
+            >
+              {o.rotulo}
+            </button>
+          ))}
+        </div>
+        <div className="dialogo-botoes">
+          <button onClick={() => responder(null)}>Cancelar</button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 /** Montado uma vez perto da raiz. Renderiza o modal quando há um pedido aberto. */
 export function HostDialogos() {
   const pedido = useDialogo((s) => s.pedido)

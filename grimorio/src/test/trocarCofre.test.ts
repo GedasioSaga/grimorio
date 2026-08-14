@@ -322,6 +322,7 @@ describe('carregarPersonagens', () => {
     const tree: VaultTree = {
       campanhas: [],
       canvasesSoltos: [],
+      mapasSoltos: [],
       personagensSoltos: {
         slug: 'personagens-soltos', nome: 'Personagens', caminho: 'personagens-soltos', subpastas: [],
         personagens: [

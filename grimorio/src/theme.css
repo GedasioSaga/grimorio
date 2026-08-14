@@ -141,8 +141,8 @@ button:hover { border-color: var(--dourado); color: var(--dourado-claro); }
 .chevron { color: var(--texto-fraco); font-size: 10px; }
 
 /* ---- canvas ---- */
-.canvas-wrap { position: relative; flex: 1; min-height: 0; }
-.canvas-wrap .tl-container { height: 100%; }
+.canvas-wrap, .mapa-wrap { position: relative; flex: 1; min-height: 0; }
+.canvas-wrap .tl-container, .mapa-wrap .tl-container { height: 100%; }
 .canvas-toolbar {
   /* centralizado no topo: tldraw usa o canto superior esquerdo (toolbar) e
      o canto superior direito (painel de estilo) — o topo central fica livre. */
