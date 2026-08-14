@@ -1,4 +1,23 @@
-import { GeoShapeGeoStyle, useEditor, useValue } from 'tldraw'
+import {
+  createShapeId,
+  DefaultColorStyle,
+  DefaultDashStyle,
+  DefaultFillStyle,
+  DefaultSizeStyle,
+  GeoShapeGeoStyle,
+  useEditor,
+  useValue,
+  type StyleProp,
+} from 'tldraw'
+import { DEGRAUS_ESCADA, ELEMENTOS_PALETA, type ElementoPaleta } from '../lib/paletaMapa'
+
+/** Style props do tldraw indexados pelo mesmo nome usado em `ElementoPaleta.estilos`. */
+const STYLE_PROPS_POR_NOME: Record<string, StyleProp<string>> = {
+  color: DefaultColorStyle,
+  fill: DefaultFillStyle,
+  dash: DefaultDashStyle,
+  size: DefaultSizeStyle,
+}
 
 /**
  * Toolbar própria do mapa, substituindo a do tldraw (slot `components.Toolbar`).
@@ -22,6 +41,25 @@ import { GeoShapeGeoStyle, useEditor, useValue } from 'tldraw'
  * `display:flex; justify-content:center` e o ancestral `.tlui-layout` é
  * `pointer-events:none` — por isso só precisamos de `pointer-events:auto`
  * aqui, sem `position:absolute` manual (ver TldrawUi.tsx / tldraw.css).
+ *
+ * ## Paleta RPG (Parede, Porta, Janela, Escada)
+ *
+ * Parede/Porta/Janela usam o MESMO mecanismo geo acima: `editor.run(() => {
+ * setStyleForNextShapes(cada style do elemento); setCurrentTool('geo') })`.
+ *
+ * Botão ativo da paleta (simplificação documentada, pedida na task): só compara
+ * `toolId === 'geo' && corAtual === elemento.estilos.color`. Não compara fill/dash/
+ * size também porque cor já é suficiente para diferenciar os 3 elementos entre si
+ * na UX (nenhum dois usa a mesma cor) e porque comparar todos os styles com
+ * `useValue` seria 1 hook por style — desnecessário para o que a task pede.
+ *
+ * Escada é um botão de AÇÃO, não de ferramenta: ela cria na hora um grupo de
+ * `DEGRAUS_ESCADA` retângulos finos e paralelos centrados na viewport, via
+ * `editor.createShapes` + `editor.groupShapes` (verificado em
+ * `node_modules/@tldraw/editor/src/lib/editor/Editor.ts:7917` e `:8250-8323` —
+ * decisão documentada em `src/lib/paletaMapa.ts`). `groupShapes` só agrupa quando a
+ * ferramenta corrente é `select` (`Editor.ts:8287-8288` — "Only group when the
+ * select tool is active"), por isso o `run` troca para `select` antes de agrupar.
  */
 export function MapaToolbar() {
   const editor = useEditor()
@@ -30,6 +68,11 @@ export function MapaToolbar() {
   const geoAtual = useValue(
     'mapa-toolbar-geo-atual',
     () => editor.getStyleForNextShape(GeoShapeGeoStyle),
+    [editor],
+  )
+  const corAtual = useValue(
+    'mapa-toolbar-cor-atual',
+    () => editor.getStyleForNextShape(DefaultColorStyle),
     [editor],
   )
 
@@ -41,6 +84,54 @@ export function MapaToolbar() {
     editor.run(() => {
       editor.setStyleForNextShapes(GeoShapeGeoStyle, geo)
       editor.setCurrentTool('geo')
+    })
+  }
+
+  function aplicarElementoPaleta(elemento: ElementoPaleta) {
+    if (elemento.id === 'escada') {
+      criarEscada()
+      return
+    }
+    editor.run(() => {
+      for (const [nomeStyle, valor] of Object.entries(elemento.estilos)) {
+        const style = STYLE_PROPS_POR_NOME[nomeStyle]
+        if (style) editor.setStyleForNextShapes(style, valor)
+      }
+      editor.setCurrentTool('geo')
+    })
+  }
+
+  function criarEscada() {
+    const largura = 120
+    const altura = 14
+    const espaco = 20
+    const alturaTotal = DEGRAUS_ESCADA * altura + (DEGRAUS_ESCADA - 1) * espaco
+    const centro = editor.getViewportPageBounds().center
+    const xInicial = centro.x - largura / 2
+    const yInicial = centro.y - alturaTotal / 2
+
+    const ids = Array.from({ length: DEGRAUS_ESCADA }, () => createShapeId())
+
+    editor.run(() => {
+      editor.createShapes(
+        ids.map((id, i) => ({
+          id,
+          type: 'geo',
+          x: xInicial,
+          y: yInicial + i * (altura + espaco),
+          props: {
+            geo: 'rectangle',
+            w: largura,
+            h: altura,
+            color: 'black',
+            fill: 'solid',
+            dash: 'solid',
+            size: 's',
+          },
+        })),
+      )
+      editor.setCurrentTool('select')
+      editor.groupShapes(ids)
     })
   }
 
@@ -76,6 +167,18 @@ export function MapaToolbar() {
           onClick={b.aoClicar}
         >
           {b.icone}
+        </button>
+      ))}
+      <div className="mapa-toolbar-divisor" aria-hidden="true" />
+      {ELEMENTOS_PALETA.map((elemento) => (
+        <button
+          key={elemento.id}
+          type="button"
+          className={`btn-icon${toolId === 'geo' && corAtual === elemento.estilos.color ? ' ativo' : ''}`}
+          title={elemento.rotulo}
+          onClick={() => aplicarElementoPaleta(elemento)}
+        >
+          {elemento.glifo}
         </button>
       ))}
     </div>

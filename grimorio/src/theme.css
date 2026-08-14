@@ -186,6 +186,7 @@ button:hover { border-color: var(--dourado); color: var(--dourado-claro); }
 }
 .mapa-toolbar .btn-icon { font-size: 15px; padding: 5px 8px; }
 .mapa-toolbar .btn-icon.ativo { border-color: var(--dourado); color: var(--dourado-claro); background: var(--fundo-elevado); }
+.mapa-toolbar-divisor { width: 1px; align-self: stretch; margin: 4px 2px; background: var(--borda); }
 
 /* ---- cartão de personagem ---- */
 .char-card {
