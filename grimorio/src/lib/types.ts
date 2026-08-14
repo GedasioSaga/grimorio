@@ -205,6 +205,8 @@ export interface PastaItemNode {
 export interface VaultTree {
   campanhas: CampanhaNode[]
   canvasesSoltos: ItemRef[]
+  /** mapas da seção "Mapas" (caminho = "mapas-soltos"); lista plana na v1 */
+  mapasSoltos: ItemRef[]
   /** raiz da área de personagens fora de campanha (caminho = "personagens-soltos") */
   personagensSoltos: PastaNode
   /** raiz da seção de cenários (caminho = "cenarios") */

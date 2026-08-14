@@ -17,6 +17,7 @@ const tree: VaultTree = {
     { id: 'camp-2', slug: 'c2', nome: 'Campanha 2', sessoes: [], personagens: [], canvases: [], escritas: [] },
   ],
   canvasesSoltos: [],
+  mapasSoltos: [],
   personagensSoltos: pasta('personagens-soltos', undefined, [pasta('personagens-soltos/viloes', 'pasta-viloes')]),
   cenarios: raizCenarios,
   itens: { slug: 'itens', nome: 'itens', caminho: 'itens', subpastas: [], itens: [] },

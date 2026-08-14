@@ -167,6 +167,7 @@ export class VaultRepo {
   async inicializar(): Promise<void> {
     await this.fs.mkdirAll(this.abs('campanhas'))
     await this.fs.mkdirAll(this.abs('canvases-soltos'))
+    await this.fs.mkdirAll(this.abs('mapas-soltos'))
   }
 
   // ---------- criação ----------
@@ -628,6 +629,7 @@ export class VaultRepo {
     return {
       campanhas,
       canvasesSoltos: await this.listarItens('canvases-soltos'),
+      mapasSoltos: await this.listarItens('mapas-soltos'),
       personagensSoltos: await this.montarArvorePastas('personagens-soltos'),
       cenarios: await this.montarArvoreCenarios(),
       itens: await this.montarArvoreItens(),

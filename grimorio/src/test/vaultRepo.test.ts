@@ -116,6 +116,21 @@ describe('VaultRepo', () => {
     expect(tree.canvasesSoltos[0].nome).toBe('Rabisco')
   })
 
+  it('lista mapas de mapas-soltos na árvore', async () => {
+    await repo.inicializar()
+    await repo.criarCanvasDoc('mapas-soltos', 'Castelo L1')
+    const tree = await repo.montarArvore()
+    expect(tree.mapasSoltos.map((m) => m.nome)).toEqual(['Castelo L1'])
+  })
+
+  it('cofre sem pasta mapas-soltos devolve lista vazia, não erro', async () => {
+    await repo.inicializar()
+    // cofre antigo, criado antes do tipo Mapa existir
+    await fs.removePath('C:/Cofre/mapas-soltos')
+    const tree = await repo.montarArvore()
+    expect(tree.mapasSoltos).toEqual([])
+  })
+
   it('arquivo corrompido vira item com erro, sem derrubar a árvore', async () => {
     await repo.inicializar()
     const camp = await repo.criarCampanha('Teste')
@@ -431,7 +446,7 @@ describe('idsDePastas + campanhasHerdadas ligados à árvore real do VaultRepo',
 
     const personagensSoltos = await repo.montarArvorePastas('personagens-soltos')
     const cenarios = await repo.montarArvoreCenarios()
-    const tree: VaultTree = { campanhas: [], canvasesSoltos: [], personagensSoltos, cenarios, itens: await repo.montarArvoreItens() }
+    const tree: VaultTree = { campanhas: [], canvasesSoltos: [], mapasSoltos: [], personagensSoltos, cenarios, itens: await repo.montarArvoreItens() }
 
     const mapa = idsDePastas(tree)
 
@@ -445,7 +460,7 @@ describe('idsDePastas + campanhasHerdadas ligados à árvore real do VaultRepo',
 
     const personagensSoltos = await repo.montarArvorePastas('personagens-soltos')
     const cenarios = await repo.montarArvoreCenarios()
-    const tree: VaultTree = { campanhas: [], canvasesSoltos: [], personagensSoltos, cenarios, itens: await repo.montarArvoreItens() }
+    const tree: VaultTree = { campanhas: [], canvasesSoltos: [], mapasSoltos: [], personagensSoltos, cenarios, itens: await repo.montarArvoreItens() }
     const mapa = idsDePastas(tree)
 
     const vinculo: Vinculo = {
