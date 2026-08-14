@@ -70,6 +70,16 @@ export function Sidebar({ recolhida, onToggle }: { recolhida: boolean; onToggle:
     })
   }
 
+  async function novoMapaSolto() {
+    const nome = await pedirTexto('Nome do mapa:')
+    if (!nome || !repo) return
+    await comAvisoDeErro(async () => {
+      const ref = await repo.criarCanvasDoc('mapas-soltos', nome)
+      await associarNaCriacao('canvas', ref.id, nome)
+      await recarregar()
+    })
+  }
+
   if (!tree) return <aside className="sidebar">Carregando…</aside>
 
   // filtro validado contra a árvore ATUAL: campanha apagada nesta sessão não deixa
@@ -100,6 +110,8 @@ export function Sidebar({ recolhida, onToggle }: { recolhida: boolean; onToggle:
   const campanhasVisiveis = campanhaValida ? tree.campanhas.filter((c) => c.id === campanhaValida) : tree.campanhas
   const canvasesVisiveis = idsFiltro ? filtrarCanvasesSoltos(tree.canvasesSoltos, idsFiltro) : tree.canvasesSoltos
   const ocultosCanvases = tree.canvasesSoltos.length - canvasesVisiveis.length
+  const mapasVisiveis = idsFiltro ? filtrarCanvasesSoltos(tree.mapasSoltos, idsFiltro) : tree.mapasSoltos
+  const ocultosMapas = tree.mapasSoltos.length - mapasVisiveis.length
   const limparFiltro = () => setCampanhaFiltro(null)
 
   return (
@@ -151,6 +163,28 @@ export function Sidebar({ recolhida, onToggle }: { recolhida: boolean; onToggle:
             key={i.caminho}
             item={i}
             tipo="canvas"
+            aoMudar={recarregar}
+            aoEtiquetar={i.id ? () => void editarCampanhas('canvas', i.id!, i.nome) : undefined}
+          />
+        ))}
+      </div>
+
+      <div className="sidebar-section">
+        <div className="sidebar-section-header">
+          <span>Mapas</span>
+          <button className="btn-icon" title="Novo mapa" onClick={novoMapaSolto}>+</button>
+        </div>
+        {ocultosMapas > 0 && (
+          <button className="filtro-ocultos" onClick={limparFiltro}>
+            {ocultosMapas} {ocultosMapas === 1 ? 'mapa oculto' : 'mapas ocultos'} pelo filtro — mostrar todos
+          </button>
+        )}
+        {mapasVisiveis.map((i) => (
+          <ItemLinha
+            key={i.caminho}
+            item={i}
+            tipo="canvas"
+            tipoAbertura="mapa"
             aoMudar={recarregar}
             aoEtiquetar={i.id ? () => void editarCampanhas('canvas', i.id!, i.nome) : undefined}
           />
@@ -297,7 +331,7 @@ function ItemLinha({ item, tipo, tipoAbertura, aoMudar, aoEtiquetar }: {
       }}
       title={item.erro ? 'Arquivo com erro — não foi possível ler' : item.nome}
     >
-      <span className="item-nome">{tipo === 'personagem' ? '👤 ' : tipoAbertura === 'escrita' ? '✍ ' : '▦ '}{item.nome}{item.erro ? ' ⚠' : ''}</span>
+      <span className="item-nome">{tipo === 'personagem' ? '👤 ' : tipoAbertura === 'escrita' ? '✍ ' : tipoAbertura === 'mapa' ? '🗺 ' : '▦ '}{item.nome}{item.erro ? ' ⚠' : ''}</span>
       <span className="item-acoes" onClick={(e) => e.stopPropagation()}>
         {aoEtiquetar && (
           <button className="btn-icon" title="Campanhas" onClick={(e) => { e.stopPropagation(); aoEtiquetar() }}>🏷️</button>
