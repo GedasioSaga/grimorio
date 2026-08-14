@@ -162,9 +162,16 @@ function idParaSubstituir(caminho: string, ciclo: Ciclo): string | null {
  * uma assimetria do motor: o lado remoto tem plano B (`versaoRemota`) quando o Drive não sabe
  * o checksum, e o lado local não tem nenhum — se o hash do manifesto não for o do arquivo em
  * disco, toda varredura seguinte lê "local mudou" e reenvia o cofre inteiro.
+ *
+ * A guarda de divergência é o que torna esse hash confiável: o envio lê o arquivo do DISCO na
+ * hora, e sem a guarda ele subia bytes mais novos que a varredura com o hash velho no manifesto.
+ * O ciclo seguinte lia "local mudou × remoto mudou" num arquivo que só ESTA máquina editou e
+ * fabricava uma cópia de conflito — a cada ciclo, enquanto o usuário estivesse editando (o
+ * autosave do canvas grava fora de `descarregarFilas`).
  */
 async function subir(caminho: string, ciclo: Ciclo): Promise<Desfecho> {
   const local = exigirLocal(caminho, ciclo)
+  if (await arquivoDivergiuDoSnapshot(caminho, ciclo)) throw erroDeDivergencia(caminho)
   const pastaId = await ciclo.resolverPasta(pastaDe(caminho))
   const enviado = await ciclo.deps.drive.enviar({
     pastaId,
@@ -256,8 +263,16 @@ function registrar(caminho: string, ciclo: Ciclo): Desfecho {
   }
 }
 
-/** Salva o perdedor e depois converge para o vencedor, que é uma subida ou uma descida comum. */
+/**
+ * Salva o perdedor e depois converge para o vencedor, que é uma subida ou uma descida comum.
+ *
+ * A checagem de divergência vem ANTES da preservação: adiar depois de preservar deixaria o
+ * conflito de pé E uma cópia nova no cofre a cada ciclo — com o usuário editando o arquivo, a
+ * sidebar enchia de "(conflito) …" idênticos. Adiado antes, o ciclo seguinte refaz a conta com
+ * a varredura fresca e preserva UMA vez.
+ */
 async function resolverConflito(acao: AcaoConflito, ciclo: Ciclo): Promise<Desfecho> {
+  if (await arquivoDivergiuDoSnapshot(acao.caminho, ciclo)) throw erroDeDivergencia(acao.caminho)
   await ciclo.deps.preservarPerdedor(acao, ciclo.estado.remoto.get(acao.caminho))
   return acao.vencedor === 'local' ? subir(acao.caminho, ciclo) : baixar(acao.caminho, ciclo)
 }

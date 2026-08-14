@@ -176,6 +176,12 @@ interface EstadoDeCofre {
   campanhaFiltro: string | null
   /** teia de vínculos ocupando a área principal (some junto com o cofre) */
   grafoAberto: boolean
+  /**
+   * Sobe a cada `recarregarDoDisco` que chegou ao fim. É o sinal para views com cache PRÓPRIO
+   * — hoje, o canvas aberto, cujo snapshot vive num store do tldraw fora destes caches —
+   * relerem o arquivo delas depois de o sync ter escrito no cofre.
+   */
+  recargasDoDisco: number
   erroCofre: string | null
 }
 
@@ -372,6 +378,7 @@ export function estadoLimpoDeCofre(): EstadoDeCofre {
     vinculos: [],
     campanhaFiltro: null,
     grafoAberto: false,
+    recargasDoDisco: 0,
     erroCofre: null,
   }
 }
@@ -394,6 +401,7 @@ export const useApp = create<AppState>((set, get) => ({
   vinculos: [],
   campanhaFiltro: null,
   grafoAberto: false,
+  recargasDoDisco: 0,
   carregando: false,
   erroCofre: null,
 
@@ -468,6 +476,9 @@ export const useApp = create<AppState>((set, get) => ({
     await get().carregarCenarios()
     await get().carregarItens()
     await get().carregarVinculos()
+    // por último: quem escuta o contador (CanvasView) relê o próprio arquivo, e os caches
+    // acima já têm de estar repostos quando esse reler acontecer
+    set((s) => ({ recargasDoDisco: s.recargasDoDisco + 1 }))
   },
 
   abrirDocumento(tipo, caminho, nome) {
@@ -789,8 +800,8 @@ export const useApp = create<AppState>((set, get) => ({
     // o abrirCofre lá embaixo desistiria em silêncio DEPOIS de o cache ter sido zerado
     if (norm === get().vaultPath || get().carregando) return
     // 1) fecha TUDO que tem debounce próprio. descarregarFilas só enxerga os timers de
-    //    nível de módulo; PerfilModal, CenarioModal, NotasEditor e ChatIA guardam o seu
-    //    em timer.current e CanvasView num `let` do efeito — todos lendo repo/caminho de
+    //    nível de módulo; PerfilModal, CenarioModal, NotasEditor, ChatIA e CanvasView
+    //    guardam o seu em timer.current — todos lendo repo/caminho de
     //    uma closure do React. Desmontá-los antes é o que faz esses timers gravarem no
     //    cofre certo. perfilAbertoId/cenarioAbertoId NÃO saem junto com `aberto`.
     //    Consequência aceita: se `confirmarFalhas` recusar lá embaixo, o que estava

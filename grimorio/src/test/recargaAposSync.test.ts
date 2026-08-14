@@ -169,4 +169,20 @@ describe('recarregarDoDisco', () => {
     useApp.setState({ ...estadoLimpoDeCofre(), vaultPath: null, repo: null })
     await expect(useApp.getState().recarregarDoDisco()).resolves.toBeUndefined()
   })
+
+  it('sobe recargasDoDisco ao fim — é o sinal que o canvas aberto escuta para reler o arquivo', async () => {
+    // O tldraw guarda o snapshot num store próprio, fora dos caches que a recarga repõe:
+    // sem este sinal, um canvas aberto continua mostrando (e regravando) o retrato de antes
+    // do download — a divergência real que vira cópia de conflito.
+    const antes = useApp.getState().recargasDoDisco
+    await useApp.getState().recarregarDoDisco()
+    expect(useApp.getState().recargasDoDisco).toBe(antes + 1)
+  })
+
+  it('recarga que desiste sem ler (cofre fechado) não sobe o contador', async () => {
+    useApp.setState({ ...estadoLimpoDeCofre(), vaultPath: null, repo: null })
+    const antes = useApp.getState().recargasDoDisco
+    await useApp.getState().recarregarDoDisco()
+    expect(useApp.getState().recargasDoDisco).toBe(antes)
+  })
 })
