@@ -8,7 +8,7 @@ import { PerfilModal } from './components/PerfilModal'
 import { CenarioModal } from './components/CenarioModal'
 import { ItemModal } from './components/ItemModal'
 import { GrafoVinculos } from './components/GrafoVinculos'
-import { HostDialogos } from './components/dialogos'
+import { HostDialogos, HostEscolha } from './components/dialogos'
 import { HostDialogoCampanhas } from './components/dialogoCampanhas'
 import { HostDialogoTransformar } from './components/dialogoTransformar'
 import { HostOpcoes } from './components/Opcoes'
@@ -131,6 +131,7 @@ export default function App() {
       <HostOpcoes />
       <HostDialogoTransformar />
       <HostDialogoCampanhas />
+      <HostEscolha />
       <HostDialogos />
     </div>
   )

@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { ask, message } from '@tauri-apps/plugin-dialog'
 import { useApp } from '../state/store'
 import type { TipoAberto } from '../state/store'
-import { pedirTexto } from './dialogos'
+import { pedirEscolha, pedirTexto } from './dialogos'
 import type { CampanhaNode, ItemRef } from '../lib/types'
 import { escritaDirDaCampanha } from '../lib/caminhos'
 import { idsDaCampanha } from '../lib/vinculos'
@@ -60,21 +60,17 @@ export function Sidebar({ recolhida, onToggle }: { recolhida: boolean; onToggle:
     })
   }
 
-  async function novoCanvasSolto() {
-    const nome = await pedirTexto('Nome do canvas:')
-    if (!nome || !repo) return
+  async function novoCanvasOuMapa() {
+    const tipo = await pedirEscolha('Criar:', [
+      { valor: 'canvas', rotulo: 'Canvas' },
+      { valor: 'mapa', rotulo: 'Mapa' },
+    ])
+    if (!tipo || !repo) return
+    const dir = tipo === 'mapa' ? 'mapas-soltos' : 'canvases-soltos'
+    const nome = await pedirTexto(tipo === 'mapa' ? 'Nome do mapa:' : 'Nome do canvas:')
+    if (!nome) return
     await comAvisoDeErro(async () => {
-      const ref = await repo.criarCanvasDoc('canvases-soltos', nome)
-      await associarNaCriacao('canvas', ref.id, nome)
-      await recarregar()
-    })
-  }
-
-  async function novoMapaSolto() {
-    const nome = await pedirTexto('Nome do mapa:')
-    if (!nome || !repo) return
-    await comAvisoDeErro(async () => {
-      const ref = await repo.criarCanvasDoc('mapas-soltos', nome)
+      const ref = await repo.criarCanvasDoc(dir, nome)
       await associarNaCriacao('canvas', ref.id, nome)
       await recarregar()
     })
@@ -112,6 +108,12 @@ export function Sidebar({ recolhida, onToggle }: { recolhida: boolean; onToggle:
   const ocultosCanvases = tree.canvasesSoltos.length - canvasesVisiveis.length
   const mapasVisiveis = idsFiltro ? filtrarCanvasesSoltos(tree.mapasSoltos, idsFiltro) : tree.mapasSoltos
   const ocultosMapas = tree.mapasSoltos.length - mapasVisiveis.length
+  // seção única "Canvas e Mapa": os dois tipos convivem na mesma lista, ordenados por nome
+  const canvasEMapaVisiveis = [
+    ...canvasesVisiveis.map((i) => ({ item: i, tipoAbertura: 'canvas' as const })),
+    ...mapasVisiveis.map((i) => ({ item: i, tipoAbertura: 'mapa' as const })),
+  ].sort((a, b) => a.item.nome.localeCompare(b.item.nome, 'pt'))
+  const ocultosCanvasEMapa = ocultosCanvases + ocultosMapas
   const limparFiltro = () => setCampanhaFiltro(null)
 
   return (
@@ -150,43 +152,22 @@ export function Sidebar({ recolhida, onToggle }: { recolhida: boolean; onToggle:
 
       <div className="sidebar-section">
         <div className="sidebar-section-header">
-          <span>Canvases soltos</span>
-          <button className="btn-icon" title="Novo canvas" onClick={novoCanvasSolto}>+</button>
+          <span>Canvas e Mapa</span>
+          <button className="btn-icon" title="Novo canvas ou mapa" onClick={novoCanvasOuMapa}>+</button>
         </div>
-        {ocultosCanvases > 0 && (
+        {ocultosCanvasEMapa > 0 && (
           <button className="filtro-ocultos" onClick={limparFiltro}>
-            {ocultosCanvases} {ocultosCanvases === 1 ? 'canvas oculto' : 'canvases ocultos'} pelo filtro — mostrar todos
+            {ocultosCanvasEMapa} {ocultosCanvasEMapa === 1 ? 'oculto' : 'ocultos'} pelo filtro — mostrar todos
           </button>
         )}
-        {canvasesVisiveis.map((i) => (
+        {canvasEMapaVisiveis.map(({ item, tipoAbertura }) => (
           <ItemLinha
-            key={i.caminho}
-            item={i}
+            key={item.caminho}
+            item={item}
             tipo="canvas"
+            tipoAbertura={tipoAbertura}
             aoMudar={recarregar}
-            aoEtiquetar={i.id ? () => void editarCampanhas('canvas', i.id!, i.nome) : undefined}
-          />
-        ))}
-      </div>
-
-      <div className="sidebar-section">
-        <div className="sidebar-section-header">
-          <span>Mapas</span>
-          <button className="btn-icon" title="Novo mapa" onClick={novoMapaSolto}>+</button>
-        </div>
-        {ocultosMapas > 0 && (
-          <button className="filtro-ocultos" onClick={limparFiltro}>
-            {ocultosMapas} {ocultosMapas === 1 ? 'mapa oculto' : 'mapas ocultos'} pelo filtro — mostrar todos
-          </button>
-        )}
-        {mapasVisiveis.map((i) => (
-          <ItemLinha
-            key={i.caminho}
-            item={i}
-            tipo="canvas"
-            tipoAbertura="mapa"
-            aoMudar={recarregar}
-            aoEtiquetar={i.id ? () => void editarCampanhas('canvas', i.id!, i.nome) : undefined}
+            aoEtiquetar={item.id ? () => void editarCampanhas('canvas', item.id!, item.nome) : undefined}
           />
         ))}
       </div>

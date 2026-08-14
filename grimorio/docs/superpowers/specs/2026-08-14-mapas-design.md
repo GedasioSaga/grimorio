@@ -16,7 +16,7 @@ traço-branco-sobre-preto que ele já usa.
 |---|---|
 | Natureza do editor | **Vetorial** (formas editáveis), não raster nem tile-based |
 | Motor | **tldraw reaproveitado** — mesmo do canvas atual; nada de segundo motor |
-| Onde vive | **Novo tipo de documento "Mapa"**, seção própria "Mapas" na sidebar |
+| Onde vive | **Novo tipo de documento "Mapa"**, na seção única "Canvas e Mapa" da sidebar — o "+" pergunta o tipo (Canvas ou Mapa) ao criar (decisão do usuário em 14/08, pós-fatia 1; revoga a seção "Mapas" separada cogitada antes) |
 | Organização | Lista **plana** (como Canvases Soltos); pastas ficam para depois |
 | Integração | Aceita **cards de entidade** (drop de personagem/cenário/item) além do desenho |
 | Unidade de medida | **Quadrados da grade** (1 quadrado = 1 célula; padrão RPG de mesa) |

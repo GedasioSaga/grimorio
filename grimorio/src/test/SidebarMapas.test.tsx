@@ -10,12 +10,13 @@ import type { VaultTree } from '../lib/types'
 // mockar o store inteiro esconderia justamente a transição que o teste precisa provar.
 const h = vi.hoisted(() => ({
   pedirTexto: vi.fn(),
+  pedirEscolha: vi.fn(),
   associarNaCriacao: vi.fn(async () => {}),
   editarCampanhas: vi.fn(async () => {}),
 }))
 
 vi.mock('@tauri-apps/plugin-dialog', () => ({ ask: vi.fn(), message: vi.fn() }))
-vi.mock('../components/dialogos', () => ({ pedirTexto: h.pedirTexto }))
+vi.mock('../components/dialogos', () => ({ pedirTexto: h.pedirTexto, pedirEscolha: h.pedirEscolha }))
 vi.mock('../components/dialogoCampanhas', () => ({
   associarNaCriacao: h.associarNaCriacao,
   editarCampanhas: h.editarCampanhas,
@@ -32,10 +33,10 @@ import { Sidebar } from '../components/Sidebar'
 let container: HTMLDivElement
 let root: Root
 
-function arvoreComMapa(): VaultTree {
+function arvoreComCanvasEMapa(): VaultTree {
   return {
     campanhas: [],
-    canvasesSoltos: [],
+    canvasesSoltos: [{ nome: 'Anotações da mesa', caminho: 'canvases-soltos/anotacoes-da-mesa.json', slug: 'anotacoes-da-mesa', id: 'c1' }],
     mapasSoltos: [{ nome: 'Castelo L1', caminho: 'mapas-soltos/castelo-l1.json', slug: 'castelo-l1', id: 'm1' }],
     personagensSoltos: { slug: 'personagens-soltos', nome: 'Personagens soltos', caminho: 'personagens-soltos', subpastas: [], personagens: [] },
     cenarios: { slug: 'cenarios', nome: 'Cenários', caminho: 'cenarios', subpastas: [], cenarios: [] },
@@ -54,20 +55,32 @@ async function montar() {
 
 const clicar = (el: Element) => el.dispatchEvent(new MouseEvent('click', { bubbles: true }))
 
-function secaoMapas(): HTMLElement {
+function secaoCanvasEMapa(): HTMLElement {
   const secoes = Array.from(container.querySelectorAll('.sidebar-section'))
-  const secao = secoes.find((s) => s.querySelector('.sidebar-section-header span')?.textContent === 'Mapas')
-  if (!secao) throw new Error('seção Mapas não encontrada')
+  const secao = secoes.find((s) => s.querySelector('.sidebar-section-header span')?.textContent === 'Canvas e Mapa')
+  if (!secao) throw new Error('seção "Canvas e Mapa" não encontrada')
   return secao as HTMLElement
+}
+
+function itemComTexto(texto: string): HTMLElement {
+  const item = Array.from(secaoCanvasEMapa().querySelectorAll('.item-linha'))
+    .find((el) => el.textContent?.includes(texto))
+  if (!item) throw new Error(`item "${texto}" não encontrado`)
+  return item as HTMLElement
 }
 
 beforeEach(() => {
   h.pedirTexto.mockReset()
+  h.pedirEscolha.mockReset()
   h.associarNaCriacao.mockReset().mockResolvedValue(undefined)
   h.editarCampanhas.mockReset().mockResolvedValue(undefined)
   useApp.setState({
-    tree: arvoreComMapa(),
-    repo: { criarCanvasDoc: vi.fn(async () => ({ slug: 'novo-mapa', nome: 'Novo Mapa', caminho: 'mapas-soltos/novo-mapa.json', id: 'novo-id' })) } as never,
+    tree: arvoreComCanvasEMapa(),
+    repo: {
+      criarCanvasDoc: vi.fn(async (dir: string) => ({
+        slug: 'novo', nome: 'Novo', caminho: `${dir}/novo.json`, id: 'novo-id',
+      })),
+    } as never,
     recarregarArvore: vi.fn(async () => {}),
     carregarPersonagens: vi.fn(async () => {}),
     carregarCenarios: vi.fn(async () => {}),
@@ -86,23 +99,22 @@ afterEach(() => {
   container.remove()
 })
 
-describe('Sidebar: seção Mapas', () => {
-  it('lista o mapa da árvore com o ícone 🗺', async () => {
+describe('Sidebar: seção "Canvas e Mapa"', () => {
+  it('lista canvas e mapa juntos, cada um com o ícone certo', async () => {
     await montar()
 
-    const secao = secaoMapas()
-    expect(secao.textContent).toContain('🗺')
-    expect(secao.textContent).toContain('Castelo L1')
+    const secao = secaoCanvasEMapa()
+    expect(itemComTexto('Anotações da mesa').textContent).toContain('▦')
+    expect(itemComTexto('Castelo L1').textContent).toContain('🗺')
+    // não sobrou seção "Mapas" separada
+    expect(Array.from(secao.parentElement!.querySelectorAll('.sidebar-section-header span')).map((s) => s.textContent))
+      .not.toContain('Mapas')
   })
 
-  it('clicar no item abre o documento como mapa', async () => {
+  it('clicar no mapa abre o documento como mapa', async () => {
     await montar()
 
-    const item = Array.from(secaoMapas().querySelectorAll('.item-linha'))
-      .find((el) => el.textContent?.includes('Castelo L1'))
-    if (!item) throw new Error('item "Castelo L1" não encontrado')
-
-    await act(async () => { clicar(item) })
+    await act(async () => { clicar(itemComTexto('Castelo L1')) })
 
     expect(useApp.getState().aberto).toEqual({
       tipo: 'mapa',
@@ -111,16 +123,57 @@ describe('Sidebar: seção Mapas', () => {
     })
   })
 
-  it('botão "+" cria um mapa em mapas-soltos com o nome pedido', async () => {
+  it('clicar no canvas abre o documento como canvas', async () => {
+    await montar()
+
+    await act(async () => { clicar(itemComTexto('Anotações da mesa')) })
+
+    expect(useApp.getState().aberto).toEqual({
+      tipo: 'canvas',
+      caminho: 'canvases-soltos/anotacoes-da-mesa.json',
+      nome: 'Anotações da mesa',
+    })
+  })
+
+  it('botão "+" pergunta o tipo; escolhendo Mapa cria em mapas-soltos', async () => {
+    h.pedirEscolha.mockResolvedValue('mapa')
     h.pedirTexto.mockResolvedValue('Novo Mapa')
     await montar()
 
-    const botaoNovo = secaoMapas().querySelector<HTMLButtonElement>('button[title="Novo mapa"]')
-    if (!botaoNovo) throw new Error('botão "Novo mapa" não encontrado')
+    const botaoNovo = secaoCanvasEMapa().querySelector<HTMLButtonElement>('button.btn-icon')
+    if (!botaoNovo) throw new Error('botão "+" não encontrado')
 
     await act(async () => { clicar(botaoNovo) })
 
     const repo = useApp.getState().repo as unknown as { criarCanvasDoc: ReturnType<typeof vi.fn> }
     expect(repo.criarCanvasDoc).toHaveBeenCalledWith('mapas-soltos', 'Novo Mapa')
+  })
+
+  it('botão "+" pergunta o tipo; escolhendo Canvas cria em canvases-soltos', async () => {
+    h.pedirEscolha.mockResolvedValue('canvas')
+    h.pedirTexto.mockResolvedValue('Novo Canvas')
+    await montar()
+
+    const botaoNovo = secaoCanvasEMapa().querySelector<HTMLButtonElement>('button.btn-icon')
+    if (!botaoNovo) throw new Error('botão "+" não encontrado')
+
+    await act(async () => { clicar(botaoNovo) })
+
+    const repo = useApp.getState().repo as unknown as { criarCanvasDoc: ReturnType<typeof vi.fn> }
+    expect(repo.criarCanvasDoc).toHaveBeenCalledWith('canvases-soltos', 'Novo Canvas')
+  })
+
+  it('cancelar a escolha de tipo não cria nada', async () => {
+    h.pedirEscolha.mockResolvedValue(null)
+    await montar()
+
+    const botaoNovo = secaoCanvasEMapa().querySelector<HTMLButtonElement>('button.btn-icon')
+    if (!botaoNovo) throw new Error('botão "+" não encontrado')
+
+    await act(async () => { clicar(botaoNovo) })
+
+    expect(h.pedirTexto).not.toHaveBeenCalled()
+    const repo = useApp.getState().repo as unknown as { criarCanvasDoc: ReturnType<typeof vi.fn> }
+    expect(repo.criarCanvasDoc).not.toHaveBeenCalled()
   })
 })
