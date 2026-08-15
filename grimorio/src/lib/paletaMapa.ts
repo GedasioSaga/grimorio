@@ -36,11 +36,21 @@
  * aceitável quando não há textura própria de "traço grosso vazado" no fill tldraw.
  */
 
+export type PecaId =
+  | 'sala' | 'parede' | 'porta' | 'janela' | 'escada'
+  | 'movel' | 'secreta' | 'armadilha' | 'marcador' | 'rotulo'
+
 export interface ElementoPaleta {
-  id: 'sala' | 'parede' | 'porta' | 'janela' | 'escada'
+  id: PecaId
   rotulo: string
   glifo: string
-  /** estilos tldraw a aplicar nas próximas formas (chave = nome do style, valor = valor válido) */
+  /**
+   * Como a peça entra no mapa:
+   * - `geo`: pré-estila a próxima forma (`setStyleForNextShapes`) e liga a ferramenta `geo`
+   * - `texto`: idem, mas liga a ferramenta `text`
+   * - `acao`: a toolbar cria a forma na hora (escada, porta e marcador não são geo puro)
+   */
+  tipo: 'geo' | 'texto' | 'acao'
   estilos: Record<string, string>
   geo?: string
 }
@@ -52,6 +62,7 @@ export const ELEMENTOS_PALETA: ElementoPaleta[] = [
     id: 'sala',
     rotulo: 'Sala',
     glifo: '⬛',
+    tipo: 'geo',
     geo: 'rectangle',
     estilos: { color: 'green', fill: 'solid', dash: 'solid', size: 's' },
   },
@@ -59,20 +70,23 @@ export const ELEMENTOS_PALETA: ElementoPaleta[] = [
     id: 'parede',
     rotulo: 'Parede',
     glifo: '▤',
+    tipo: 'geo',
     geo: 'rectangle',
     estilos: { color: 'white', fill: 'solid', dash: 'solid', size: 'm' },
   },
   {
+    // porta virou shape próprio nesta leva (vão + jambas + arco): ver PortaShape.tsx
     id: 'porta',
     rotulo: 'Porta',
     glifo: '🚪',
-    geo: 'rectangle',
-    estilos: { color: 'orange', fill: 'solid', dash: 'solid', size: 's' },
+    tipo: 'acao',
+    estilos: {},
   },
   {
     id: 'janela',
     rotulo: 'Janela',
     glifo: '▭',
+    tipo: 'geo',
     geo: 'rectangle',
     estilos: { color: 'light-blue', fill: 'none', dash: 'solid', size: 's' },
   },
@@ -80,7 +94,49 @@ export const ELEMENTOS_PALETA: ElementoPaleta[] = [
     id: 'escada',
     rotulo: 'Escada',
     glifo: '≡',
+    tipo: 'acao',
     estilos: {},
+  },
+  {
+    // mobília ocupa espaço dentro da sala sem competir com a parede: cinza, sólido, fino
+    id: 'movel',
+    rotulo: 'Móvel',
+    glifo: '▬',
+    tipo: 'geo',
+    geo: 'rectangle',
+    estilos: { color: 'grey', fill: 'solid', dash: 'solid', size: 's' },
+  },
+  {
+    // tracejado violeta: some no mapa impresso e salta quando o mestre procura
+    id: 'secreta',
+    rotulo: 'Passagem secreta',
+    glifo: '◈',
+    tipo: 'geo',
+    geo: 'rectangle',
+    estilos: { color: 'violet', fill: 'none', dash: 'dashed', size: 's' },
+  },
+  {
+    id: 'armadilha',
+    rotulo: 'Armadilha',
+    glifo: '⚠',
+    tipo: 'geo',
+    geo: 'triangle',
+    estilos: { color: 'red', fill: 'none', dash: 'solid', size: 's' },
+  },
+  {
+    // círculo com número, amarrando o ponto do mapa à anotação escrita
+    id: 'marcador',
+    rotulo: 'Marcador numerado',
+    glifo: '①',
+    tipo: 'acao',
+    estilos: { color: 'yellow', fill: 'solid', dash: 'solid', size: 's' },
+  },
+  {
+    id: 'rotulo',
+    rotulo: 'Rótulo',
+    glifo: 'A',
+    tipo: 'texto',
+    estilos: { color: 'white', size: 's' },
   },
 ]
 

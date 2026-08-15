@@ -6,7 +6,7 @@ import {
   DefaultSizeStyle,
   GeoShapeGeoStyle,
 } from 'tldraw'
-import { ELEMENTOS_PALETA } from '../lib/paletaMapa'
+import { ELEMENTOS_PALETA, type ElementoPaleta } from '../lib/paletaMapa'
 
 // Listas de valores válidos direto do tlschema real (StyleProp.defineEnum expõe `.values`,
 // verificado em node_modules/@tldraw/tlschema/src/styles/StyleProp.ts:112-121 — EnumStyleProp
@@ -18,9 +18,13 @@ const SIZES_VALIDOS = new Set<string>(DefaultSizeStyle.values)
 const GEOS_VALIDOS = new Set<string>(GeoShapeGeoStyle.values)
 
 describe('ELEMENTOS_PALETA', () => {
-  it('tem os 5 elementos da paleta RPG', () => {
-    expect(ELEMENTOS_PALETA).toHaveLength(5)
-    expect(ELEMENTOS_PALETA.map((e) => e.id)).toEqual(['sala', 'parede', 'porta', 'janela', 'escada'])
+  // leva 4a: catálogo cresceu de 5 pra 10 peças (móvel, secreta, armadilha, marcador, rótulo) — ver describe abaixo
+  it('tem os 10 elementos da paleta RPG', () => {
+    expect(ELEMENTOS_PALETA).toHaveLength(10)
+    expect(ELEMENTOS_PALETA.map((e) => e.id)).toEqual([
+      'sala', 'parede', 'porta', 'janela', 'escada',
+      'movel', 'secreta', 'armadilha', 'marcador', 'rotulo',
+    ])
   })
 
   it('cada elemento tem rótulo pt-BR e glifo não vazios', () => {
@@ -55,12 +59,12 @@ describe('ELEMENTOS_PALETA', () => {
     expect(parede.estilos.size).toBe('m')
   })
 
-  it('porta: geo rectangle, cor laranja, fill sólido, tamanho s', () => {
+  // leva 4a: porta virou shape próprio (PortaShape.tsx), não mais geo pré-estilado
+  it('porta: tipo ação, sem geo nem estilo — o desenho é o PortaShape', () => {
     const porta = ELEMENTOS_PALETA.find((e) => e.id === 'porta')!
-    expect(porta.geo).toBe('rectangle')
-    expect(porta.estilos.color).toBe('orange')
-    expect(porta.estilos.fill).toBe('solid')
-    expect(porta.estilos.size).toBe('s')
+    expect(porta.tipo).toBe('acao')
+    expect(porta.geo).toBeUndefined()
+    expect(Object.keys(porta.estilos)).toHaveLength(0)
   })
 
   it('janela: geo rectangle, cor light-blue, sem fill, tamanho s', () => {
@@ -121,5 +125,46 @@ describe('ELEMENTOS_PALETA', () => {
         expect(GEOS_VALIDOS.has(el.geo)).toBe(true)
       }
     }
+  })
+})
+
+describe('peças da leva 4a', () => {
+  it('classifica cada peça pelo jeito que ela entra no mapa', () => {
+    const porTipo = (tipo: ElementoPaleta['tipo']) =>
+      ELEMENTOS_PALETA.filter((e) => e.tipo === tipo).map((e) => e.id)
+
+    expect(porTipo('geo')).toEqual(['sala', 'parede', 'janela', 'movel', 'secreta', 'armadilha'])
+    expect(porTipo('texto')).toEqual(['rotulo'])
+    expect(porTipo('acao')).toEqual(['porta', 'escada', 'marcador'])
+  })
+
+  it('toda peça geo declara a forma tldraw e ao menos um estilo', () => {
+    for (const e of ELEMENTOS_PALETA.filter((el) => el.tipo === 'geo')) {
+      expect(e.geo, `peça ${e.id} sem geo`).toBeTruthy()
+      expect(Object.keys(e.estilos).length, `peça ${e.id} sem estilo`).toBeGreaterThan(0)
+    }
+  })
+
+  it('todo estilo usa valor que existe no tlschema do tldraw', () => {
+    // valores conferidos em node_modules/@tldraw/tlschema/src/styles/:
+    // TLColorStyle.ts:23-37, TLFillStyle.ts:39, TLDashStyle.ts:38, TLSizeStyle.ts:38
+    const validos: Record<string, string[]> = {
+      color: ['black', 'grey', 'light-violet', 'violet', 'blue', 'light-blue', 'yellow',
+              'orange', 'green', 'light-green', 'light-red', 'red', 'white'],
+      fill: ['none', 'semi', 'solid', 'pattern', 'fill', 'lined-fill'],
+      dash: ['draw', 'solid', 'dashed', 'dotted'],
+      size: ['s', 'm', 'l', 'xl'],
+    }
+    for (const e of ELEMENTOS_PALETA) {
+      for (const [nome, valor] of Object.entries(e.estilos)) {
+        expect(validos[nome], `estilo desconhecido: ${nome}`).toBeTruthy()
+        expect(validos[nome], `${e.id}.${nome} = ${valor}`).toContain(valor)
+      }
+    }
+  })
+
+  it('cada peça tem id único', () => {
+    const ids = ELEMENTOS_PALETA.map((e) => e.id)
+    expect(new Set(ids).size).toBe(ids.length)
   })
 })
