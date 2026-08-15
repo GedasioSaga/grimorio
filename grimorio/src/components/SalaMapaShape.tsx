@@ -1,5 +1,7 @@
-import { BaseBoxShapeUtil, SVGContainer, T, type RecordProps, type TLShape } from 'tldraw'
+import { BaseBoxShapeUtil, SVGContainer, T, createShapePropsMigrationIds, createShapePropsMigrationSequence, type RecordProps, type TLShape } from 'tldraw'
+import { useApp } from '../state/store'
 import { ESPESSURA_CONTORNO_SALA, aparenciaDaSala, quebrarRotulo } from '../lib/salaMapa'
+import { resolverVinculoSala } from '../lib/vinculoSalaCenario'
 
 declare module '@tldraw/tlschema' {
   interface TLGlobalShapePropsMap {
@@ -12,6 +14,8 @@ declare module '@tldraw/tlschema' {
       rotulo: string
       /** cor escolhida à mão; vazio significa "usar a cor do estado" */
       cor: string
+      /** id do Cenário (ficha) que esta sala abre; vazio = sem vínculo */
+      cenarioId: string
     }
   }
 }
@@ -38,6 +42,13 @@ const ENTRELINHA = 14
  * escuro é sem informação. Trocar o estado é o gesto mais repetido no uso real, então
  * ele fica no painel de propriedades, a um clique.
  */
+// mapas salvos antes do vínculo sala↔cenário não têm `cenarioId` — sem a migração o
+// tldraw recusa o documento inteiro ao validar contra o schema novo (mesmo padrão de
+// CharacterCardShape.tsx / CenarioCardShape.tsx).
+const versoes = createShapePropsMigrationIds('sala-mapa', {
+  AdicionaCenarioId: 1,
+})
+
 export class SalaMapaShapeUtil extends BaseBoxShapeUtil<SalaMapaShapeType> {
   static override type = 'sala-mapa' as const
 
@@ -47,49 +58,150 @@ export class SalaMapaShapeUtil extends BaseBoxShapeUtil<SalaMapaShapeType> {
     estado: T.string,
     rotulo: T.string,
     cor: T.string,
+    cenarioId: T.string,
   }
 
+  static override migrations = createShapePropsMigrationSequence({
+    sequence: [
+      {
+        id: versoes.AdicionaCenarioId,
+        up(props) {
+          props.cenarioId = ''
+        },
+        down(props) {
+          delete props.cenarioId
+        },
+      },
+    ],
+  })
+
   getDefaultProps(): SalaMapaShapeType['props'] {
-    return { w: SALA_LARGURA_PADRAO, h: SALA_ALTURA_PADRAO, estado: 'pendente', rotulo: '', cor: '' }
+    return { w: SALA_LARGURA_PADRAO, h: SALA_ALTURA_PADRAO, estado: 'pendente', rotulo: '', cor: '', cenarioId: '' }
+  }
+
+  /**
+   * Duplo clique abre a ficha do Cenário vinculado. Escolhido em vez de clique único
+   * porque clique único já é seleção/início de arrasto no tldraw — usar esse gesto para
+   * abrir a ficha tornaria impossível mover a sala sem abrir a ficha de goela abaixo.
+   * Duplo clique também não tinha nenhum uso anterior nesta forma (ela não é editável
+   * inline; o nome do cômodo se edita pelo painel de propriedades), então não colide com
+   * nada.
+   *
+   * Vínculo quebrado (cenário excluído): duplo clique não faz nada — não há o que abrir,
+   * e o usuário já vê o aviso na própria sala (badge ⚠).
+   */
+  override onDoubleClick = (shape: SalaMapaShapeType) => {
+    const { cenarioId } = shape.props
+    if (cenarioId && useApp.getState().cenarios[cenarioId]) useApp.getState().abrirCenario(cenarioId)
+    /**
+     * SEMPRE devolve uma mudança, mesmo sem vínculo nenhum para abrir.
+     *
+     * O `Idle` do SelectTool só considera o handler atendido quando ele retorna algo truthy
+     * (`node_modules/tldraw/src/lib/tools/SelectTool/childStates/Idle.ts:312-336`): sem retorno,
+     * ele segue para `handleDoubleClickOnCanvas`, que CRIA um shape de texto no ponto e entra em
+     * edição — o comentário no código deles diz isso com todas as letras. Como a sala não é
+     * editável (`canEdit` default é false), todo duplo clique numa sala sujava o mapa com um
+     * texto vazio. Isso já acontecia antes deste vínculo existir, porque não havia handler
+     * nenhum; agora o handler existe e fecha os dois casos de uma vez.
+     *
+     * O retorno é um parcial sem prop alguma: `updateShapes` não acha diferença e nada muda de
+     * verdade. O valor serve só de "eu tratei isto".
+     */
+    return { id: shape.id, type: shape.type }
   }
 
   component(shape: SalaMapaShapeType) {
-    const { w, h, estado, rotulo, cor } = shape.props
-    const aparencia = aparenciaDaSala(estado, cor || undefined)
-    const linhas = quebrarRotulo(rotulo, w, FONTE_ROTULO)
-    const alturaTexto = linhas.length * ENTRELINHA
-    const primeiraLinhaY = h / 2 - alturaTexto / 2 + ENTRELINHA / 2
-
-    return (
-      <SVGContainer>
-        <rect
-          x={0}
-          y={0}
-          width={w}
-          height={h}
-          fill={aparencia.preenchimento}
-          stroke={aparencia.contorno}
-          strokeWidth={ESPESSURA_CONTORNO_SALA}
-        />
-        {linhas.map((linha, i) => (
-          <text
-            key={i}
-            x={w / 2}
-            y={primeiraLinhaY + i * ENTRELINHA}
-            fill={aparencia.texto}
-            fontSize={FONTE_ROTULO}
-            fontFamily="system-ui, sans-serif"
-            textAnchor="middle"
-            dominantBaseline="central"
-          >
-            {linha}
-          </text>
-        ))}
-      </SVGContainer>
-    )
+    return <CorpoSala shape={shape} />
   }
 
   indicator(shape: SalaMapaShapeType) {
     return <rect width={shape.props.w} height={shape.props.h} />
   }
+}
+
+/** Tamanho do badge de vínculo, no canto superior-direito da sala. */
+const BADGE_RAIO = 8
+const BADGE_MARGEM = 4
+
+function CorpoSala({ shape }: { shape: SalaMapaShapeType }) {
+  const { w, h, estado, rotulo, cor, cenarioId } = shape.props
+  // nome do cenário vinculado (se existir) é o bastante pro resolvedor puro decidir
+  // vinculado/quebrado/sem-vínculo
+  const nomeCenario = useApp((s) => (cenarioId ? s.cenarios[cenarioId]?.nome : undefined))
+  // `carregando` separa "cenário sumiu" de "ainda não li os cenários" — as duas chegam como
+  // chave ausente, e confundi-las faria toda sala ligada piscar o aviso de quebrado ao abrir
+  // o cofre. O porquê inteiro está em `resolverVinculoSala`.
+  const carregando = useApp((s) => s.carregando)
+  const vinculo = resolverVinculoSala(
+    cenarioId,
+    nomeCenario !== undefined ? { [cenarioId]: nomeCenario } : {},
+    !carregando,
+  )
+
+  const aparencia = aparenciaDaSala(estado, cor || undefined)
+  const linhas = quebrarRotulo(rotulo, w, FONTE_ROTULO)
+  const alturaTexto = linhas.length * ENTRELINHA
+  const primeiraLinhaY = h / 2 - alturaTexto / 2 + ENTRELINHA / 2
+
+  const badgeCx = w - BADGE_MARGEM - BADGE_RAIO
+  const badgeCy = BADGE_MARGEM + BADGE_RAIO
+  const badgeCabe = w > (BADGE_RAIO + BADGE_MARGEM) * 2 && h > (BADGE_RAIO + BADGE_MARGEM) * 2
+
+  return (
+    <SVGContainer>
+      <rect
+        x={0}
+        y={0}
+        width={w}
+        height={h}
+        fill={aparencia.preenchimento}
+        stroke={aparencia.contorno}
+        strokeWidth={ESPESSURA_CONTORNO_SALA}
+      />
+      {linhas.map((linha, i) => (
+        <text
+          key={i}
+          x={w / 2}
+          y={primeiraLinhaY + i * ENTRELINHA}
+          fill={aparencia.texto}
+          fontSize={FONTE_ROTULO}
+          fontFamily="system-ui, sans-serif"
+          textAnchor="middle"
+          dominantBaseline="central"
+        >
+          {linha}
+        </text>
+      ))}
+      {/* `carregando` fica de fora: a sala tem vínculo, mas o cache de cenários ainda não
+          chegou. Desenhar o ⚠ aqui acusaria estrago que não houve, e o aviso vira ruído. Assim
+          que `carregarCenarios` termina, o zustand re-renderiza e o 🔗 aparece sozinho. */}
+      {(vinculo.estado === 'vinculado' || vinculo.estado === 'quebrado') && badgeCabe && (
+        <g>
+          <title>
+            {vinculo.estado === 'vinculado'
+              ? `Abre "${vinculo.nomeCenario}" (duplo clique)`
+              : 'Vínculo quebrado: o cenário foi excluído'}
+          </title>
+          <circle
+            cx={badgeCx}
+            cy={badgeCy}
+            r={BADGE_RAIO}
+            fill={vinculo.estado === 'vinculado' ? '#2f6f4f' : '#8a3b2f'}
+            stroke={aparencia.contorno}
+            strokeWidth={1}
+          />
+          <text
+            x={badgeCx}
+            y={badgeCy}
+            fontSize={BADGE_RAIO * 1.3}
+            textAnchor="middle"
+            dominantBaseline="central"
+            fill="#ffffff"
+          >
+            {vinculo.estado === 'vinculado' ? '🔗' : '⚠'}
+          </text>
+        </g>
+      )}
+    </SVGContainer>
+  )
 }

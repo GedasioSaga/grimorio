@@ -62,7 +62,7 @@ describe('shapes próprios do Mapa registram tipo e props', () => {
     const { SalaMapaShapeUtil } = await import('../components/SalaMapaShape')
     expect(SalaMapaShapeUtil.type).toBe('sala-mapa')
     // props precisam existir, senão o tldraw rejeita o shape ao carregar o arquivo
-    expect(Object.keys(SalaMapaShapeUtil.props)).toEqual(['w', 'h', 'estado', 'rotulo', 'cor'])
+    expect(Object.keys(SalaMapaShapeUtil.props)).toEqual(['w', 'h', 'estado', 'rotulo', 'cor', 'cenarioId'])
   })
 
   it('PortaShapeUtil', async () => {

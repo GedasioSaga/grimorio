@@ -1325,3 +1325,9 @@ button:hover { border-color: var(--dourado); color: var(--dourado-claro); }
   background: var(--fundo-painel); border: 1px solid var(--dourado); border-radius: 8px;
   padding: 8px 14px; font-size: 13px; color: var(--texto); cursor: pointer; max-width: 480px;
 }
+
+/* vínculo sala↔cenário quebrado (cenário excluído): aviso curto sob o seletor, no
+   painel de propriedades da sala — ver SeletorCenarioDaSala em PainelPropriedades.tsx */
+.painel-vinculo-quebrado {
+  display: block; font-size: 11px; color: var(--erro); margin-top: 4px;
+}

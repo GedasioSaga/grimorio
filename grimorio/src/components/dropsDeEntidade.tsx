@@ -13,6 +13,7 @@ import { CARD_ALTURA_PADRAO, CARD_LARGURA_PADRAO } from './CharacterCardShape'
 import { MIME_CENARIO } from './CenariosSoltos'
 import { MIME_ITEM } from './ItensSoltos'
 import { cardsPorEntidade, ligarCenarioNoCanvas, ligarRelacoesNoCanvas } from './ligacoesCanvas'
+import type { SalaMapaShapeType } from './SalaMapaShape'
 
 const MIME_PERSONAGEM = 'application/x-grimorio-personagem'
 const MIME_IMAGEM = 'application/x-grimorio-imagem'
@@ -83,6 +84,24 @@ async function soltarImagemNoMapa(
   })
 }
 
+/**
+ * Sala do mapa embaixo do ponto de solta, se houver. `getShapesAtPoint` devolve as
+ * formas com a mais ao topo primeiro e já filtra as escondidas, então o primeiro
+ * `sala-mapa` da lista é a sala que o usuário está vendo sob o cursor.
+ *
+ * Sala TRAVADA (por si ou pela camada) não conta. `editor.updateShape` recusa shape travado
+ * **em silêncio** (`@tldraw/editor/src/lib/editor/Editor.ts`, o laço faz `continue` sem erro —
+ * é o mesmo comportamento que o `HANDOFF.md:54` já registra para `deleteShapes`). Devolver a
+ * sala travada aqui faria o drop não criar vínculo E não criar card: sumiria sem explicação.
+ * Devolvendo `undefined`, o drop cai no caminho normal e vira card, que é visível e desfazível.
+ */
+function salaSobPonto(editor: Editor, ponto: { x: number; y: number }): SalaMapaShapeType | undefined {
+  const sala = editor.getShapesAtPoint(ponto, { hitInside: true }).find((s) => s.type === 'sala-mapa') as
+    | SalaMapaShapeType
+    | undefined
+  return sala && !editor.isShapeOrAncestorLocked(sala) ? sala : undefined
+}
+
 /** Handlers de drag/drop para superfícies tldraw que aceitam entidades e imagens do cofre. */
 export function criarHandlersDeDrop(
   editorRef: React.RefObject<Editor | null>,
@@ -122,6 +141,17 @@ export function criarHandlersDeDrop(
         e.preventDefault()
         e.stopPropagation()
         const ponto = editor.screenToPage({ x: e.clientX, y: e.clientY })
+
+        // Cenário solto EM CIMA de uma sala liga os dois em vez de criar um card —
+        // soltar em área vazia continua criando card normalmente (ramo abaixo).
+        if (mime === MIME_CENARIO) {
+          const sala = salaSobPonto(editor, ponto)
+          if (sala) {
+            editor.updateShape<SalaMapaShapeType>({ id: sala.id, type: 'sala-mapa', props: { cenarioId: id } })
+            return
+          }
+        }
+
         // Batch: card + setas viram UM passo de undo (Ctrl+Z desfaz o drop inteiro).
         editor.run(() => {
           editor.createShape({

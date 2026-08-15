@@ -4,6 +4,9 @@ import { QUADRADO_PX, emQuadrados, parseQuadrados } from '../lib/quadrados'
 import { CORES_SALA, ESTADOS_SALA, aparenciaDaSala } from '../lib/salaMapa'
 import { definicaoDoSimbolo } from '../lib/simbolosMapa'
 import { ESTADOS_PORTA, aparenciaDaPorta } from '../lib/portaMapa'
+import { opcoesDeCenario, resolverVinculoSala } from '../lib/vinculoSalaCenario'
+import { coletarCenarioRefs } from '../lib/cenarioArvore'
+import { useApp } from '../state/store'
 
 /** Snapshot reativo da seleção que o painel precisa para se desenhar. */
 export type SelecaoPropriedades =
@@ -24,6 +27,8 @@ export type SelecaoPropriedades =
       simbolo?: string
       /** cor escolhida à mão na sala; vazio = usa a cor do estado */
       cor?: string
+      /** id do Cenário vinculado à sala; vazio = sem vínculo (só faz sentido p/ sala-mapa) */
+      cenarioId?: string
     }
   | { tipo: 'multi'; w: number; h: number }
   | null
@@ -80,6 +85,7 @@ export function SelecaoPropriedadesBridge() {
         rotuloSala: typeof props.rotulo === 'string' ? props.rotulo : undefined,
         simbolo: typeof props.simbolo === 'string' ? props.simbolo : undefined,
         cor: typeof props.cor === 'string' ? props.cor : undefined,
+        cenarioId: typeof props.cenarioId === 'string' ? props.cenarioId : undefined,
       }
     },
     [editor],
@@ -110,6 +116,7 @@ export function PainelPropriedades({
   aoTrocarEstado,
   aoRenomearSala,
   aoTrocarCor,
+  aoVincularCenario,
 }: {
   selecao: SelecaoPropriedades
   aoAplicarX: (id: TLShapeId, quadrados: number) => void
@@ -119,6 +126,7 @@ export function PainelPropriedades({
   aoTrocarEstado: (id: TLShapeId, estado: string) => void
   aoRenomearSala: (id: TLShapeId, nome: string) => void
   aoTrocarCor: (id: TLShapeId, cor: string) => void
+  aoVincularCenario: (id: TLShapeId, cenarioId: string) => void
 }) {
   const [colapsado, setColapsado] = useState(false)
 
@@ -165,6 +173,12 @@ export function PainelPropriedades({
           )}
           {selecao.tipoShape === 'sala-mapa' && (
             <SeletorCor atual={selecao.cor ?? ''} onEscolher={(cor) => aoTrocarCor(selecao.id, cor)} />
+          )}
+          {selecao.tipoShape === 'sala-mapa' && (
+            <SeletorCenarioDaSala
+              atual={selecao.cenarioId ?? ''}
+              onEscolher={(cenarioId) => aoVincularCenario(selecao.id, cenarioId)}
+            />
           )}
           <div className="painel-propriedades-grade">
           <CampoQuadrado label="X" valorPx={selecao.x} onAplicar={(q) => aoAplicarX(selecao.id, q)} />
@@ -363,6 +377,50 @@ function SeletorCor({ atual, onEscolher }: { atual: string; onEscolher: (cor: st
           />
         ))}
       </div>
+    </div>
+  )
+}
+
+/**
+ * Cenário que a sala abre ao duplo clique. Segundo jeito de criar o vínculo (o primeiro
+ * é arrastar o cenário da sidebar e soltar em cima da sala — ver `dropsDeEntidade.tsx`).
+ * Escolher "— nenhum —" desfaz o vínculo sem apagar a sala.
+ *
+ * `useApp` é lido diretamente aqui (em vez de vir por prop do MapaView) porque é só
+ * LEITURA — a lista de cenários existe pronta no store, e replicar esse fio por prop só
+ * pra popular um <select> não ganha nada em troca.
+ */
+function SeletorCenarioDaSala({ atual, onEscolher }: { atual: string; onEscolher: (cenarioId: string) => void }) {
+  const cenarios = useApp((s) => s.cenarios)
+  const raizCenarios = useApp((s) => s.tree?.cenarios)
+  const opcoes = opcoesDeCenario(raizCenarios ? coletarCenarioRefs(raizCenarios) : [])
+  const nomeAtual = atual ? cenarios[atual]?.nome : undefined
+  // ver `resolverVinculoSala`: sem isto, cenário ainda não carregado vira "vínculo quebrado"
+  const carregando = useApp((s) => s.carregando)
+  const vinculo = resolverVinculoSala(
+    atual,
+    nomeAtual !== undefined ? { [atual]: nomeAtual } : {},
+    !carregando,
+  )
+
+  return (
+    <div className="painel-estado">
+      <span className="painel-propriedades-label">Cenário vinculado</span>
+      <select
+        className="painel-propriedades-input"
+        value={vinculo.estado === 'quebrado' ? '' : atual}
+        onChange={(e) => onEscolher(e.target.value)}
+      >
+        <option value="">— nenhum —</option>
+        {opcoes.map((o) => (
+          <option key={o.id} value={o.id}>
+            {o.nome}
+          </option>
+        ))}
+      </select>
+      {vinculo.estado === 'quebrado' && (
+        <span className="painel-vinculo-quebrado">Vínculo quebrado — o cenário foi excluído. Escolha outro ou "— nenhum —" para limpar.</span>
+      )}
     </div>
   )
 }

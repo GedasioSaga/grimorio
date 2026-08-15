@@ -330,6 +330,14 @@ export function MapaView({ caminho, nome }: { caminho: string; nome: string }) {
     editor.updateShape({ id, type: shape.type, props: { cor } } as Parameters<typeof editor.updateShape>[0])
   }
 
+  /** Vincula/desvincula o Cenário que a sala abre; string vazia desfaz o vínculo. */
+  function aoVincularCenario(id: TLShapeId, cenarioId: string) {
+    const editor = editorRef.current
+    const shape = editor?.getShape(id)
+    if (!editor || !shape || shape.type !== 'sala-mapa') return
+    editor.updateShape({ id, type: shape.type, props: { cenarioId } } as Parameters<typeof editor.updateShape>[0])
+  }
+
   async function exportar(formato: 'png' | 'svg') {
     const editor = editorRef.current
     if (!editor || !repo) return
@@ -461,6 +469,7 @@ export function MapaView({ caminho, nome }: { caminho: string; nome: string }) {
           aoTrocarEstado={aoTrocarEstado}
           aoRenomearSala={aoRenomearSala}
           aoTrocarCor={aoTrocarCor}
+          aoVincularCenario={aoVincularCenario}
         />
         <PainelCamadas
           camadas={camadas}
