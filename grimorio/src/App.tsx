@@ -12,6 +12,7 @@ import { HostDialogos, HostEscolha } from './components/dialogos'
 import { HostDialogoCampanhas } from './components/dialogoCampanhas'
 import { HostDialogoTransformar } from './components/dialogoTransformar'
 import { HostOpcoes } from './components/Opcoes'
+import { HostBuscaGlobal } from './components/BuscaGlobal'
 import { MapaView } from './components/MapaView'
 import { checarAtualizacao } from './lib/atualizador'
 import { dirNotasDoMapa } from './lib/caminhos'
@@ -133,6 +134,8 @@ export default function App() {
       <HostDialogoCampanhas />
       <HostEscolha />
       <HostDialogos />
+      {/* por último: Ctrl+K precisa abrir por cima de qualquer outro modal que esteja na tela */}
+      <HostBuscaGlobal />
     </div>
   )
 }

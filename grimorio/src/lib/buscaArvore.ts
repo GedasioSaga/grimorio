@@ -60,7 +60,9 @@ export function pontuar(nome: string, termo: string): Pontuacao | null {
   return melhor
 }
 
-function rotuloDe(ancestrais: string[]): string {
+/** Exportado para `buscaGlobal.ts` reusar a mesma regra de corte — a busca Ctrl+K
+ * varre entidades fora da árvore de uma seção só, mas o rótulo de ancestrais é idêntico. */
+export function rotuloDe(ancestrais: string[]): string {
   if (ancestrais.length <= MAX_NIVEIS_ROTULO) return ancestrais.join('/')
   return `…/${ancestrais.slice(-MAX_NIVEIS_ROTULO).join('/')}`
 }
