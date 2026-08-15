@@ -257,12 +257,19 @@ button:hover { border-color: var(--dourado); color: var(--dourado-claro); }
 .mapa-zoom-valor:hover { border-color: var(--borda); color: var(--dourado-claro); }
 .mapa-zoom-valor:active { transform: scale(0.97); }
 
-/* painel de propriedades (X/Y/L/A em quadrados): coluna direita do .mapa-wrap, fora
-   do tldraw, ACIMA do painel de camadas (mesmo padrão de layout/colapso). `top` vem
-   inline (fixo, 8px — nunca se move) e o PainelCamadas recebe `topPx` calculado no
-   MapaView pra não sobrepor quando os dois estão visíveis ao mesmo tempo. */
+/* painel de propriedades (X/Y/L/A em quadrados): coluna ESQUERDA do .mapa-wrap, fora
+   do tldraw, ACIMA do painel de camadas (mesmo padrão de layout/colapso).
+
+   Por que esquerda e não direita (fix de bug reportado pelo usuário): o canto superior
+   direito é do StylePanel nativo do tldraw (`.tlui-layout__top__right`, uma coluna flex
+   ancorada no topo — tldraw.css:2190-2196), e os dois painéis ficavam um por cima do
+   outro. O canto superior ESQUERDO tem só o MainMenu nativo, baixo, então a coluna
+   começa em TOPO_COLUNA_PX (96px, definido no MapaView) para passar longe dele; os
+   28px de recuo lateral livram a régua esquerda, que tem 20px. O `top` do painel de
+   camadas vem inline, calculado no MapaView, pra não sobrepor este quando os dois
+   estão visíveis. Topo central é da `.canvas-toolbar` e o rodapé é da MapaToolbar. */
 .painel-propriedades {
-  position: absolute; top: 8px; right: 8px; z-index: 300;
+  position: absolute; top: 96px; left: 28px; z-index: 300;
   width: 200px; display: flex; flex-direction: column;
   background: var(--fundo-painel); border: 1px solid var(--borda); border-radius: 6px;
   padding: 8px; gap: 8px;
@@ -281,14 +288,14 @@ button:hover { border-color: var(--dourado); color: var(--dourado-claro); }
 .painel-propriedades-input:focus { border-color: var(--dourado); }
 .painel-propriedades-multi { font-size: 13px; color: var(--texto-fraco); text-align: center; padding: 4px; }
 .painel-propriedades-reabrir {
-  position: absolute; top: 8px; right: 8px; z-index: 300;
+  position: absolute; top: 96px; left: 28px; z-index: 300;
   background: var(--fundo-painel); border: 1px solid var(--borda); border-radius: 6px;
   padding: 6px 8px; font-size: 15px;
 }
 
-/* painel de camadas: coluna direita do .mapa-wrap, fora do tldraw */
+/* painel de camadas: mesma coluna esquerda do painel de propriedades (ver acima) */
 .painel-camadas {
-  position: absolute; top: 8px; right: 8px; bottom: 8px; z-index: 300;
+  position: absolute; top: 96px; left: 28px; bottom: 8px; z-index: 300;
   width: 200px; display: flex; flex-direction: column;
   background: var(--fundo-painel); border: 1px solid var(--borda); border-radius: 6px;
   padding: 8px; gap: 6px; overflow: hidden;
@@ -313,7 +320,7 @@ button:hover { border-color: var(--dourado); color: var(--dourado-claro); }
 }
 .painel-camadas-add:hover { color: var(--dourado-claro); border-color: var(--dourado); }
 .painel-camadas-reabrir {
-  position: absolute; top: 8px; right: 8px; z-index: 300;
+  position: absolute; top: 96px; left: 28px; z-index: 300;
   background: var(--fundo-painel); border: 1px solid var(--borda); border-radius: 6px;
   padding: 6px 8px; font-size: 15px;
 }

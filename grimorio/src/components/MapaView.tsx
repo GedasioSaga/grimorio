@@ -64,6 +64,10 @@ const componentsMapa: TLComponents = {
 // o PainelCamadas pra baixo sem sobrepor quando os dois estão visíveis na mesma coluna.
 const ALTURA_PAINEL_PROPRIEDADES_PX = 184
 
+// onde começa a coluna de painéis (esquerda): abaixo do MainMenu nativo do tldraw.
+// Mesmo valor do `top` das classes .painel-* em theme.css — ver o comentário de lá.
+const TOPO_COLUNA_PX = 96
+
 export function MapaView({ caminho, nome }: { caminho: string; nome: string }) {
   const repo = useApp((s) => s.repo)
   const vaultPath = useApp((s) => s.vaultPath)
@@ -412,7 +416,7 @@ export function MapaView({ caminho, nome }: { caminho: string; nome: string }) {
         aoAlternarOculta={aoAlternarOcultaCamada}
         aoAlternarTravada={aoAlternarTravadaCamada}
         aoMover={aoMoverCamada}
-        topPx={selecaoProp ? 8 + ALTURA_PAINEL_PROPRIEDADES_PX : 8}
+        topPx={selecaoProp ? TOPO_COLUNA_PX + ALTURA_PAINEL_PROPRIEDADES_PX : TOPO_COLUNA_PX}
       />
       <div className="canvas-banners">
         {salvandoErro && <div className="canvas-salvar-erro">Falha ao salvar: {salvandoErro}</div>}
