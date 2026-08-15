@@ -33,8 +33,14 @@ export type Politica = 'entidade' | 'uniao' | 'metadado' | 'binario'
 /** Único arquivo do cofre que resolve por união. Mora na raiz (`vaultRepo.lerVinculos`). */
 export const ARQUIVO_DE_VINCULOS = 'vinculos.json'
 
-/** Arquivos que só carregam metadado — vencem por data e não deixam cópia. */
-const METADADOS = new Set(['campanha.json', 'pasta.json', 'cofre.json'])
+/**
+ * Arquivos que só carregam metadado — vencem por data e não deixam cópia.
+ *
+ * `layout-teia.json` entra aqui e não em `entidade`: ele não tem `id` nem `nome` (é um mapa de
+ * escopo -> posição por id de OUTRAS entidades), e posição de nó na teia não é conteúdo autoral
+ * que mereça cópia preservada — é layout que o usuário reconstrói arrastando de novo.
+ */
+const METADADOS = new Set(['campanha.json', 'pasta.json', 'cofre.json', 'layout-teia.json'])
 
 /**
  * Cenário é o único caso em que a entidade é um DIRETÓRIO: `montarArvoreCenarios` reconhece um

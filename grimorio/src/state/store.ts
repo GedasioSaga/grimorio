@@ -7,6 +7,7 @@ import { adicionarVinculo as adicionarVinculoPuro, removerVinculo as removerVinc
 import { aplicarPatchCenario, versaoAtiva, type PatchCenario } from '../lib/cenarioVersao'
 import { aplicarPatchPersonagem, versaoAtivaPersonagem, comNomeEspelho, type PatchPersonagem } from '../lib/personagemVersao'
 import { CHAVE_FILTRO, CHAVE_VAULT, chaveDeCofre, normalizarCaminho, registrar as registrarCofre } from '../lib/cofres'
+import { atualizarLayoutSalvo, type LayoutSalvo, type Posicao } from '../lib/grafoLayoutPersistido'
 
 export type TipoAberto = 'sessao' | 'canvas' | 'escrita' | 'mapa'
 
@@ -123,6 +124,9 @@ function agendarSalvarPersonagem(get: () => AppState, id: string) {
 // um arquivo só (vinculos.json): um timer só
 let timerSalvarVinculos: ReturnType<typeof setTimeout> | null = null
 
+// mesma lógica de arquivo único para o layout da teia (layout-teia.json)
+let timerSalvarLayoutTeia: ReturnType<typeof setTimeout> | null = null
+
 /**
  * Documento aberto no workspace (sessão, canvas ou caderno de escrita).
  *
@@ -174,6 +178,11 @@ interface EstadoDeCofre {
   vinculos: Vinculo[]
   /** id da campanha selecionada no filtro da sidebar; null = "Todas" */
   campanhaFiltro: string | null
+  /**
+   * Posições que o usuário arrumou na teia (`layout-teia.json`), por escopo — `'cofre'` ou
+   * `'campanha:<id>'` (ver `chaveDoEscopo`). Nó ausente do escopo cai no layout automático.
+   */
+  layoutsTeia: Record<string, LayoutSalvo>
   /** teia de vínculos ocupando a área principal (some junto com o cofre) */
   grafoAberto: boolean
   /**
@@ -241,6 +250,11 @@ interface AppState extends EstadoDeCofre {
   setCampanhaFiltro(id: string | null): void
   /** Abre/fecha a teia de vínculos na área principal. */
   alternarGrafo(): void
+  carregarLayoutTeia(): Promise<void>
+  /** Registra a posição arrastada de `id` no `escopo` atual (persiste debounced). */
+  salvarPosicaoTeia(escopo: string, idsAtuais: ReadonlySet<string>, id: string, posicaoFracao: Posicao): void
+  /** Volta o `escopo` ao layout automático (some com o que foi arrumado à mão). */
+  resetarLayoutTeia(escopo: string): void
   /** Ajusta os vínculos 'participa' da entidade para bater EXATAMENTE com a lista (add os novos, remove os que saíram). */
   definirCampanhas(entidadeTipo: TipoEntidadeVinculo, entidadeId: string, campanhaIds: string[]): void
   /**
@@ -276,6 +290,28 @@ function agendarSalvarVinculos(get: () => AppState) {
 }
 
 /**
+ * Mesma janela dos outros arquivos, de propósito.
+ *
+ * Uma versão anterior usava 1500ms alegando que `salvarPosicaoTeia` dispara a cada pixel do
+ * arrasto. Não dispara: a única chamada está em `encerrarArrasto` (GrafoVinculos.tsx), no
+ * mouseup — um arrasto inteiro gera UMA chamada. A janela maior não comprava nada e só
+ * ampliava o intervalo em que fechar o app perde o arranjo, que aqui é trabalho manual.
+ */
+const SALVAR_LAYOUT_TEIA_DEBOUNCE_MS = SALVAR_PARCIAL_DEBOUNCE_MS
+
+function agendarSalvarLayoutTeia(get: () => AppState) {
+  sinalizarGravacao()
+  if (timerSalvarLayoutTeia) clearTimeout(timerSalvarLayoutTeia)
+  timerSalvarLayoutTeia = setTimeout(() => {
+    timerSalvarLayoutTeia = null
+    const { repo, layoutsTeia } = get()
+    if (!repo) return
+    // fire-and-forget: VaultRepo serializa escritas por caminho
+    repo.salvarLayoutTeia(layoutsTeia).catch((e) => console.error('Falha ao salvar layout da teia:', e))
+  }, SALVAR_LAYOUT_TEIA_DEBOUNCE_MS)
+}
+
+/**
  * Executa AGORA todo debounce pendente e limpa os timers. Existe por causa de
  * `agendarSalvarPersonagem`/`agendarSalvarCenario`, que re-resolvem o caminho no
  * disparo: um timer que sobrevive à troca de cofre gravaria o conteúdo do cofre
@@ -304,8 +340,12 @@ async function descarregarFilasPendentes(get: () => AppState): Promise<FalhaDesc
   if (timerSalvarVinculos) clearTimeout(timerSalvarVinculos)
   timerSalvarVinculos = null
 
+  const tinhaLayoutTeia = timerSalvarLayoutTeia !== null
+  if (timerSalvarLayoutTeia) clearTimeout(timerSalvarLayoutTeia)
+  timerSalvarLayoutTeia = null
+
   const falhas: FalhaDescarga[] = []
-  const { repo, personagens, caminhoPorId, cenarios, caminhoCenarioPorId, itens, caminhoItemPorId, vinculos } = get()
+  const { repo, personagens, caminhoPorId, cenarios, caminhoCenarioPorId, itens, caminhoItemPorId, vinculos, layoutsTeia } = get()
   if (!repo) return falhas
 
   for (const id of idsPersonagens) {
@@ -352,6 +392,14 @@ async function descarregarFilasPendentes(get: () => AppState): Promise<FalhaDesc
       falhas.push({ caminho: 'vinculos.json', rotulo: 'Vínculos', erro: e })
     }
   }
+  if (tinhaLayoutTeia) {
+    try {
+      await repo.salvarLayoutTeia(layoutsTeia)
+    } catch (e) {
+      console.error('Falha ao salvar layout da teia:', e)
+      falhas.push({ caminho: 'layout-teia.json', rotulo: 'Layout da teia', erro: e })
+    }
+  }
   return falhas
 }
 
@@ -377,6 +425,7 @@ export function estadoLimpoDeCofre(): EstadoDeCofre {
     itemAbertoId: null,
     vinculos: [],
     campanhaFiltro: null,
+    layoutsTeia: {},
     grafoAberto: false,
     recargasDoDisco: 0,
     erroCofre: null,
@@ -400,6 +449,7 @@ export const useApp = create<AppState>((set, get) => ({
   itemAbertoId: null,
   vinculos: [],
   campanhaFiltro: null,
+  layoutsTeia: {},
   grafoAberto: false,
   recargasDoDisco: 0,
   carregando: false,
@@ -423,6 +473,7 @@ export const useApp = create<AppState>((set, get) => ({
       await get().carregarCenarios()
       await get().carregarItens()
       await get().carregarVinculos()
+      await get().carregarLayoutTeia()
     } catch (e) {
       set({ erroCofre: `Não foi possível abrir o cofre: ${e}` })
       throw e
@@ -476,6 +527,7 @@ export const useApp = create<AppState>((set, get) => ({
     await get().carregarCenarios()
     await get().carregarItens()
     await get().carregarVinculos()
+    await get().carregarLayoutTeia()
     // por último: quem escuta o contador (CanvasView) relê o próprio arquivo, e os caches
     // acima já têm de estar repostos quando esse reler acontecer
     set((s) => ({ recargasDoDisco: s.recargasDoDisco + 1 }))
@@ -767,6 +819,30 @@ export const useApp = create<AppState>((set, get) => ({
 
   alternarGrafo() {
     set((s) => ({ grafoAberto: !s.grafoAberto }))
+  },
+
+  async carregarLayoutTeia() {
+    const { repo } = get()
+    if (!repo) return
+    set({ layoutsTeia: await repo.lerLayoutTeia() })
+  },
+
+  salvarPosicaoTeia(escopo, idsAtuais, id, posicaoFracao) {
+    const atual = get().layoutsTeia[escopo] ?? {}
+    const novo: LayoutSalvo = atualizarLayoutSalvo(atual, idsAtuais, id, posicaoFracao)
+    set((s) => ({ layoutsTeia: { ...s.layoutsTeia, [escopo]: novo } }))
+    agendarSalvarLayoutTeia(get)
+  },
+
+  resetarLayoutTeia(escopo) {
+    // escopo sem entrada é EXATAMENTE o mesmo que escopo vazio para `posicoesEfetivas`,
+    // mas remover a chave (em vez de gravar {}) mantém o arquivo enxuto
+    if (!(escopo in get().layoutsTeia)) return
+    set((s) => {
+      const { [escopo]: _descartado, ...resto } = s.layoutsTeia
+      return { layoutsTeia: resto }
+    })
+    agendarSalvarLayoutTeia(get)
   },
 
   definirCampanhas(entidadeTipo, entidadeId, campanhaIds) {

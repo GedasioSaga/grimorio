@@ -37,10 +37,11 @@ describe('politicaDoCaminho', () => {
     expect(politicaDoCaminho('campanhas/x/vinculos.json')).toBe('entidade')
   })
 
-  it('campanha.json, pasta.json e cofre.json são metadado (vencem por data, sem cópia)', () => {
+  it('campanha.json, pasta.json, cofre.json e layout-teia.json são metadado (vencem por data, sem cópia)', () => {
     expect(politicaDoCaminho('campanhas/aventura/campanha.json')).toBe('metadado')
     expect(politicaDoCaminho('personagens-soltos/viloes/pasta.json')).toBe('metadado')
     expect(politicaDoCaminho('cofre.json')).toBe('metadado')
+    expect(politicaDoCaminho('layout-teia.json')).toBe('metadado')
   })
 
   it('o que não é .json é binário', () => {

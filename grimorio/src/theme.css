@@ -292,24 +292,41 @@ button:hover { border-color: var(--dourado); color: var(--dourado-claro); }
 .mapa-zoom-valor:hover { border-color: var(--borda); color: var(--dourado-claro); }
 .mapa-zoom-valor:active { transform: scale(0.97); }
 
-/* painel de propriedades (X/Y/L/A em quadrados): coluna ESQUERDA do .mapa-wrap, fora
-   do tldraw, ACIMA do painel de camadas (mesmo padrão de layout/colapso).
+/* coluna ESQUERDA do .mapa-wrap, fora do tldraw: propriedades em cima, camadas embaixo.
 
    Por que esquerda e não direita (fix de bug reportado pelo usuário): o canto superior
    direito é do StylePanel nativo do tldraw (`.tlui-layout__top__right`, uma coluna flex
    ancorada no topo — tldraw.css:2190-2196), e os dois painéis ficavam um por cima do
    outro. O canto superior ESQUERDO tem só o MainMenu nativo, baixo, então a coluna
-   começa em TOPO_COLUNA_PX (96px, definido no MapaView) para passar longe dele; os
-   28px de recuo lateral livram a régua esquerda, que tem 20px. O `top` do painel de
-   camadas vem inline, calculado no MapaView, pra não sobrepor este quando os dois
-   estão visíveis. Topo central é da `.canvas-toolbar` e o rodapé é da MapaToolbar. */
+   começa 96px abaixo para passar longe dele; os 28px de recuo lateral livram a régua
+   esquerda, que tem 20px. Topo central é da `.canvas-toolbar`.
+
+   O `bottom` PRECISA folgar a faixa do rodapé: a toolbar do mapa é centralizada e cresce
+   para os lados, então em janela estreita ela alcança esta coluna — e a coluna, sendo
+   z-index 300 e posterior no DOM, cobria a toolbar inteira. Foi assim que a barra de
+   ferramentas "sumiu" para o usuário: ela estava lá, atrás do painel. 104px cobrem a
+   toolbar (~44px + margem) e ainda a barra contextual de alinhar, que aparece acima dela
+   quando há 2+ formas selecionadas.
+
+   Os dois painéis empilham por FLEX, não por `top` calculado. A versão anterior
+   posicionava o de camadas somando uma constante de altura do de propriedades
+   (`ALTURA_PAINEL_PROPRIEDADES_PX = 184` no MapaView) — mas propriedades cresce com o que
+   está selecionado (nome + 3 estados + cor + X/Y/L/A passa de 300px), e aí camadas subia
+   por cima dele e cortava a última linha. Constante não acompanha conteúdo; flex sim. */
+.mapa-coluna-esq {
+  position: absolute; top: 96px; left: 28px; bottom: 104px; z-index: 300;
+  display: flex; flex-direction: column; align-items: flex-start; gap: 8px;
+  /* a coluna é mais alta que os painéis somados: sem isto, o vão vazio entre eles
+     engoliria o clique no canvas — e desenhar ali pararia de funcionar sem erro nenhum. */
+  pointer-events: none;
+}
+.mapa-coluna-esq > * { pointer-events: auto; }
+
 .painel-propriedades {
-  position: absolute; top: 96px; left: 28px; z-index: 300;
-  /* mesmo motivo do `bottom` do painel de camadas: com nome + estado + cor + X/Y/L/A o
-     painel cresce e alcançaria o rodapé, cobrindo a toolbar. Aqui o limite é a altura
-     máxima, com rolagem interna, porque este painel encolhe conforme o que está
-     selecionado e não deve reservar espaço que não usa. */
-  max-height: calc(100% - 200px); overflow-y: auto;
+  /* `min-height: 0` porque item de flex column NÃO encolhe abaixo do próprio conteúdo por
+     padrão: sem ele, um painel alto empurraria o de camadas para fora da coluna em vez de
+     rolar dentro de si — que é exatamente o mesmo bug, só que por outro caminho. */
+  flex: 0 1 auto; min-height: 0; overflow-y: auto;
   width: 200px; display: flex; flex-direction: column;
   background: var(--fundo-painel); border: 1px solid var(--borda); border-radius: 6px;
   padding: 8px; gap: 8px;
@@ -361,31 +378,32 @@ button:hover { border-color: var(--dourado); color: var(--dourado-claro); }
   background: transparent; border: 1px dashed var(--borda); color: var(--texto-fraco);
 }
 .painel-cor-auto.ativo { border-style: solid; border-color: var(--dourado); color: var(--dourado-claro); }
+/* colapsado vira botão, e o botão continua sendo item da coluna — se ele voltasse a ser
+   `position: absolute` no mesmo canto, colapsar um painel o faria pousar em cima do outro. */
 .painel-propriedades-reabrir {
-  position: absolute; top: 96px; left: 28px; z-index: 300;
+  flex: 0 0 auto;
   background: var(--fundo-painel); border: 1px solid var(--borda); border-radius: 6px;
   padding: 6px 8px; font-size: 15px;
 }
 
-/* painel de camadas: mesma coluna esquerda do painel de propriedades (ver acima).
-
-   O `bottom` PRECISA folgar a faixa do rodapé: a toolbar do mapa é centralizada e cresce
-   para os lados, então em janela estreita ela alcança a coluna esquerda — e o painel,
-   sendo z-index 300 e posterior no DOM, cobria a toolbar inteira. Foi assim que a barra
-   de ferramentas "sumiu" para o usuário: ela estava lá, atrás do painel. 104px cobrem a
-   toolbar (~44px + margem) e ainda a barra contextual de alinhar, que aparece acima dela
-   quando há 2+ formas selecionadas. */
+/* painel de camadas: segundo item da `.mapa-coluna-esq` (o porquê da coluna está lá).
+   A lista interna (`.painel-camadas-lista`) é quem rola; o painel só recorta. */
 .painel-camadas {
-  position: absolute; top: 96px; left: 28px; bottom: 104px; z-index: 300;
+  flex: 0 1 auto; min-height: 0;
   width: 200px; display: flex; flex-direction: column;
   background: var(--fundo-painel); border: 1px solid var(--borda); border-radius: 6px;
   padding: 8px; gap: 6px; overflow: hidden;
 }
+/* Cabeçalho e "+ camada" NÃO encolhem; só a lista rola. Sem isto, o flex da coluna vê
+   `.painel-camadas` (que tem `min-height: 0` e `overflow: hidden`) como encolhível até zero e,
+   numa janela baixa com o painel de propriedades cheio, corta o cabeçalho e o botão sem deixar
+   rolagem que os alcance — o mesmo bug de conteúdo cortado, só que dentro do painel. */
 .painel-camadas-cabecalho {
+  flex-shrink: 0;
   display: flex; align-items: center; justify-content: space-between;
   color: var(--dourado-claro); font-size: 12px; text-transform: uppercase; letter-spacing: 1px;
 }
-.painel-camadas-lista { list-style: none; margin: 0; padding: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 2px; }
+.painel-camadas-lista { flex: 1 1 auto; min-height: 0; list-style: none; margin: 0; padding: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 2px; }
 .painel-camadas-item {
   display: flex; align-items: center; justify-content: space-between; gap: 4px;
   padding: 4px 6px; border-radius: 4px; cursor: pointer; font-size: 13px;
@@ -396,12 +414,13 @@ button:hover { border-color: var(--dourado); color: var(--dourado-claro); }
 .painel-camadas-acoes { display: flex; align-items: center; gap: 1px; }
 .painel-camadas-acoes .btn-icon { font-size: 11px; padding: 2px 4px; }
 .painel-camadas-add {
+  flex-shrink: 0;
   align-self: stretch; padding: 5px; border-radius: 4px; border: 1px dashed var(--borda);
   color: var(--texto-fraco); background: transparent;
 }
 .painel-camadas-add:hover { color: var(--dourado-claro); border-color: var(--dourado); }
 .painel-camadas-reabrir {
-  position: absolute; top: 96px; left: 28px; z-index: 300;
+  flex: 0 0 auto;
   background: var(--fundo-painel); border: 1px solid var(--borda); border-radius: 6px;
   padding: 6px 8px; font-size: 15px;
 }
@@ -441,18 +460,33 @@ button:hover { border-color: var(--dourado); color: var(--dourado-claro); }
   padding: 8px 10px;
 }
 .char-card-secao-header { display: flex; align-items: center; justify-content: space-between; gap: 6px; margin-bottom: 4px; }
-.char-card-secao-acoes { display: flex; align-items: center; gap: 4px; }
+.char-card-secao-acoes { display: flex; align-items: center; gap: calc(4px * var(--card-fe, 1) * var(--card-ctrl, 1)); }
 .char-card-secao-titulo { font-family: var(--serif); font-size: calc(13px * var(--card-fe, 1)); color: var(--dourado-claro); }
 .char-card-info-toggle {
   border: none; background: transparent; padding: 0;
   font-family: var(--serif); font-size: calc(13px * var(--card-fe, 1)); color: var(--dourado-claro); cursor: pointer;
 }
 .char-card-info-toggle:hover { color: var(--dourado); }
+/* ↓ → ✎ das seções. Duas escalas multiplicam, e cada uma corrige um fator diferente do
+   tamanho que o olho vê (`px × card-fe × zoom`):
+
+   `--card-fe` — enquanto estas regras eram px fixos, aumentar o card aumentava TODA fonte
+   menos elas, e quanto maior o card menores ficavam em comparação, até sumirem.
+   `--card-ctrl` — correção de espaço de tela (`escalaDosControles`, escalaFonte.ts): sobe o
+   controle até um piso de px NA TELA, com teto para não estourar o layout do card. Sem ela,
+   afastar a câmera devolvia o botão ao mesmo tamanho ilegível de antes.
+
+   Cor cheia (`--texto`, não `--texto-fraco`): um glifo pequeno dentro de um shape que a
+   câmera ainda reduz não fica "discreto", fica invisível. */
 .char-card-btn-editar {
-  border: none; background: transparent; padding: 0 2px; font-size: 13px;
-  color: var(--texto-fraco); cursor: pointer; line-height: 1;
+  border: 1px solid transparent; background: transparent; border-radius: 4px;
+  padding: calc(2px * var(--card-fe, 1) * var(--card-ctrl, 1)) calc(5px * var(--card-fe, 1) * var(--card-ctrl, 1));
+  font-size: calc(13px * var(--card-fe, 1) * var(--card-ctrl, 1));
+  color: var(--texto); cursor: pointer; line-height: 1;
 }
-.char-card-btn-editar:hover { color: var(--dourado-claro); }
+.char-card-btn-editar:hover {
+  color: var(--dourado-claro); border-color: var(--dourado); background: var(--fundo-elevado);
+}
 .char-card-sem-descricao { font-size: calc(13px * var(--card-fe, 1)); color: var(--texto-fraco); font-style: italic; }
 .char-card-descricao { font-size: calc(14px * var(--card-fe, 1)); color: var(--texto); line-height: 1.45; }
 .char-card-descricao p { margin: 0 0 5px; }
@@ -484,11 +518,20 @@ button:hover { border-color: var(--dourado); color: var(--dourado-claro); }
 .char-card-editor .tiptap li p { margin: 0; }
 .char-card-editor .tiptap h2, .char-card-editor .tiptap h3 { font-family: var(--serif); font-size: calc(15px * var(--card-fe, 1)); color: var(--dourado-claro); margin: 5px 0 3px; }
 
-.card-fonte-ctrl { display: inline-flex; gap: 4px; margin-top: 6px; }
+/* A− / A+. Mesmas duas escalas de `.char-card-btn-editar` — o porquê de cada uma está lá.
+   O `12px` de base é o `CONTROLE_BASE_PX` de escalaFonte.ts: mudar um sem o outro faz a
+   correção de espaço de tela mirar num tamanho que não é o que está desenhado aqui. */
+.card-fonte-ctrl {
+  display: inline-flex;
+  gap: calc(4px * var(--card-fe, 1) * var(--card-ctrl, 1));
+  margin-top: calc(6px * var(--card-fe, 1) * var(--card-ctrl, 1));
+}
 .card-fonte-ctrl button {
-  border: 1px solid var(--borda); background: var(--fundo); color: var(--texto-fraco);
-  border-radius: 4px; font-family: var(--serif); font-size: 11px; line-height: 1;
-  padding: 2px 6px; cursor: pointer;
+  border: 1px solid var(--borda); background: var(--fundo); color: var(--texto);
+  border-radius: 4px; font-family: var(--serif); line-height: 1;
+  font-size: calc(12px * var(--card-fe, 1) * var(--card-ctrl, 1));
+  padding: calc(3px * var(--card-fe, 1) * var(--card-ctrl, 1)) calc(7px * var(--card-fe, 1) * var(--card-ctrl, 1));
+  cursor: pointer;
 }
 .card-fonte-ctrl button:hover { color: var(--dourado-claro); border-color: var(--dourado); }
 .card-fonte-ctrl button:disabled { opacity: 0.4; cursor: default; }
@@ -1207,3 +1250,44 @@ button:hover { border-color: var(--dourado); color: var(--dourado-claro); }
 .grafo-no-nome { fill: var(--texto); font-size: 14px; pointer-events: none; }
 
 .btn-icon.ativo { color: var(--dourado-claro); }
+
+/* ---- busca global (Ctrl+K) ---- */
+/* alinhada mais perto do topo que os outros .modal-overlay (perfil, diálogos): uma paleta de
+   comando embaixo do centro fica longe do dedo que acabou de apertar Ctrl+K */
+.busca-global-overlay { align-items: flex-start; padding-top: 12vh; }
+.busca-global-caixa {
+  width: min(560px, 92vw); max-height: 60vh; background: var(--fundo-painel);
+  border: 1px solid var(--dourado); border-radius: 8px;
+  display: flex; flex-direction: column; overflow: hidden;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
+}
+.busca-global-campo {
+  display: flex; align-items: center; gap: 8px; padding: 12px 16px;
+  border-bottom: 1px solid var(--borda);
+}
+.busca-global-input {
+  flex: 1; min-width: 0; background: transparent; border: none;
+  color: var(--texto); font-size: 15px; outline: none;
+}
+.busca-global-carregando { color: var(--texto-fraco); font-size: 12px; }
+.busca-global-lista { flex: 1; overflow-y: auto; padding: 6px; }
+.busca-global-dica, .busca-global-vazio {
+  padding: 20px 12px; text-align: center; color: var(--texto-fraco); font-size: 13px;
+}
+.busca-global-item {
+  display: flex; align-items: center; gap: 10px; width: 100%;
+  padding: 8px 10px; border-radius: 6px; border: 1px solid transparent;
+  background: transparent; color: var(--texto); text-align: left; cursor: pointer;
+}
+.busca-global-item + .busca-global-item { margin-top: 2px; }
+.busca-global-item.selecionado { background: var(--fundo-elevado); border-color: var(--dourado); }
+.busca-global-icone { font-size: 15px; flex: 0 0 auto; }
+.busca-global-nome { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.busca-global-tipo {
+  flex: 0 0 auto; font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px;
+  color: var(--dourado); border: 1px solid var(--borda); border-radius: 10px; padding: 2px 8px;
+}
+.busca-global-caminho {
+  flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  color: var(--texto-fraco); font-size: 11px; max-width: 30%;
+}

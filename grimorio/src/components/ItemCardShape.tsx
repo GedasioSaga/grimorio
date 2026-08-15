@@ -4,6 +4,7 @@ import {
   HTMLContainer,
   T,
   useEditor,
+  useValue,
   type RecordProps,
   type TLShape,
 } from 'tldraw'
@@ -15,6 +16,7 @@ import { CARD_ALTURA_PADRAO, CARD_LARGURA_PADRAO } from './CharacterCardShape'
 import { EditorInline } from './EditorInline'
 import { ControlesFonte } from './ControlesFonte'
 import { CardRetrato } from './CardRetrato'
+import { escalaDosControles } from '../lib/escalaFonte'
 
 declare module '@tldraw/tlschema' {
   interface TLGlobalShapePropsMap {
@@ -126,6 +128,9 @@ function CartaoItem({ shape }: { shape: ItemCardShapeType }) {
   // então imagem e texto crescem juntos ao redimensionar o card
   const cols = colunasTotais(expandido, contarAoLado(shape.props))
   const cardFe = escalaDoCartao(shape.props.w, cols) * fonteEscala
+  // escala dos controles corrigida pelo zoom da câmera; o porquê está em `escalaDosControles`,
+  // e o porquê do `useValue` (em vez de `getZoomLevel()` cru) está no CharacterCardShape.
+  const ctrlFe = escalaDosControles(cardFe, useValue('zoom', () => editor.getZoomLevel(), [editor]))
 
   const [editando, setEditando] = useState<'descricao' | ChaveSecao | null>(null)
 
@@ -261,7 +266,7 @@ function CartaoItem({ shape }: { shape: ItemCardShapeType }) {
   const aoLado = SECOES.filter((s) => shape.props[FLAGS[s.chave].lado])
 
   return (
-    <HTMLContainer className="char-card" style={{ pointerEvents: 'all', ['--card-fe' as any]: cardFe }}>
+    <HTMLContainer className="char-card" style={{ pointerEvents: 'all', ['--card-fe' as any]: cardFe, ['--card-ctrl' as any]: ctrlFe }}>
       {/* HTMLContainer não encaminha ref (não usa forwardRef); wrapper com
           display:contents pega o listener de wheel sem alterar o layout flex. */}
       <div ref={cardRef} style={{ display: 'contents' }}>
@@ -269,6 +274,7 @@ function CartaoItem({ shape }: { shape: ItemCardShapeType }) {
           <CardRetrato
             src={retratoSrc}
             alt={item.nome}
+            foco={item.foco}
             fallback={<span className="char-card-inicial">💎</span>}
           />
           <div className="char-card-texto">

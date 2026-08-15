@@ -4,9 +4,13 @@ import { pedirTexto } from './dialogos'
 import type { CamadaMapa } from '../lib/types'
 
 /**
- * Painel de camadas do Mapa (Fatia 3): coluna direita colapsável do `.mapa-wrap`,
+ * Painel de camadas do Mapa (Fatia 3): item colapsável da `.mapa-coluna-esq` do `.mapa-wrap`,
  * fora do `<Tldraw>`. Componente burro — só apresenta `camadas` e chama os callbacks;
  * quem possui o estado, aplica `getShapeVisibility`/`isLocked` e persiste é o MapaView.
+ *
+ * Não posiciona a si mesmo: quem empilha é a coluna flex. A versão anterior recebia um
+ * `topPx` calculado a partir de uma altura FIXA presumida do painel de propriedades, e
+ * cobria o fim dele sempre que a seleção tinha campos demais para caber nessa presunção.
  */
 export function PainelCamadas({
   camadas,
@@ -18,7 +22,6 @@ export function PainelCamadas({
   aoAlternarOculta,
   aoAlternarTravada,
   aoMover,
-  topPx = 8,
 }: {
   camadas: CamadaMapa[]
   ativaId: string
@@ -29,8 +32,6 @@ export function PainelCamadas({
   aoAlternarOculta: (id: string) => void
   aoAlternarTravada: (id: string) => void
   aoMover: (id: string, direcao: 'cima' | 'baixo') => void
-  /** Empurra o painel pra baixo quando o PainelPropriedades está mostrando acima (mesma coluna). */
-  topPx?: number
 }) {
   const [colapsado, setColapsado] = useState(false)
 
@@ -58,7 +59,6 @@ export function PainelCamadas({
         type="button"
         className="painel-camadas-reabrir"
         title="Mostrar camadas"
-        style={{ top: topPx }}
         onClick={() => setColapsado(false)}
       >
         🗂
@@ -67,7 +67,7 @@ export function PainelCamadas({
   }
 
   return (
-    <div className="painel-camadas" style={{ top: topPx }}>
+    <div className="painel-camadas">
       <div className="painel-camadas-cabecalho">
         <span>Camadas</span>
         <button type="button" className="btn-icon" title="Esconder painel" onClick={() => setColapsado(true)}>»</button>

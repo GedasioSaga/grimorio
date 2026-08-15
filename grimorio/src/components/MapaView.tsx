@@ -65,14 +65,6 @@ const componentsMapa: TLComponents = {
   NavigationPanel: ControleZoom,
 }
 
-// altura aproximada do PainelPropriedades (cabeçalho + 4 campos + paddings), pra empurrar
-// o PainelCamadas pra baixo sem sobrepor quando os dois estão visíveis na mesma coluna.
-const ALTURA_PAINEL_PROPRIEDADES_PX = 184
-
-// onde começa a coluna de painéis (esquerda): abaixo do MainMenu nativo do tldraw.
-// Mesmo valor do `top` das classes .painel-* em theme.css — ver o comentário de lá.
-const TOPO_COLUNA_PX = 96
-
 export function MapaView({ caminho, nome }: { caminho: string; nome: string }) {
   const repo = useApp((s) => s.repo)
   const vaultPath = useApp((s) => s.vaultPath)
@@ -441,28 +433,32 @@ export function MapaView({ caminho, nome }: { caminho: string; nome: string }) {
         }}
       />
       </ProvedorSelecaoPropriedades>
-      <PainelPropriedades
-        selecao={selecaoProp}
-        aoAplicarX={aoAplicarX}
-        aoAplicarY={aoAplicarY}
-        aoAplicarL={aoAplicarL}
-        aoAplicarA={aoAplicarA}
-        aoTrocarEstado={aoTrocarEstado}
-        aoRenomearSala={aoRenomearSala}
-        aoTrocarCor={aoTrocarCor}
-      />
-      <PainelCamadas
-        camadas={camadas}
-        ativaId={camadaAtivaId}
-        aoSelecionarAtiva={setCamadaAtivaId}
-        aoCriar={aoCriarCamada}
-        aoRenomear={aoRenomearCamada}
-        aoExcluir={aoExcluirCamada}
-        aoAlternarOculta={aoAlternarOcultaCamada}
-        aoAlternarTravada={aoAlternarTravadaCamada}
-        aoMover={aoMoverCamada}
-        topPx={selecaoProp ? TOPO_COLUNA_PX + ALTURA_PAINEL_PROPRIEDADES_PX : TOPO_COLUNA_PX}
-      />
+      {/* Os dois painéis são itens de uma coluna flex — quem os empilha é o CSS, medindo a
+          altura real de cada um. Empurrar o de camadas por um `top` calculado aqui é o que
+          fazia ele cobrir o de propriedades quando a seleção tinha muitos campos. */}
+      <div className="mapa-coluna-esq">
+        <PainelPropriedades
+          selecao={selecaoProp}
+          aoAplicarX={aoAplicarX}
+          aoAplicarY={aoAplicarY}
+          aoAplicarL={aoAplicarL}
+          aoAplicarA={aoAplicarA}
+          aoTrocarEstado={aoTrocarEstado}
+          aoRenomearSala={aoRenomearSala}
+          aoTrocarCor={aoTrocarCor}
+        />
+        <PainelCamadas
+          camadas={camadas}
+          ativaId={camadaAtivaId}
+          aoSelecionarAtiva={setCamadaAtivaId}
+          aoCriar={aoCriarCamada}
+          aoRenomear={aoRenomearCamada}
+          aoExcluir={aoExcluirCamada}
+          aoAlternarOculta={aoAlternarOcultaCamada}
+          aoAlternarTravada={aoAlternarTravadaCamada}
+          aoMover={aoMoverCamada}
+        />
+      </div>
       <div className="canvas-banners">
         {salvandoErro && <div className="canvas-salvar-erro">Falha ao salvar: {salvandoErro}</div>}
         {copiaOk && <div className="canvas-copia-ok">Imagem copiada</div>}

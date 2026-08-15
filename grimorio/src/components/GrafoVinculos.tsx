@@ -1,9 +1,11 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { convertFileSrc } from '@tauri-apps/api/core'
+import { ask } from '@tauri-apps/plugin-dialog'
 import { useApp } from '../state/store'
 import type { TipoAlvoVinculo } from '../lib/types'
 import { montarTeia, vizinhos, type NoTeia, type RetratoNo } from '../lib/grafoVinculos'
 import { calcularLayout, type Posicao } from '../lib/grafoLayout'
+import { chaveDoEscopo, paraFracao, posicoesEfetivas } from '../lib/grafoLayoutPersistido'
 import { alinhamentoSvg } from '../lib/focoRetrato'
 import { resumoAtivo, versaoAtiva } from '../lib/cenarioVersao'
 import { resumoAtivoPersonagem, versaoAtivaPersonagem } from '../lib/personagemVersao'
@@ -34,6 +36,13 @@ function retratosLigadosSalvo(): boolean {
  * borda da janela recalcularia a simulação inteira a cada pixel.
  */
 const PASSO_MEDIDA = 40
+
+/**
+ * Referência ESTÁVEL para "nenhum layout salvo neste escopo". `{}` inline no corpo do
+ * componente seria um objeto novo a cada render, e como ele entra na lista de dependências
+ * do efeito que repõe `arrastados`, isso disparava o efeito (e um novo `setState`) sem parar.
+ */
+const LAYOUT_VAZIO: Record<string, Posicao> = {}
 
 const ICONE: Record<TipoAlvoVinculo, string> = { personagem: '👤', cenario: '🗺', item: '💎' }
 const ROTULO_TIPO: Record<TipoAlvoVinculo, string> = { personagem: 'Personagens', cenario: 'Cenários', item: 'Itens' }
@@ -68,6 +77,9 @@ export function GrafoVinculos() {
   const itens = useApp((s) => s.itens)
   const vinculos = useApp((s) => s.vinculos)
   const campanhaFiltro = useApp((s) => s.campanhaFiltro)
+  const layoutsTeia = useApp((s) => s.layoutsTeia)
+  const salvarPosicaoTeia = useApp((s) => s.salvarPosicaoTeia)
+  const resetarLayoutTeia = useApp((s) => s.resetarLayoutTeia)
   const tree = useApp((s) => s.tree)
   const alternarGrafo = useApp((s) => s.alternarGrafo)
   const abrirPerfil = useApp((s) => s.abrirPerfil)
@@ -80,6 +92,11 @@ export function GrafoVinculos() {
   // ids cujo retrato não carregou (arquivo movido à mão, imagem corrompida): caem no ícone
   const [semImagem, setSemImagem] = useState<Set<string>>(new Set())
   const [retratosLigados, setRetratosLigados] = useState(retratosLigadosSalvo)
+  /**
+   * Posição de tela de CADA nó atual, em pixel absoluto — a arrumada à mão (salva ou desta
+   * sessão) onde existe, senão a do layout automático. Repovoada pelo efeito logo abaixo do
+   * `layout`; o `useState({})` inicial é só o instante antes do primeiro efeito rodar.
+   */
   const [arrastados, setArrastados] = useState<Record<string, Posicao>>({})
   const [tamanho, setTamanho] = useState(TAMANHO_INICIAL)
   const [vista, setVista] = useState<Vista>({ x: 0, y: 0, w: TAMANHO_INICIAL.largura })
@@ -144,14 +161,47 @@ export function GrafoVinculos() {
     [teia, tamanho],
   )
 
-  // redesenhou noutra moldura: o enquadramento anterior aponta para o lugar errado
+  // redesenhou noutra moldura: o enquadramento anterior aponta para o lugar errado.
+  // O ARRANJO não some daqui — quem cuida dele é o efeito abaixo, a partir do que
+  // está salvo (posição normalizada sobrevive à mudança de moldura; pixel absoluto não).
   useEffect(() => {
     setVista({ x: 0, y: 0, w: tamanho.largura })
-    setArrastados({})
   }, [tamanho])
+
+  /** Escopo da persistência: o cofre inteiro, ou a campanha do filtro atual. */
+  const escopo = chaveDoEscopo(campanhaFiltro)
+  const layoutSalvo = layoutsTeia[escopo] ?? LAYOUT_VAZIO
+
+  /**
+   * Repõe as posições arrumadas à mão sempre que o layout automático muda por baixo —
+   * redimensionar a janela, trocar de campanha, ou uma entidade nova/excluída mudando a
+   * teia. `posicoesEfetivas` converte a fração salva para pixel da moldura ATUAL, então o
+   * nó não pula de lugar mesmo com a janela em outro tamanho. Nó recém-arrastado nesta
+   * sessão também passa por aqui de novo depois do `salvarPosicaoTeia` do mouseup — é
+   * idempotente, reproduz a mesma posição que acabou de ser salva.
+   */
+  useEffect(() => {
+    const recomposto = posicoesEfetivas(layoutSalvo, layout, tamanho)
+    setArrastados((anterior) => {
+      /**
+       * O nó que está sendo arrastado AGORA vive só em `arrastados` — quem grava é o mouseup.
+       * E `arrasto` é ref, que não redispara efeito, então este efeito não tem como saber
+       * sozinho que há um arrasto de pé. Sem a guarda, uma recarga de `layoutsTeia` vinda do
+       * sync em segundo plano (`recarregarDoDisco` → `carregarLayoutTeia`) trocaria a posição
+       * do nó DEBAIXO DO CURSOR pela posição antiga, e ele saltaria para longe do mouse.
+       * Só o nó em arrasto é preservado; todo o resto é recomposto normalmente.
+       */
+      const emArrasto = arrasto.current
+      if (emArrasto?.tipo !== 'no' || !emArrasto.id) return recomposto
+      const preso = anterior[emArrasto.id]
+      return preso ? { ...recomposto, [emArrasto.id]: preso } : recomposto
+    })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [layout, layoutSalvo, tamanho])
 
   const visiveis = useMemo(() => teia.nos.filter((n) => !ocultos.has(n.tipo)), [teia.nos, ocultos])
   const idsVisiveis = useMemo(() => new Set(visiveis.map((n) => n.id)), [visiveis])
+  const idsDaTeia = useMemo(() => new Set(teia.nos.map((n) => n.id)), [teia.nos])
   const arestasVisiveis = teia.arestas.filter((a) => idsVisiveis.has(a.de) && idsVisiveis.has(a.para))
   const destacados = selecionado ? vizinhos(teia.arestas, selecionado) : null
 
@@ -178,6 +228,32 @@ export function GrafoVinculos() {
     const alturaAtual = alturaVista()
     const alturaNova = nova * (tamanho.altura / tamanho.largura)
     setVista({ x: vista.x + (vista.w - nova) * fx, y: vista.y + (alturaAtual - alturaNova) * fy, w: nova })
+  }
+
+  /**
+   * Fim de um arrasto de NÓ: persiste a posição em fração da moldura atual. Só no soltar,
+   * não a cada `mousemove` — o que importa é onde o usuário deixou o nó, e gravar a cada
+   * pixel encheria a fila de escrita à toa.
+   */
+  function encerrarArrasto() {
+    const a = arrasto.current
+    arrasto.current = null
+    if (a?.tipo !== 'no' || !a.id) return
+    salvarPosicaoTeia(escopo, idsDaTeia, a.id, paraFracao(pos(a.id), tamanho))
+  }
+
+  /**
+   * Descarta o arranjo salvo desta teia. Pergunta antes porque não há desfazer: o arranjo é
+   * trabalho manual do usuário, e recolocar dezenas de nós à mão não é reversão, é refazer.
+   */
+  async function voltarAoAutomatico() {
+    const ok = await ask(
+      'Voltar ao layout automático? O arranjo que você fez nesta teia é descartado, e não dá para desfazer.',
+      { title: 'Grimório', kind: 'warning' },
+    )
+    if (!ok) return
+    resetarLayoutTeia(escopo)
+    setArrastados(posicoesEfetivas(LAYOUT_VAZIO, layout, tamanho))
   }
 
   function aoMover(e: React.MouseEvent) {
@@ -262,8 +338,13 @@ export function GrafoVinculos() {
         >
           🖼
         </button>
-        <button className="btn-icon" title="Enquadrar tudo de novo"
-          onClick={() => { setVista({ x: 0, y: 0, w: tamanho.largura }); setArrastados({}) }}>⤢</button>
+        {/* Duas ações, dois botões. Enquadrar mexe só na CÂMERA e é reversível; voltar ao
+            automático joga fora um arranjo feito à mão e não tem desfazer. Num botão só, quem
+            quisesse recentrar a vista perdia o trabalho sem ter pedido nada disso. */}
+        <button className="btn-icon" title="Enquadrar a teia na tela"
+          onClick={() => setVista({ x: 0, y: 0, w: tamanho.largura })}>⤢</button>
+        <button className="btn-icon" title="Voltar ao layout automático (descarta o arranjo salvo desta teia)"
+          onClick={() => void voltarAoAutomatico()}>↺</button>
         <button className="btn-icon" title="Fechar a teia" onClick={alternarGrafo}>✕</button>
       </div>
 
@@ -297,8 +378,8 @@ export function GrafoVinculos() {
             onWheel={aoRolar}
             onMouseDown={(e) => { arrasto.current = { tipo: 'tela', x: e.clientX, y: e.clientY }; setSelecionado(null) }}
             onMouseMove={aoMover}
-            onMouseUp={() => { arrasto.current = null }}
-            onMouseLeave={() => { arrasto.current = null }}
+            onMouseUp={encerrarArrasto}
+            onMouseLeave={encerrarArrasto}
           >
             <defs>
               {/* um recorte só para todos os nós: eles têm o mesmo raio e são posicionados

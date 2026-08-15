@@ -14,6 +14,7 @@ import { slugify, slugUnico } from './slug'
 import { normalizarFoco } from './focoRetrato'
 import { normalizarVinculos } from './vinculos'
 import { normalizarChat, type MensagemChat } from './chatIA'
+import { normalizarLayoutTeia, type LayoutSalvo } from './grafoLayoutPersistido'
 
 function agora(): string {
   return new Date().toISOString()
@@ -586,6 +587,27 @@ export class VaultRepo {
   async salvarVinculos(lista: Vinculo[]): Promise<void> {
     return this.naFila('vinculos.json', async () => {
       await this.fs.writeTextAtomic(this.abs('vinculos.json'), JSON.stringify({ vinculos: lista }, null, 2))
+    })
+  }
+
+  // ---------- layout da teia ----------
+
+  /**
+   * Lê `layout-teia.json` da raiz do cofre: escopo (cofre inteiro ou uma campanha) -> posições
+   * que o usuário arrumou na aba Teia. Ausente/corrompido -> objeto vazio, tudo cai no layout
+   * automático em vez de quebrar a tela.
+   */
+  async lerLayoutTeia(): Promise<Record<string, LayoutSalvo>> {
+    try {
+      return normalizarLayoutTeia(JSON.parse(await this.fs.readText(this.abs('layout-teia.json'))))
+    } catch {
+      return {}
+    }
+  }
+
+  async salvarLayoutTeia(porEscopo: Record<string, LayoutSalvo>): Promise<void> {
+    return this.naFila('layout-teia.json', async () => {
+      await this.fs.writeTextAtomic(this.abs('layout-teia.json'), JSON.stringify(porEscopo, null, 2))
     })
   }
 

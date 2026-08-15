@@ -6,6 +6,7 @@ import {
   createShapePropsMigrationIds,
   createShapePropsMigrationSequence,
   useEditor,
+  useValue,
   type RecordProps,
   type TLShape,
 } from 'tldraw'
@@ -16,6 +17,7 @@ import { ajustarLargura, alturaMoldadaAImagem, colunasTotais, escalaDoCartao } f
 import { EditorInline } from './EditorInline'
 import { ControlesFonte } from './ControlesFonte'
 import { CardRetrato } from './CardRetrato'
+import { escalaDosControles } from '../lib/escalaFonte'
 import { versaoAtivaPersonagem, versaoVizinhaPersonagem } from '../lib/personagemVersao'
 
 export const CARD_LARGURA_PADRAO = 240
@@ -157,6 +159,14 @@ function CartaoPersonagem({ shape }: { shape: CharacterCardShapeType }) {
   const cols = colunasTotais(expandido, infoAoLado ? 1 : 0)
   const cardFe = escalaDoCartao(shape.props.w, cols) * fonteEscala
 
+  /**
+   * Escala dos controles corrigida pelo zoom da câmera — o porquê está em `escalaDosControles`.
+   * O zoom é lido por `useValue` e não por `getZoomLevel()` cru porque só a leitura reativa
+   * redesenha o card ao afastar a câmera; sem isso o controle guardaria a escala do momento em
+   * que o card montou e voltaria ao tamanho ilegível sem nada na tela explicando por quê.
+   */
+  const ctrlFe = escalaDosControles(cardFe, useValue('zoom', () => tldrawEditor.getZoomLevel(), [tldrawEditor]))
+
   // qual caixa do painel está em edição inline (transitório; não persiste)
   const [editando, setEditando] = useState<'descricao' | 'informacao' | null>(null)
 
@@ -283,11 +293,12 @@ function CartaoPersonagem({ shape }: { shape: CharacterCardShapeType }) {
   )
 
   return (
-    <HTMLContainer className="char-card" style={{ pointerEvents: 'all', ['--card-fe' as any]: cardFe }}>
+    <HTMLContainer className="char-card" style={{ pointerEvents: 'all', ['--card-fe' as any]: cardFe, ['--card-ctrl' as any]: ctrlFe }}>
       <div className="char-card-principal">
         <CardRetrato
           src={retratoSrc}
           alt={va.nome}
+          foco={va.foco}
           fallback={<span className="char-card-inicial">{va.nome.charAt(0).toUpperCase()}</span>}
         />
         <div className="char-card-texto">
