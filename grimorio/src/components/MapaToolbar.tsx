@@ -5,11 +5,16 @@ import {
   DefaultFillStyle,
   DefaultSizeStyle,
   GeoShapeGeoStyle,
+  toRichText,
   useEditor,
   useValue,
   type StyleProp,
 } from 'tldraw'
 import { DEGRAUS_ESCADA, ELEMENTOS_PALETA, type ElementoPaleta } from '../lib/paletaMapa'
+import { GavetaPecas } from './GavetaPecas'
+import { useDefinirPecaAtiva } from './PecaAtiva'
+import { PORTA_ESPESSURA_PADRAO, PORTA_LARGURA_PADRAO } from './PortaShape'
+import { proximoNumero } from '../lib/portaMapa'
 
 /** Style props do tldraw indexados pelo mesmo nome usado em `ElementoPaleta.estilos`. */
 const STYLE_PROPS_POR_NOME: Record<string, StyleProp<string>> = {
@@ -116,6 +121,7 @@ const MINIMO_PARA_DISTRIBUIR = 3
  */
 export function MapaToolbar() {
   const editor = useEditor()
+  const definirPecaAtiva = useDefinirPecaAtiva()
 
   const toolId = useValue('mapa-toolbar-tool-atual', () => editor.getCurrentToolId(), [editor])
   const qtdSelecionada = useValue('mapa-toolbar-qtd-selecionada', () => editor.getSelectedShapeIds().length, [editor])
@@ -160,17 +166,22 @@ export function MapaToolbar() {
   }
 
   function aplicarElementoPaleta(elemento: ElementoPaleta) {
-    if (elemento.id === 'escada') {
-      criarEscada()
+    definirPecaAtiva(elemento.id)
+
+    if (elemento.tipo === 'acao') {
+      if (elemento.id === 'escada') criarEscada()
+      if (elemento.id === 'porta') criarPorta()
+      if (elemento.id === 'marcador') criarMarcador()
       return
     }
+
     editor.run(() => {
       if (elemento.geo) editor.setStyleForNextShapes(GeoShapeGeoStyle, elemento.geo)
       for (const [nomeStyle, valor] of Object.entries(elemento.estilos)) {
         const style = STYLE_PROPS_POR_NOME[nomeStyle]
         if (style) editor.setStyleForNextShapes(style, valor)
       }
-      editor.setCurrentTool('geo')
+      editor.setCurrentTool(elemento.tipo === 'texto' ? 'text' : 'geo')
     })
   }
 
@@ -205,6 +216,71 @@ export function MapaToolbar() {
       )
       editor.setCurrentTool('select')
       editor.groupShapes(ids)
+    })
+  }
+
+  /**
+   * Porta nasce no centro da tela e o usuário arrasta até a parede — ao soltar, ela se
+   * pinta com a cor da sala (`onTranslateEnd` do PortaShape). `bringToFront`
+   * (Editor.ts:6780) garante que ela fique à frente da sala; sem isso o vão sumiria
+   * atrás do preenchimento.
+   */
+  function criarPorta() {
+    const centro = editor.getViewportPageBounds().center
+    const id = createShapeId()
+    editor.run(() => {
+      editor.createShape({
+        id,
+        type: 'porta-mapa',
+        x: centro.x - PORTA_LARGURA_PADRAO / 2,
+        y: centro.y - PORTA_ESPESSURA_PADRAO / 2,
+      })
+      editor.bringToFront([id])
+      editor.setCurrentTool('select')
+      editor.setSelectedShapes([id])
+    })
+  }
+
+  /**
+   * Marcador: círculo amarelo com o próximo número livre. O número sai de
+   * `proximoNumero` (lib pura), lendo os marcadores que já existem na página pelo
+   * `meta.peca`. `richText` é campo real do geo shape
+   * (node_modules/@tldraw/tlschema/src/shapes/TLGeoShape.ts:109), montado com o helper
+   * `toRichText` (:141).
+   */
+  function criarMarcador() {
+    const centro = editor.getViewportPageBounds().center
+    const existentes = editor
+      .getCurrentPageShapes()
+      .filter((s) => (s.meta as Record<string, unknown>).peca === 'marcador')
+      .map((s) => {
+        const props = (s as { props?: { richText?: unknown } }).props
+        return typeof props?.richText === 'object' && props.richText !== null
+          ? extrairTexto(props.richText)
+          : ''
+      })
+    const numero = proximoNumero(existentes)
+    const id = createShapeId()
+    editor.run(() => {
+      editor.createShape({
+        id,
+        type: 'geo',
+        x: centro.x - 16,
+        y: centro.y - 16,
+        meta: { peca: 'marcador' },
+        props: {
+          geo: 'ellipse',
+          w: 32,
+          h: 32,
+          color: 'yellow',
+          fill: 'solid',
+          dash: 'solid',
+          size: 's',
+          richText: toRichText(String(numero)),
+        },
+      })
+      editor.bringToFront([id])
+      editor.setCurrentTool('select')
     })
   }
 
@@ -284,18 +360,22 @@ export function MapaToolbar() {
           ⊞
         </button>
         <div className="mapa-toolbar-divisor" aria-hidden="true" />
-        {ELEMENTOS_PALETA.map((elemento) => (
-          <button
-            key={elemento.id}
-            type="button"
-            className={`btn-icon${elementoPaletaAtivo?.id === elemento.id ? ' ativo' : ''}`}
-            title={elemento.rotulo}
-            onClick={() => aplicarElementoPaleta(elemento)}
-          >
-            {elemento.glifo}
-          </button>
-        ))}
+        <GavetaPecas pecaAtivaId={elementoPaletaAtivo?.id} aoEscolher={aplicarElementoPaleta} />
       </div>
     </div>
   )
+}
+
+/** Texto puro de um `richText` do tldraw, para ler o número de um marcador. */
+function extrairTexto(richText: unknown): string {
+  const pilha: unknown[] = [richText]
+  let saida = ''
+  while (pilha.length) {
+    const no = pilha.pop()
+    if (!no || typeof no !== 'object') continue
+    const registro = no as Record<string, unknown>
+    if (typeof registro.text === 'string') saida += registro.text
+    if (Array.isArray(registro.content)) pilha.push(...registro.content)
+  }
+  return saida
 }

@@ -239,6 +239,28 @@ button:hover { border-color: var(--dourado); color: var(--dourado-claro); }
 .mapa-toolbar .btn-icon:disabled { opacity: 0.35; cursor: default; }
 .mapa-toolbar-divisor { width: 1px; align-self: stretch; margin: 4px 2px; background: var(--borda); }
 
+/* gaveta de peças: grade flutuante ACIMA da toolbar (a toolbar mora no rodapé, então a
+   grade sobe; `bottom: 100%` a ancora na borda de cima do botão). */
+.gaveta-pecas { position: relative; display: flex; }
+.gaveta-pecas-grade {
+  position: absolute; bottom: 100%; left: 50%; transform: translateX(-50%);
+  margin-bottom: 6px; z-index: 400;
+  display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 2px;
+  width: 300px; padding: 6px;
+  background: var(--fundo); border: 1px solid var(--borda); border-radius: 6px;
+}
+.gaveta-pecas-item {
+  display: flex; align-items: center; gap: 8px;
+  padding: 6px 8px; border-radius: 4px; font-size: 12px;
+  background: transparent; border: 1px solid transparent; color: var(--texto);
+  text-align: left;
+}
+.gaveta-pecas-item:hover { background: var(--fundo-elevado); }
+.gaveta-pecas-item.ativo { border-color: var(--dourado); color: var(--dourado-claro); }
+.gaveta-pecas-item:active { transform: scale(0.97); }
+.gaveta-pecas-glifo { font-size: 15px; width: 20px; text-align: center; flex: 0 0 auto; }
+.gaveta-pecas-nome { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
 /* controle de zoom (slot components.NavigationPanel, no lugar do minimap nativo):
    mesma fileira da toolbar, encostado no rodapé — ver ControleZoom.tsx. */
 .mapa-zoom {
