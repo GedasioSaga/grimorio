@@ -1,9 +1,9 @@
-import { PREFIXO_DE_NOME } from './sync/conflito'
+import { ARQUIVO_DE_CENARIO, PREFIXO_DE_NOME, temMarcaDeCopia } from './sync/conflito'
 import type { EstadoSync } from './sync/sincronizador'
 import type { FalhaAcao } from './sync/executar'
 import type { FalhaDeGravacao } from './sync/ciclo'
 import type { Acao } from './sync/tipos'
-import type { Cenario, Personagem } from './types'
+import type { Cenario, ItemRef, Personagem } from './types'
 
 /**
  * O que a aba Nuvem MOSTRA, derivado do retrato que o sincronizador publica em `syncStore`.
@@ -246,32 +246,110 @@ export function textoDoPareamento(nomeDoCofre: string, arquivosNaNuvem: number):
     + 'Ligar agora?'
 }
 
-export interface CopiaDeConflito {
-  tipo: 'personagem' | 'cenario'
+/**
+ * Personagem e cenário abrem e descartam por ID: são as duas entidades que o app já sabe indexar
+ * (`personagens[id]`/`cenarios[id]`), e cujo caminho no disco se resolve depois, na hora de agir
+ * (`caminhoPorId`/`caminhoCenarioPorId`), porque ele pode ter mudado desde que a lista foi montada.
+ *
+ * Um `tipo` por interface (não `'personagem' | 'cenario'` numa só) é o que deixa o TypeScript
+ * estreitar `CopiaDeConflito` por `if (copia.tipo === ...)` em vez de o chamador precisar de um
+ * type guard escrito à mão.
+ */
+export interface CopiaDeConflitoPersonagem {
+  tipo: 'personagem'
+  id: string
+  nome: string
+}
+
+export interface CopiaDeConflitoCenario {
+  tipo: 'cenario'
   id: string
   nome: string
 }
 
 /**
- * As cópias de conflito que estão no cofre agora, achadas pelo prefixo do nome.
+ * Canvas e mapa (Defeito B: a política `entidade` também marca `canvases-soltos/*.json` e
+ * `mapas-soltos/*.json`, mas até aqui nada os listava) abrem e descartam pelo CAMINHO — são
+ * `ItemRef`, e o app não mantém um índice deles por id como mantém para personagem e cenário.
+ */
+export interface CopiaDeConflitoCanvas {
+  tipo: 'canvas'
+  caminho: string
+  nome: string
+}
+
+export interface CopiaDeConflitoMapa {
+  tipo: 'mapa'
+  caminho: string
+  nome: string
+}
+
+export type CopiaDeConflito =
+  | CopiaDeConflitoPersonagem
+  | CopiaDeConflitoCenario
+  | CopiaDeConflitoCanvas
+  | CopiaDeConflitoMapa
+
+/**
+ * `caminhoCenarioPorId` guarda a PASTA do cenário (é o que `repo.excluirCenario`/`salvarCenario`
+ * esperam), mas `temMarcaDeCopia` reconhece a marca do cenário olhando o caminho do
+ * `cenario.json` DENTRO dela — é assim que `politicaDoCaminho`/`nomeDaCopia` também enxergam a
+ * entidade. `''` (id sem entrada no mapa) vira `'cenario.json'`, que `temMarcaDeCopia` já trata
+ * como "sem marca" (não é o arquivo especial dentro de pasta nenhuma).
+ */
+function caminhoDoCenarioJson(dirDoCenario: string | undefined): string {
+  return dirDoCenario ? `${dirDoCenario}/${ARQUIVO_DE_CENARIO}` : ARQUIVO_DE_CENARIO
+}
+
+/**
+ * Só os `ItemRef` que são cópia de conflito DE VERDADE — a marca precisa estar no CAMINHO
+ * (`temMarcaDeCopia`), não só no nome exibido.
+ *
+ * O prefixo `(conflito) ` no nome sozinho não basta para autorizar uma exclusão: é o texto que
+ * QUALQUER usuário pode digitar de propósito ("(conflito) na Ilha dos Piratas"), e enquanto a
+ * lista só oferecia Abrir isso era inofensivo. Agora que oferece Descartar, confundir os dois
+ * apaga entidade real do usuário — a marca de verdade (travessão em-dash, assinatura, carimbo)
+ * só existe no nome que `nomeDaCopia` gerou, nunca em algo que um humano digita sem querer.
+ */
+function itensMarcados(itens: ItemRef[]): ItemRef[] {
+  return itens.filter((i) => i.nome.startsWith(PREFIXO_DE_COPIA) && temMarcaDeCopia(i.caminho))
+}
+
+/**
+ * As cópias de conflito que estão no cofre agora.
  *
  * A lista vem do cofre carregado, e não do ciclo que a criou, porque `EstadoSync` não tem campo
  * para os `resolvidos()` do preservador — e mesmo que tivesse, ele seria da sessão: quem fecha o
  * app e volta no dia seguinte encontraria a lista vazia com as cópias ainda lá. Procurar pelo
  * nome acha a cópia enquanto ela existir.
  *
- * Só personagem e cenário: são as duas entidades que a política `entidade` marca com o prefixo e
- * as duas que o app sabe abrir por id.
+ * As quatro entidades que a política `entidade` marca com o prefixo: personagem, cenário, canvas
+ * e mapa solto. Sessão, escrita e item de campanha também são JSON de política `entidade`, mas
+ * não têm tela própria para abrir a cópia — ficam de fora até ganharem uma.
+ *
+ * O prefixo no `nome` filtra o candidato óbvio; `temMarcaDeCopia(caminho)` é quem de fato
+ * autoriza a entrada na lista (mesmo motivo de `itensMarcados`, acima). Personagem e cenário só
+ * têm `id`, não `caminho` — por isso os dois mapas de resolução entram como parâmetro. Sem
+ * entrada no mapa (cache ainda não carregado) não há como confirmar a marca, e a entidade fica
+ * de fora: melhor não listar do que listar algo que não dá para verificar.
  */
 export function copiasDeConflito(
   personagens: Record<string, Personagem>,
   cenarios: Record<string, Cenario>,
+  canvasesSoltos: ItemRef[],
+  mapasSoltos: ItemRef[],
+  caminhoPorId: Record<string, string>,
+  caminhoCenarioPorId: Record<string, string>,
 ): CopiaDeConflito[] {
   const todas: CopiaDeConflito[] = [
-    ...Object.values(personagens).map((p) => ({ tipo: 'personagem' as const, id: p.id, nome: p.nome })),
-    ...Object.values(cenarios).map((c) => ({ tipo: 'cenario' as const, id: c.id, nome: c.nome })),
+    ...Object.values(personagens)
+      .filter((p) => p.nome.startsWith(PREFIXO_DE_COPIA) && temMarcaDeCopia(caminhoPorId[p.id] ?? ''))
+      .map((p) => ({ tipo: 'personagem' as const, id: p.id, nome: p.nome })),
+    ...Object.values(cenarios)
+      .filter((c) => c.nome.startsWith(PREFIXO_DE_COPIA) && temMarcaDeCopia(caminhoDoCenarioJson(caminhoCenarioPorId[c.id])))
+      .map((c) => ({ tipo: 'cenario' as const, id: c.id, nome: c.nome })),
+    ...itensMarcados(canvasesSoltos).map((i) => ({ tipo: 'canvas' as const, caminho: i.caminho, nome: i.nome })),
+    ...itensMarcados(mapasSoltos).map((i) => ({ tipo: 'mapa' as const, caminho: i.caminho, nome: i.nome })),
   ]
-  return todas
-    .filter((c) => c.nome.startsWith(PREFIXO_DE_COPIA))
-    .sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'))
+  return todas.sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'))
 }

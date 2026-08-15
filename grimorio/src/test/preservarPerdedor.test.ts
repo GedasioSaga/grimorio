@@ -74,6 +74,9 @@ function montar() {
     pastaRaizId: RAIZ_DRIVE,
     novoId: () => `id-novo-${++contador}`,
     agora: () => QUANDO,
+    // fake barato: o "hash" é o próprio conteúdo, prefixado só para não passar por engano como
+    // texto legível em algum assert futuro — comparar dois arquivos ainda compara conteúdo real
+    hashArquivo: async (caminhoAbsoluto) => `hash:${await fs.readText(caminhoAbsoluto)}`,
   }
 
   const preservador = criarPreservador(deps)
@@ -341,12 +344,14 @@ describe('colisão de nome', () => {
       .rejects.toThrow('não há nome livre')
   })
 
-  it('a cópia de um cenário também numera em vez de reusar a pasta', async () => {
+  it('cenário perdedor DIFERENTE numera em vez de reusar a pasta', async () => {
     const c = montar()
     const cenario = 'cenarios/cidade/cenario.json'
-    await c.escrever(cenario, JSON.stringify({ id: 'c-1', nome: 'Cidade' }))
-
+    await c.escrever(cenario, JSON.stringify({ id: 'c-1', nome: 'Cidade', resumo: 'primeira' }))
     await c.preservador.preservarPerdedor(conflito(cenario, 'remoto'), remoto())
+
+    // o usuário editou de novo antes do próximo conflito: é conteúdo novo, então merece cópia nova
+    await c.escrever(cenario, JSON.stringify({ id: 'c-1', nome: 'Cidade', resumo: 'segunda' }))
     await c.preservador.preservarPerdedor(conflito(cenario, 'remoto'), remoto())
 
     expect(c.existe(`cenarios/cidade ${MARCA}/cenario.json`)).toBe(true)
@@ -396,5 +401,116 @@ describe('resolvidos', () => {
     expect(lista.map((r) => r.politica)).toEqual(['entidade', 'binario'])
     lista.pop()
     expect(c.preservador.resolvidos()).toHaveLength(2)
+  })
+})
+
+/**
+ * Defeito A do relato de sidebar: preservar dá certo, a TRANSFERÊNCIA que vem depois falha (rede,
+ * 403, arquivo travado), o conflito continua de pé e o ciclo seguinte preserva o MESMO perdedor
+ * outra vez — sem esta defesa, cada retentativa carimbava um nome novo (`deps.agora()` mudou) e
+ * gerava mais uma cópia idêntica, para sempre.
+ */
+describe('duplicata entre ciclos (Defeito A)', () => {
+  it('entidade: mesmo perdedor duas vezes deixa UMA cópia, não duas', async () => {
+    const c = montar()
+    await c.escrever(GANDALF, personagem('Gandalf', 'sempre igual'))
+
+    await c.preservador.preservarPerdedor(conflito(GANDALF, 'remoto'), remoto())
+    // simula o ciclo seguinte redetectando o MESMO conflito (transferência anterior falhou);
+    // o local não mudou, então o perdedor preservado agora é byte a byte o mesmo de antes
+    await c.preservador.preservarPerdedor(conflito(GANDALF, 'remoto'), remoto())
+
+    const dir = 'campanhas/aventura/personagens'
+    expect(c.existe(`${dir}/gandalf ${MARCA}.json`)).toBe(true)
+    expect(c.existe(`${dir}/gandalf ${MARCA} (2).json`)).toBe(false)
+    // a segunda passada aponta para a MESMA cópia, não fica muda sobre o que aconteceu
+    expect(c.preservador.resolvidos()[1]).toEqual({
+      caminho: GANDALF, copia: `${dir}/gandalf ${MARCA}.json`, politica: 'entidade',
+    })
+  })
+
+  it('entidade: perdedor DIFERENTE ainda gera cópia nova, mesmo com candidata no disco', async () => {
+    const c = montar()
+    await c.escrever(GANDALF, personagem('Gandalf', 'primeira'))
+    await c.preservador.preservarPerdedor(conflito(GANDALF, 'remoto'), remoto())
+
+    await c.escrever(GANDALF, personagem('Gandalf', 'segunda'))
+    await c.preservador.preservarPerdedor(conflito(GANDALF, 'remoto'), remoto())
+
+    const dir = 'campanhas/aventura/personagens'
+    expect(c.existe(`${dir}/gandalf ${MARCA}.json`)).toBe(true)
+    expect(c.existe(`${dir}/gandalf ${MARCA} (2).json`)).toBe(true)
+  })
+
+  it('cenário (cópia em PASTA): mesmo perdedor duas vezes também não duplica', async () => {
+    const c = montar()
+    const cenario = 'cenarios/cidade/cenario.json'
+    await c.escrever(cenario, JSON.stringify({ id: 'c-1', nome: 'Cidade', resumo: 'sempre igual' }))
+
+    await c.preservador.preservarPerdedor(conflito(cenario, 'remoto'), remoto())
+    await c.preservador.preservarPerdedor(conflito(cenario, 'remoto'), remoto())
+
+    expect(c.existe(`cenarios/cidade ${MARCA}/cenario.json`)).toBe(true)
+    expect(c.existe(`cenarios/cidade ${MARCA} (2)/cenario.json`)).toBe(false)
+  })
+
+  it('binário: mesma imagem duas vezes deixa UMA cópia — comparação é por conteúdo cru', async () => {
+    const c = montar()
+    const retrato = 'campanhas/aventura/assets/retrato.png'
+    await c.escrever(retrato, '<bin:sempre igual>')
+
+    await c.preservador.preservarPerdedor(conflito(retrato, 'remoto'), remoto())
+    await c.preservador.preservarPerdedor(conflito(retrato, 'remoto'), remoto())
+
+    expect(c.existe(`campanhas/aventura/assets/retrato ${MARCA}.png`)).toBe(true)
+    expect(c.existe(`campanhas/aventura/assets/retrato ${MARCA} (2).png`)).toBe(false)
+  })
+
+  it('binário: bytes diferentes não enganam — cada imagem distinta ganha sua cópia', async () => {
+    const c = montar()
+    const retrato = 'campanhas/aventura/assets/retrato.png'
+    await c.escrever(retrato, '<bin:A>')
+    await c.preservador.preservarPerdedor(conflito(retrato, 'remoto'), remoto())
+
+    await c.escrever(retrato, '<bin:B>')
+    await c.preservador.preservarPerdedor(conflito(retrato, 'remoto'), remoto())
+
+    expect(c.existe(`campanhas/aventura/assets/retrato ${MARCA}.png`)).toBe(true)
+    expect(c.existe(`campanhas/aventura/assets/retrato ${MARCA} (2).png`)).toBe(true)
+  })
+
+  it('candidata no disco com JSON corrompido não derruba o ciclo nem apaga nada', async () => {
+    const c = montar()
+    await c.escrever(GANDALF, personagem('Gandalf', 'novo conteúdo'))
+    // uma cópia de um ciclo anterior, hoje ilegível (disco cheio no meio da escrita, por ex.)
+    await c.escrever(`campanhas/aventura/personagens/gandalf ${MARCA}.json`, '{ truncado')
+
+    await c.preservador.preservarPerdedor(conflito(GANDALF, 'remoto'), remoto())
+
+    // não trava, não confunde a candidata corrompida com "igual", e não apaga a candidata velha
+    expect(await c.ler(`campanhas/aventura/personagens/gandalf ${MARCA}.json`)).toBe('{ truncado')
+    expect(c.existe(`campanhas/aventura/personagens/gandalf ${MARCA} (2).json`)).toBe(true)
+  })
+
+  it('cópia com nome prefixado duas vezes não engana a comparação', async () => {
+    const c = montar()
+    const dir = 'campanhas/aventura/personagens'
+    // uma candidata cujo NOME já viria com o prefixo repetido, mas com conteúdo REAL diferente do
+    // perdedor de agora — só descontar o prefixo repetido não pode fazer isto passar por "igual"
+    await c.escrever(
+      `${dir}/gandalf ${MARCA}.json`,
+      JSON.stringify({
+        id: 'id-antigo', nome: '(conflito) (conflito) Gandalf', versaoAtivaId: 'v1',
+        versoes: [{ id: 'v1', nome: '(conflito) (conflito) Gandalf', resumo: 'outro conteúdo' }],
+      }),
+    )
+    await c.escrever(GANDALF, personagem('Gandalf', 'conteúdo de agora'))
+
+    await c.preservador.preservarPerdedor(conflito(GANDALF, 'remoto'), remoto())
+
+    // reconhecida como DIFERENTE: gera cópia nova em vez de apontar para a candidata enganosa
+    expect(c.existe(`${dir}/gandalf ${MARCA} (2).json`)).toBe(true)
+    expect(JSON.parse(await c.ler(`${dir}/gandalf ${MARCA} (2).json`)).versoes[0].resumo)
+      .toBe('conteúdo de agora')
   })
 })

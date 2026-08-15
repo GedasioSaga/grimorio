@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { estadoInicialSync, type EstadoSync } from '../lib/sync/sincronizador'
-import type { Cenario, Personagem } from '../lib/types'
+import { nomeDaCopia } from '../lib/sync/conflito'
+import type { Cenario, ItemRef, Personagem } from '../lib/types'
 import {
   avisosDoSync,
   copiasDeConflito,
@@ -8,6 +9,19 @@ import {
   quandoFoi,
   resumirSync,
 } from '../lib/painelSync'
+
+const QUANDO_MARCA = new Date(2026, 6, 26, 14, 32)
+
+/** Caminho de cópia GERADA por `nomeDaCopia` — a marca de verdade, não o prefixo no nome exibido. */
+function caminhoMarcado(original: string): string {
+  return nomeDaCopia(original, 'PC Casa', QUANDO_MARCA, 0)
+}
+
+/** `caminhoCenarioPorId` guarda a PASTA, não o `cenario.json` — mesma forma que o store usa. */
+function dirCenarioMarcado(original: string): string {
+  const marcado = caminhoMarcado(original)
+  return marcado.slice(0, marcado.length - '/cenario.json'.length)
+}
 
 /** Retrato do sync com só o que o teste quiser mudar. */
 function sync(parcial: Partial<EstadoSync> = {}): EstadoSync {
@@ -27,6 +41,10 @@ function personagem(id: string, nome: string): Personagem {
 
 function cenario(id: string, nome: string): Cenario {
   return { id, nome, personagens: [], versoes: [], versaoAtivaId: '', criadoEm: '', modificadoEm: '' }
+}
+
+function item(caminho: string, nome: string): ItemRef {
+  return { slug: nome, nome, caminho }
 }
 
 describe('resumirSync', () => {
@@ -184,6 +202,8 @@ describe('descreverAcao', () => {
 
 describe('copiasDeConflito', () => {
   it('acha personagem e cenário marcados e ignora o resto', () => {
+    const caminhoGandalf = 'personagens-soltos/gandalf.json'
+    const caminhoTaverna = 'cenarios/taverna/cenario.json'
     const personagens = {
       p1: personagem('p1', 'Gandalf'),
       p2: personagem('p2', '(conflito) Gandalf'),
@@ -192,7 +212,10 @@ describe('copiasDeConflito', () => {
       c1: cenario('c1', 'Taverna'),
       c2: cenario('c2', '(conflito) Taverna'),
     }
-    expect(copiasDeConflito(personagens, cenarios)).toEqual([
+    const caminhoPorId = { p2: caminhoMarcado(caminhoGandalf) }
+    const caminhoCenarioPorId = { c2: dirCenarioMarcado(caminhoTaverna) }
+
+    expect(copiasDeConflito(personagens, cenarios, [], [], caminhoPorId, caminhoCenarioPorId)).toEqual([
       { tipo: 'personagem', id: 'p2', nome: '(conflito) Gandalf' },
       { tipo: 'cenario', id: 'c2', nome: '(conflito) Taverna' },
     ])
@@ -200,10 +223,81 @@ describe('copiasDeConflito', () => {
 
   it('a marca só vale no começo do nome — "Cópia (conflito)" não é cópia de conflito', () => {
     const personagens = { p1: personagem('p1', 'Guerra do (conflito) eterno') }
-    expect(copiasDeConflito(personagens, {})).toEqual([])
+    expect(copiasDeConflito(personagens, {}, [], [], {}, {})).toEqual([])
   })
 
   it('cofre sem conflito nenhum devolve lista vazia', () => {
-    expect(copiasDeConflito({ p1: personagem('p1', 'Gandalf') }, { c1: cenario('c1', 'Taverna') })).toEqual([])
+    expect(copiasDeConflito({ p1: personagem('p1', 'Gandalf') }, { c1: cenario('c1', 'Taverna') }, [], [], {}, {}))
+      .toEqual([])
+  })
+
+  it('Defeito B: acha canvas e mapa soltos marcados — antes o painel nem olhava essas duas listas', () => {
+    const canvasesSoltos = [
+      item('canvases-soltos/mapa-mental.json', 'Mapa Mental'),
+      item(caminhoMarcado('canvases-soltos/mapa-mental.json'), '(conflito) Mapa Mental'),
+    ]
+    const mapasSoltos = [
+      item('mapas-soltos/castelo.json', 'Castelo'),
+      item(caminhoMarcado('mapas-soltos/castelo.json'), '(conflito) Castelo'),
+    ]
+    expect(copiasDeConflito({}, {}, canvasesSoltos, mapasSoltos, {}, {})).toEqual([
+      { tipo: 'mapa', caminho: caminhoMarcado('mapas-soltos/castelo.json'), nome: '(conflito) Castelo' },
+      { tipo: 'canvas', caminho: caminhoMarcado('canvases-soltos/mapa-mental.json'), nome: '(conflito) Mapa Mental' },
+    ])
+  })
+
+  it('as quatro entidades convivem na mesma lista, ordenada por nome', () => {
+    const personagens = { p2: personagem('p2', '(conflito) Zelda') }
+    const cenarios = { c2: cenario('c2', '(conflito) Bosque') }
+    const canvasesSoltos = [item(caminhoMarcado('canvases-soltos/x.json'), '(conflito) Anotações')]
+    const mapasSoltos = [item(caminhoMarcado('mapas-soltos/y.json'), '(conflito) Mapa do Castelo L2')]
+    const caminhoPorId = { p2: caminhoMarcado('personagens-soltos/zelda.json') }
+    const caminhoCenarioPorId = { c2: dirCenarioMarcado('cenarios/bosque/cenario.json') }
+
+    const nomes = copiasDeConflito(
+      personagens, cenarios, canvasesSoltos, mapasSoltos, caminhoPorId, caminhoCenarioPorId,
+    ).map((c) => c.nome)
+    expect(nomes).toEqual([
+      '(conflito) Anotações',
+      '(conflito) Bosque',
+      '(conflito) Mapa do Castelo L2',
+      '(conflito) Zelda',
+    ])
+  })
+
+  describe('CRÍTICO: prefixo no nome exibido não basta — a marca precisa estar no caminho', () => {
+    it('personagem nomeado pelo usuário com o prefixo NÃO entra, mesmo com entrada no cache', () => {
+      const personagens = { p1: personagem('p1', '(conflito) Nome Escolhido Pelo Jogador') }
+      // caminho REAL, sem a marca de `nomeDaCopia` — é exatamente o caso do mestre que batiza
+      // a entidade assim de propósito
+      const caminhoPorId = { p1: 'personagens-soltos/conflito-nome-escolhido-pelo-jogador.json' }
+      expect(copiasDeConflito(personagens, {}, [], [], caminhoPorId, {})).toEqual([])
+    })
+
+    it('cenário nomeado pelo usuário com o prefixo NÃO entra — caso do relato original', () => {
+      const cenarios = { c1: cenario('c1', '(conflito) na Ilha dos Piratas') }
+      const caminhoCenarioPorId = { c1: 'cenarios/na-ilha-dos-piratas' }
+      expect(copiasDeConflito({}, cenarios, [], [], {}, caminhoCenarioPorId)).toEqual([])
+    })
+
+    it('canvas/mapa com nome digitado começando com o prefixo também não entra', () => {
+      const canvasesSoltos = [item('canvases-soltos/conflito-armado.json', '(conflito) Armado')]
+      const mapasSoltos = [item('mapas-soltos/conflito-na-fronteira.json', '(conflito) na Fronteira')]
+      expect(copiasDeConflito({}, {}, canvasesSoltos, mapasSoltos, {}, {})).toEqual([])
+    })
+
+    it('cópia de VERDADE (caminho gerado por nomeDaCopia) continua entrando', () => {
+      const personagens = { p1: personagem('p1', '(conflito) Gandalf') }
+      const caminhoPorId = { p1: caminhoMarcado('personagens-soltos/gandalf.json') }
+      expect(copiasDeConflito(personagens, {}, [], [], caminhoPorId, {})).toEqual([
+        { tipo: 'personagem', id: 'p1', nome: '(conflito) Gandalf' },
+      ])
+    })
+
+    it('sem entrada no cache (id ainda não resolvido) a entidade fica de fora, não entra por otimismo', () => {
+      const personagens = { p1: personagem('p1', '(conflito) Gandalf') }
+      const cenarios = { c1: cenario('c1', '(conflito) Taverna') }
+      expect(copiasDeConflito(personagens, cenarios, [], [], {}, {})).toEqual([])
+    })
   })
 })

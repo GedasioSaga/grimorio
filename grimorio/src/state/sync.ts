@@ -3,7 +3,7 @@ import { nomePadrao } from '../lib/cofres'
 import { idDoDispositivo, nomeDoDispositivo } from '../lib/dispositivo'
 import { tauriFs } from '../lib/fsBridge'
 import { googleConta } from '../lib/googleAuth'
-import { hashTexto } from '../lib/hashBridge'
+import { hashArquivo, hashTexto } from '../lib/hashBridge'
 import { executarCiclo, type ResultadoDoCiclo } from '../lib/sync/ciclo'
 import { sondagemNoDisco, varreduraNoDisco } from '../lib/sync/disco'
 import { tauriDrive } from '../lib/sync/driveBridge'
@@ -134,6 +134,7 @@ function executarCicloDoCofre(caminho: string, dirManifesto: string): Promise<Re
           pastaRaizId: manifesto.pastaRaizId,
           novoId: () => crypto.randomUUID(),
           agora: () => new Date(),
+          hashArquivo,
         }).preservarPerdedor,
     agora: () => new Date().toISOString(),
   })

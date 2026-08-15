@@ -9,6 +9,7 @@ import {
   type Politica,
 } from './conflito'
 import type { ClienteDrive } from './driveBridge'
+import { candidatosDeCopia, mesmoConteudoEntidade } from './duplicata'
 import { caminhoAbsoluto, type AcaoConflito } from './executar'
 import type { EstadoRemoto } from './tipos'
 
@@ -45,6 +46,12 @@ export interface DependenciasDePreservacao {
   novoId(): string
   /** Instante do conflito, para carimbar o nome da cópia. Injetado como em `executar.agora`. */
   agora(): Date
+  /**
+   * SHA-256 de um arquivo no disco, para comparar cópia binária sem carregar a imagem inteira
+   * no JavaScript. Mesma porta que a varredura usa (`hashBridge.hashArquivo`, `hash_arquivo` no
+   * Rust) — só entra aqui para o Defeito A (preservação repetida do mesmo perdedor).
+   */
+  hashArquivo(caminhoAbsoluto: string): Promise<string>
 }
 
 export interface Preservador {
@@ -121,19 +128,92 @@ export function criarPreservador(deps: DependenciasDePreservacao): Preservador {
   }
 
   /**
+   * Acha, entre `candidatos`, o primeiro cuja comparação com o perdedor dá "igual" — a defesa do
+   * Defeito A (preservação repetida do mesmo perdedor entre ciclos, ver `duplicata.ts`).
+   *
+   * Candidato ilegível ou que sumiu entre o `listDir` e agora não deve travar uma preservação
+   * NOVA e legítima: conta como "não é duplicata" e o laço segue para o próximo, em vez de
+   * lançar e derrubar a ação inteira.
+   */
+  async function acharDuplicata(
+    candidatos: string[],
+    comparar: (candidato: string) => Promise<boolean>,
+  ): Promise<string | null> {
+    for (const candidato of candidatos) {
+      try {
+        if (await comparar(candidato)) return candidato
+      } catch {
+        continue
+      }
+    }
+    return null
+  }
+
+  /**
    * Cópia de entidade: mesmo conteúdo, identidade nova.
+   *
+   * O perdedor chega primeiro num arquivo TEMPORÁRIO — não direto em `copia` — porque antes de
+   * decidir se ele é cópia nova ou duplicata do que já existe, o conteúdo cru precisa ser lido e
+   * comparado. Só quando não há duplicata o temporário vira a cópia de verdade (`rename`); achada
+   * a duplicata, ele é descartado e a preservação aponta para a cópia ANTIGA.
    *
    * Se o conteúdo não puder ser marcado (JSON ilegível, ou sem `id`), a cópia fica como veio.
    * Não é atalho: um arquivo que o `JSON.parse` recusa também é recusado por `montarArvorePastas`
    * e `listaComSlug`, que o marcam como `erro` e nunca o põem no índice por id — o estrago que o
    * id novo previne não existe nesse caso.
    */
-  async function preservarEntidade(acao: AcaoConflito, remoto: EstadoRemoto, copia: string): Promise<void> {
-    await trazerPerdedor(acao, remoto, copia)
-    const original = await deps.fs.readText(abs(copia))
-    const marcado = marcarComoCopia(original, deps.novoId())
+  async function preservarEntidade(
+    acao: AcaoConflito,
+    remoto: EstadoRemoto,
+    copia: string,
+    candidatos: string[],
+  ): Promise<void> {
+    const temporario = `${copia}.tmp-conflito`
+    await trazerPerdedor(acao, remoto, temporario)
+    const bruto = await deps.fs.readText(abs(temporario))
+
+    const duplicata = await acharDuplicata(candidatos, async (candidato) =>
+      mesmoConteudoEntidade(bruto, await deps.fs.readText(abs(candidato))),
+    )
+    if (duplicata !== null) {
+      await deps.fs.removePath(abs(temporario))
+      registrar(acao.caminho, duplicata, 'entidade')
+      return
+    }
+
+    const marcado = marcarComoCopia(bruto, deps.novoId())
+    await deps.fs.rename(abs(temporario), abs(copia))
     if (marcado !== null) await deps.fs.writeTextAtomic(abs(copia), marcado)
     registrar(acao.caminho, copia, 'entidade')
+  }
+
+  /**
+   * Cópia binária: mesmo raciocínio de `preservarEntidade`, mas a comparação é por HASH do
+   * arquivo (`deps.hashArquivo`, o mesmo `hash_arquivo` do Rust que a varredura usa) — o
+   * conteúdo não tem `id` nem `nome` para normalizar, então bytes crus é a comparação certa.
+   */
+  async function preservarBinario(
+    acao: AcaoConflito,
+    remoto: EstadoRemoto,
+    copia: string,
+    candidatos: string[],
+  ): Promise<void> {
+    const temporario = `${copia}.tmp-conflito`
+    await trazerPerdedor(acao, remoto, temporario)
+    const hashNovo = await deps.hashArquivo(abs(temporario))
+
+    const duplicata = await acharDuplicata(
+      candidatos,
+      async (candidato) => (await deps.hashArquivo(abs(candidato))) === hashNovo,
+    )
+    if (duplicata !== null) {
+      await deps.fs.removePath(abs(temporario))
+      registrar(acao.caminho, duplicata, 'binario')
+      return
+    }
+
+    await deps.fs.rename(abs(temporario), abs(copia))
+    registrar(acao.caminho, copia, 'binario')
   }
 
   /**
@@ -190,12 +270,19 @@ export function criarPreservador(deps: DependenciasDePreservacao): Preservador {
     }
 
     const assinatura = assinaturaDoPerdedor(acao.vencedor, deps.deviceNome, remoto.deviceNome)
+    if (politica === 'uniao') {
+      const copia = await caminhoLivreParaCopia(acao.caminho, assinatura)
+      return preservarUniao(acao, remoto, copia)
+    }
+
+    // só entidade e binário criam cópia de verdade no disco, e só essas duas podem duplicar
+    // entre ciclos — a busca por candidato fica de fora do caminho de união de propósito.
+    // Sem filtrar por assinatura: cópia de mesmo conteúdo vinda de outro computador também é
+    // duplicata, e quem decide isso é a comparação de conteúdo, não o nome do arquivo.
+    const candidatos = await candidatosDeCopia({ fs: deps.fs, abs }, acao.caminho)
     const copia = await caminhoLivreParaCopia(acao.caminho, assinatura)
-    if (politica === 'uniao') return preservarUniao(acao, remoto, copia)
-    if (politica === 'entidade') return preservarEntidade(acao, remoto, copia)
-    // binário: o conteúdo não tem identidade a trocar, e mexer nele seria corrompê-lo
-    await trazerPerdedor(acao, remoto, copia)
-    registrar(acao.caminho, copia, politica)
+    if (politica === 'entidade') return preservarEntidade(acao, remoto, copia, candidatos)
+    return preservarBinario(acao, remoto, copia, candidatos)
   }
 
   return { preservarPerdedor, resolvidos: () => [...resolvidos] }

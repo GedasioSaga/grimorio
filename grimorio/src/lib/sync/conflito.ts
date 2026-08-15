@@ -47,7 +47,7 @@ const METADADOS = new Set(['campanha.json', 'pasta.json', 'cofre.json', 'layout-
  * cenário pela presença deste arquivo dentro da pasta. Uma cópia irmã (`cenario (conflito …).json`)
  * não seria lida por ninguém — a cópia tem de ser uma pasta irmã.
  */
-const ARQUIVO_DE_CENARIO = 'cenario.json'
+export const ARQUIVO_DE_CENARIO = 'cenario.json'
 
 /**
  * Prefixo do nome da entidade copiada, para o usuário reconhecer a cópia dentro do app.
@@ -156,6 +156,99 @@ export function nomeDaCopia(
   const base = corte <= 0 ? nome : nome.slice(0, corte)
   const extensao = corte <= 0 ? '' : nome.slice(corte)
   return juntar(pasta, `${base} ${marca}${extensao}`)
+}
+
+/**
+ * A marca sem o carimbo: `(conflito — <assinatura> <dd-mm HHhMM>)`, com o ordinal opcional
+ * ` (2)`, ` (3)` que `nomeDaCopia` acrescenta a partir da segunda tentativa.
+ *
+ * `.+` guloso porque a assinatura é o NOME DO COMPUTADOR e pode conter parêntese
+ * ("PC (casa)"); parar no primeiro `)` deixaria de reconhecer a cópia desse usuário.
+ */
+const MARCA_DE_COPIA = /^\(conflito — .+\)(?: \(\d+\))?$/
+
+/**
+ * `candidato` é uma cópia de conflito de `caminho`?
+ *
+ * Mora aqui, ao lado de `nomeDaCopia`, e não em quem consome, pelo mesmo motivo documentado em
+ * `PREFIXO_DE_NOME`: enquanto a forma do nome viver em dois arquivos, mudá-la num deles faz o
+ * outro parar de achar as cópias **sem erro nenhum** — e aqui isso significa a fábrica de
+ * `(conflito)` duplicados voltar a funcionar em silêncio. Juntos, os dois quebram no mesmo
+ * teste. A versão anterior deduzia o formato comparando duas saídas de `nomeDaCopia` com datas
+ * diferentes; funcionava, mas apostava calado em quatro invariantes que ninguém garante (que o
+ * trecho variável é contíguo, que dia/mês/hora/minuto têm 2 dígitos, que o ordinal fica sempre
+ * entre parênteses antes da extensão, e que cenário é a única política em pasta).
+ *
+ * Ignora a assinatura de propósito: cópia com o mesmo conteúdo vinda de outro computador também
+ * é duplicata, e quem decide "é o mesmo perdedor" é a comparação de CONTEÚDO, não o nome.
+ */
+export function ehCopiaDe(caminho: string, candidato: string): boolean {
+  const nome = nomeDeArquivo(caminho)
+  const pasta = pastaDe(caminho)
+
+  // cenário: a entidade é a PASTA, então a cópia é uma pasta irmã com o `cenario.json` dentro
+  if (nome === ARQUIVO_DE_CENARIO && pasta !== '') {
+    if (nomeDeArquivo(candidato) !== ARQUIVO_DE_CENARIO) return false
+    const pastaDoCandidato = pastaDe(candidato)
+    if (pastaDe(pastaDoCandidato) !== pastaDe(pasta)) return false
+    return temMarcaApos(nomeDeArquivo(pastaDoCandidato), nomeDeArquivo(pasta), '')
+  }
+
+  if (pastaDe(candidato) !== pasta) return false
+  const corte = nome.lastIndexOf('.')
+  const base = corte <= 0 ? nome : nome.slice(0, corte)
+  const extensao = corte <= 0 ? '' : nome.slice(corte)
+  return temMarcaApos(nomeDeArquivo(candidato), base, extensao)
+}
+
+/** `<base> <marca><extensao>` — a mesma montagem de `nomeDaCopia`, lida ao contrário. */
+function temMarcaApos(candidato: string, base: string, extensao: string): boolean {
+  if (!candidato.startsWith(`${base} `) || !candidato.endsWith(extensao)) return false
+  return MARCA_DE_COPIA.test(candidato.slice(base.length + 1, candidato.length - extensao.length))
+}
+
+/**
+ * `caminho` É uma cópia de conflito de verdade — gerada por `nomeDaCopia`, não um nome que o
+ * usuário digitou?
+ *
+ * Existe porque `PREFIXO_DE_NOME` sozinho é fraco demais para autorizar exclusão: um mestre pode
+ * batizar um cenário de "(conflito) na Ilha dos Piratas" de propósito, e o prefixo no nome
+ * EXIBIDO não distingue isso de uma cópia gerada pelo sync. A marca de verdade — travessão
+ * em-dash, assinatura, carimbo `dd-mm HHhMM`, ordinal opcional — mora no nome do ARQUIVO (ou, no
+ * caso de cenário, no nome da PASTA), e reconhecê-la ali é o que este arquivo já sabe fazer via
+ * `temMarcaApos`. Reaproveita a MESMA lógica de `ehCopiaDe`, só que sem exigir um `caminho`
+ * original para comparar — aqui a pergunta é sobre o candidato sozinho.
+ */
+export function temMarcaDeCopia(caminho: string): boolean {
+  const nome = nomeDeArquivo(caminho)
+  const pasta = pastaDe(caminho)
+
+  // cenário: a marca fica no nome da PASTA que contém `cenario.json`, não no arquivo
+  if (nome === ARQUIVO_DE_CENARIO && pasta !== '') {
+    return temMarcaNoSegmento(nomeDeArquivo(pasta))
+  }
+  return temMarcaNoSegmento(nome)
+}
+
+/**
+ * Um segmento de caminho (nome de arquivo sem pasta, ou nome de pasta) termina em `<algo> <marca>`,
+ * para ALGUM ponto de corte?
+ *
+ * Sem um `caminho` original para comparar (ao contrário de `ehCopiaDe`), a "base" verdadeira não
+ * é conhecida de antemão — então testa cada espaço como possível corte, reusando `temMarcaApos`
+ * tal e qual. `MARCA_DE_COPIA` é ancorada (`^...$`), então só o corte que isola exatamente
+ * `(conflito — …)` passa; um nome digitado por um humano que só CONTENHA parênteses ou espaços
+ * não engana o regex.
+ */
+function temMarcaNoSegmento(segmento: string): boolean {
+  const corte = segmento.lastIndexOf('.')
+  const semExtensao = corte <= 0 ? segmento : segmento.slice(0, corte)
+  const extensao = corte <= 0 ? '' : segmento.slice(corte)
+
+  for (let espaco = semExtensao.indexOf(' '); espaco >= 0; espaco = semExtensao.indexOf(' ', espaco + 1)) {
+    if (temMarcaApos(segmento, semExtensao.slice(0, espaco), extensao)) return true
+  }
+  return false
 }
 
 /** Só prefixa uma vez: reconflitar a cópia não produz "(conflito) (conflito) Gandalf". */
