@@ -63,14 +63,13 @@ export interface ElementoPaleta {
 
 export const ELEMENTOS_PALETA: ElementoPaleta[] = [
   {
-    // salas preenchidas com contorno fino são a base dos mapas de referência do
-    // usuário (estilo Resident Evil); a cor troca depois no painel de estilos
+    // sala virou shape próprio (SalaMapaShape): as cores de estado das referências
+    // não existem na paleta do tldraw e ela carrega o próprio nome dentro
     id: 'sala',
     rotulo: 'Sala',
     glifo: '⬛',
-    tipo: 'geo',
-    geo: 'rectangle',
-    estilos: { color: 'green', fill: 'solid', dash: 'solid', size: 's' },
+    tipo: 'acao',
+    estilos: {},
   },
   {
     id: 'parede',
@@ -191,12 +190,18 @@ export function pecaDaFormaCriada(
   forma: FormaCriada,
   elementos: ElementoPaleta[] = ELEMENTOS_PALETA,
 ): PecaId | null {
+  // amostra dentro do quadro de legenda não é peça do mapa. Sem esta guarda, a
+  // miniatura de "Sala" na legenda contava como sala de verdade (achado de revisão):
+  // aparecia na contagem de peças presentes e podia ser lida por quem procura salas.
+  if (forma.meta?.decorativo === true) return null
+
   // quem cria a forma por código (marcador) já carimba; essa decisão vence a dedução
   const jaCarimbada = forma.meta?.peca
   if (typeof jaCarimbada === 'string') return jaCarimbada as PecaId
 
-  // a porta é shape próprio: o tipo já diz o que ela é, sem comparar estilo
+  // shapes próprios: o tipo já diz o que a peça é, sem comparar estilo
   if (forma.type === 'porta-mapa') return 'porta'
+  if (forma.type === 'sala-mapa') return 'sala'
 
   // símbolos desenhados carregam o próprio nome na prop `simbolo`
   if (forma.type === 'simbolo-mapa') {

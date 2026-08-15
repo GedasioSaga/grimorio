@@ -40,18 +40,28 @@ describe('entradasDaLegenda', () => {
 
 describe('planoDeConversao', () => {
   it('peça de estilo mantém a forma e repinta', () => {
-    const plano = planoDeConversao('sala')
+    const plano = planoDeConversao('parede')
     expect(plano.tipo).toBe('estilo')
     if (plano.tipo !== 'estilo') throw new Error('tipo errado')
     expect(plano.geo).toBe('rectangle')
-    expect(plano.estilos.color).toBe('green')
+    expect(plano.estilos.color).toBe('white')
+  })
+
+  // converter em sala é o caso que mais importa: é o que o mapa antigo tem de sobra
+  it('sala vira shape próprio, no estado pendente', () => {
+    const plano = planoDeConversao('sala')
+    expect(plano.tipo).toBe('substituir')
+    if (plano.tipo !== 'substituir') throw new Error('tipo errado')
+    expect(plano.novoTipo).toBe('sala-mapa')
+    expect(plano.props.estado).toBe('pendente')
   })
 
   it('peça desenhada troca a forma por um símbolo', () => {
     const plano = planoDeConversao('armadilha')
     expect(plano.tipo).toBe('substituir')
     if (plano.tipo !== 'substituir') throw new Error('tipo errado')
-    expect(plano.simbolo).toBe('armadilha')
+    expect(plano.novoTipo).toBe('simbolo-mapa')
+    expect(plano.props.simbolo).toBe('armadilha')
   })
 
   it('porta não é convertível: o vão depende da parede sob ela', () => {

@@ -37,10 +37,11 @@ import {
 import type { CamadaMapa } from '../lib/types'
 import { PortaShapeUtil } from './PortaShape'
 import { SimboloMapaShapeUtil } from './SimboloMapaShape'
+import { SalaMapaShapeUtil } from './SalaMapaShape'
 import { pecaDaFormaCriada } from '../lib/paletaMapa'
 
 // mesmos card-shapes do canvas: mapa aceita drop de personagem/cenário/item
-const shapeUtilsCustom = [CharacterCardShapeUtil, CenarioCardShapeUtil, ItemCardShapeUtil, PortaShapeUtil, SimboloMapaShapeUtil]
+const shapeUtilsCustom = [CharacterCardShapeUtil, CenarioCardShapeUtil, ItemCardShapeUtil, PortaShapeUtil, SimboloMapaShapeUtil, SalaMapaShapeUtil]
 const shapeUtilsDoStore = [...defaultShapeUtils, ...shapeUtilsCustom]
 
 // combina os overlays de espaço-de-tela num só slot (InFrontOfTheCanvas aceita 1 componente)
@@ -307,6 +308,22 @@ export function MapaView({ caminho, nome }: { caminho: string; nome: string }) {
     editor.resizeShape(id, { x: 1, y: alturaAlvoPx / bounds.h }, { scaleOrigin: { x: bounds.x, y: bounds.y } })
   }
 
+  /** Troca o estado da sala/porta selecionada (vermelho, azul, escuro; livre, trancada). */
+  function aoTrocarEstado(id: TLShapeId, estado: string) {
+    const editor = editorRef.current
+    const shape = editor?.getShape(id)
+    if (!editor || !shape) return
+    editor.updateShape({ id, type: shape.type, props: { estado } } as Parameters<typeof editor.updateShape>[0])
+  }
+
+  /** Nome do cômodo, que a própria sala desenha no centro dela. */
+  function aoRenomearSala(id: TLShapeId, nome: string) {
+    const editor = editorRef.current
+    const shape = editor?.getShape(id)
+    if (!editor || !shape || shape.type !== 'sala-mapa') return
+    editor.updateShape({ id, type: shape.type, props: { rotulo: nome } } as Parameters<typeof editor.updateShape>[0])
+  }
+
   async function exportar(formato: 'png' | 'svg') {
     const editor = editorRef.current
     if (!editor || !repo) return
@@ -417,6 +434,8 @@ export function MapaView({ caminho, nome }: { caminho: string; nome: string }) {
         aoAplicarY={aoAplicarY}
         aoAplicarL={aoAplicarL}
         aoAplicarA={aoAplicarA}
+        aoTrocarEstado={aoTrocarEstado}
+        aoRenomearSala={aoRenomearSala}
       />
       <PainelCamadas
         camadas={camadas}

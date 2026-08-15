@@ -1,5 +1,4 @@
 import { ELEMENTOS_PALETA, type ElementoPaleta, type PecaId } from './paletaMapa'
-import type { SimboloId } from './simbolosMapa'
 
 /**
  * "Converter seleção em ▸ peça": transforma o que já está desenhado numa peça de verdade.
@@ -17,14 +16,15 @@ import type { SimboloId } from './simbolosMapa'
  * - peça DESENHADA (janela, armadilha, mesa…): não há como "pintar" um retângulo até
  *   virar um losango com "!". A forma velha é trocada por um `simbolo-mapa` ocupando o
  *   mesmo espaço.
- * - porta: fica de fora. Ela se recolore a partir da sala sob ela e nasce de um fluxo
- *   próprio; converter um retângulo qualquer em porta produziria uma porta órfã, sem a
- *   parede que dá sentido ao vão.
+ * - porta e escada ficam de fora. A porta é uma marca SOBRE a parede, com tamanho e
+ *   posição próprios — converter um retângulo grande em porta daria uma barra gigante
+ *   sem parede embaixo. A escada é um grupo de formas, não uma forma.
  */
 
 export type PlanoConversao =
   | { tipo: 'estilo'; peca: PecaId; geo?: string; estilos: Record<string, string> }
-  | { tipo: 'substituir'; peca: PecaId; simbolo: SimboloId }
+  /** troca a forma velha por um shape próprio, preservando posição e tamanho */
+  | { tipo: 'substituir'; peca: PecaId; novoTipo: 'simbolo-mapa' | 'sala-mapa'; props: Record<string, unknown> }
   | { tipo: 'impossivel'; motivo: string }
 
 export function planoDeConversao(
@@ -34,7 +34,20 @@ export function planoDeConversao(
   const elemento = elementos.find((e) => e.id === pecaAlvo)
   if (!elemento) return { tipo: 'impossivel', motivo: 'peça desconhecida' }
 
-  if (elemento.simbolo) return { tipo: 'substituir', peca: elemento.id, simbolo: elemento.simbolo }
+  if (elemento.simbolo) {
+    return {
+      tipo: 'substituir',
+      peca: elemento.id,
+      novoTipo: 'simbolo-mapa',
+      props: { simbolo: elemento.simbolo, rotulo: '' },
+    }
+  }
+
+  // sala é o caso que mais importa converter: é o que o mapa antigo tem de sobra.
+  // Vira `sala-mapa` no estado "pendente" — o usuário troca depois no painel.
+  if (elemento.id === 'sala') {
+    return { tipo: 'substituir', peca: 'sala', novoTipo: 'sala-mapa', props: { estado: 'pendente', rotulo: '' } }
+  }
 
   if (elemento.tipo === 'geo' || elemento.tipo === 'texto') {
     return { tipo: 'estilo', peca: elemento.id, geo: elemento.geo, estilos: elemento.estilos }

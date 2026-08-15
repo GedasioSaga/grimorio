@@ -84,7 +84,19 @@ function converterSelecao(editor: Editor, pecaId: string, stylePropsPorNome: Rec
   const plano = planoDeConversao(pecaId)
   if (plano.tipo === 'impossivel') return
 
-  const selecionadas = editor.getSelectedShapeIds()
+  // Achados de revisão, os três no mesmo lugar:
+  // 1. shape TRAVADO: `deleteShapes` ignora travados em silêncio (Editor.ts:8541-8543),
+  //    então o antigo sobrevivia embaixo do novo, duplicado.
+  // 2. GRUPO na seleção: `setStyleForSelectedShapes` recursa para os filhos, mas o
+  //    carimbo de identidade iterava a lista plana — visual e identidade divergiam.
+  // 3. tipo INCOMPATÍVEL: carimbar `peca` numa porta ou num card de personagem que
+  //    entraram na seleção por arrasto corrompia a identidade correta que eles já tinham.
+  const selecionadas = editor
+    .getSelectedShapeIds()
+    .filter((id) => {
+      const forma = editor.getShape(id)
+      return forma !== undefined && !forma.isLocked && forma.type !== 'group'
+    })
   if (selecionadas.length === 0) return
 
   editor.run(() => {
@@ -95,11 +107,12 @@ function converterSelecao(editor: Editor, pecaId: string, stylePropsPorNome: Rec
         const style = stylePropsPorNome[nome]
         if (style) editor.setStyleForSelectedShapes(style, valor)
       }
+      // só carimba quem o setStyle de fato conseguiu repintar: forma comum (geo/text).
       editor.updateShapes(
-        selecionadas.map((id) => {
-          const forma = editor.getShape(id)!
-          return { id, type: forma.type, meta: { ...forma.meta, peca: plano.peca } }
-        }),
+        selecionadas
+          .map((id) => editor.getShape(id)!)
+          .filter((forma) => forma.type === 'geo' || forma.type === 'text')
+          .map((forma) => ({ id: forma.id, type: forma.type, meta: { ...forma.meta, peca: plano.peca } })),
       )
       return
     }
@@ -111,13 +124,17 @@ function converterSelecao(editor: Editor, pecaId: string, stylePropsPorNome: Rec
       const bounds = editor.getShapePageBounds(id)
       if (!forma || !bounds) continue
       const novoId = createShapeId()
+      // sem `parentId`, o símbolo nasceria solto e o grupo original se desfaria ao
+      // perder o filho antigo (GroupShapeUtil.onChildrenChange desagrupa com 1 filho).
+      const local = editor.getPointInParentSpace(id, { x: bounds.x, y: bounds.y })
       editor.createShape({
         id: novoId,
-        type: 'simbolo-mapa',
-        x: bounds.x,
-        y: bounds.y,
+        type: plano.novoTipo,
+        parentId: forma.parentId,
+        x: local.x,
+        y: local.y,
         // a forma antiga pode ter qualquer tamanho; o símbolo assume o espaço dela
-        props: { w: bounds.w, h: bounds.h, simbolo: plano.simbolo, rotulo: '' },
+        props: { w: bounds.w, h: bounds.h, ...plano.props },
         meta: { ...forma.meta, peca: plano.peca },
       })
       novas.push(novoId)
@@ -160,8 +177,13 @@ function inserirLegenda(editor: Editor) {
   const altura = LEGENDA.alturaTitulo + entradas.length * LEGENDA.alturaLinha + LEGENDA.margemInterna * 2
 
   const ids: TLShapeId[] = []
+  /**
+   * `meta.decorativo` marca que a forma é AMOSTRA, não peça do mapa. Sem isso, a
+   * miniatura de "Sala" dentro do quadro contava como uma sala de verdade na contagem de
+   * peças presentes — achado de revisão.
+   */
   const criar = (id: TLShapeId, forma: Parameters<Editor['createShape']>[0]) => {
-    editor.createShape(forma)
+    editor.createShape({ ...forma, meta: { ...(forma.meta ?? {}), decorativo: true } })
     ids.push(id)
   }
 

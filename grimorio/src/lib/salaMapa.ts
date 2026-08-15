@@ -1,0 +1,76 @@
+/**
+ * A sala do mapa e o seu ESTADO.
+ *
+ * Nas referências do usuário (mapas do Resident Evil 2), a cor da sala não é decoração —
+ * é a informação principal que o mapa existe para dar: vermelho quer dizer "ainda tem
+ * coisa aqui", azul quer dizer "já limpei", escuro quer dizer "não sei o que tem". Numa
+ * mesa de RPG, é o que o mestre lê de relance no meio da cena.
+ *
+ * Por que a sala é desenhada por nós e não é uma forma `geo` do tldraw pintada: as cores
+ * abaixo não existem na paleta do tldraw e não há como redefini-la. No tema escuro, a
+ * cor `red` com preenchimento sólido resolve para `#382726` (quase marrom) — conferido em
+ * node_modules/@tldraw/tlschema/src/styles/TLColorStyle.ts, bloco `darkMode`. O preço é
+ * que a sala é retangular; forma irregular se compõe com salas encostadas, como o próprio
+ * usuário já desenha.
+ */
+
+export type EstadoSala = 'pendente' | 'limpa' | 'sem-info'
+
+export interface AparenciaSala {
+  estado: EstadoSala
+  rotulo: string
+  preenchimento: string
+  contorno: string
+  /** cor do nome do cômodo escrito dentro da sala */
+  texto: string
+}
+
+const CONTORNO = '#b9c4c9'
+
+const APARENCIAS: Record<EstadoSala, Omit<AparenciaSala, 'estado'>> = {
+  pendente: { rotulo: 'Ainda tem coisa', preenchimento: '#7d3b3b', contorno: CONTORNO, texto: '#ffffff' },
+  limpa: { rotulo: 'Já limpei', preenchimento: '#40596b', contorno: CONTORNO, texto: '#ffffff' },
+  'sem-info': { rotulo: 'Sem informação', preenchimento: '#1c1c1c', contorno: CONTORNO, texto: '#cfcfcf' },
+}
+
+/** Ordem em que os estados aparecem no painel de propriedades. */
+export const ESTADOS_SALA: EstadoSala[] = ['pendente', 'limpa', 'sem-info']
+
+/**
+ * Aparência de um estado. Estado desconhecido (arquivo de versão futura, ou editado à
+ * mão) cai em `sem-info` em vez de sumir: sala invisível seria pior que sala neutra.
+ */
+export function aparenciaDaSala(estado: string): AparenciaSala {
+  const chave = (ESTADOS_SALA as string[]).includes(estado) ? (estado as EstadoSala) : 'sem-info'
+  return { estado: chave, ...APARENCIAS[chave] }
+}
+
+/**
+ * Quebra o nome do cômodo em linhas que cabem na largura da sala.
+ *
+ * As referências fazem isso o tempo todo ("Safety Deposit Room" em duas linhas dentro de
+ * uma sala estreita). A conta é aproximada de propósito — largura média de caractere — e
+ * não precisa ser exata: erra para menos, e o texto sobra dentro da caixa em vez de
+ * vazar.
+ */
+export function quebrarRotulo(rotulo: string, larguraPx: number, tamanhoFontePx: number): string[] {
+  const texto = rotulo.trim()
+  if (!texto) return []
+
+  const larguraMediaChar = tamanhoFontePx * 0.55
+  const maxChars = Math.max(4, Math.floor((larguraPx - 8) / larguraMediaChar))
+
+  const linhas: string[] = []
+  let atual = ''
+  for (const palavra of texto.split(/\s+/)) {
+    const candidata = atual ? `${atual} ${palavra}` : palavra
+    if (candidata.length <= maxChars) {
+      atual = candidata
+      continue
+    }
+    if (atual) linhas.push(atual)
+    atual = palavra
+  }
+  if (atual) linhas.push(atual)
+  return linhas
+}

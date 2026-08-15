@@ -1,10 +1,25 @@
 import { createContext, useContext, useEffect, useState } from 'react'
 import { useEditor, useValue, type TLShapeId } from 'tldraw'
 import { QUADRADO_PX, emQuadrados, parseQuadrados } from '../lib/quadrados'
+import { ESTADOS_SALA, aparenciaDaSala } from '../lib/salaMapa'
+import { ESTADOS_PORTA, aparenciaDaPorta } from './PortaShape'
 
 /** Snapshot reativo da seleção que o painel precisa para se desenhar. */
 export type SelecaoPropriedades =
-  | { tipo: 'single'; id: TLShapeId; x: number; y: number; w: number; h: number }
+  | {
+      tipo: 'single'
+      id: TLShapeId
+      x: number
+      y: number
+      w: number
+      h: number
+      /** tipo do shape tldraw ('sala-mapa', 'porta-mapa', 'geo'…) */
+      tipoShape: string
+      /** estado atual, quando a peça tem estado (sala e porta) */
+      estado?: string
+      /** nome do cômodo, quando a peça é sala */
+      rotuloSala?: string
+    }
   | { tipo: 'multi'; w: number; h: number }
   | null
 
@@ -46,7 +61,19 @@ export function SelecaoPropriedadesBridge() {
       const id = ids[0]
       const bounds = editor.getShapePageBounds(id)
       if (!bounds) return null
-      return { tipo: 'single', id, x: bounds.x, y: bounds.y, w: bounds.w, h: bounds.h }
+      const forma = editor.getShape(id)
+      const props = (forma?.props ?? {}) as Record<string, unknown>
+      return {
+        tipo: 'single',
+        id,
+        x: bounds.x,
+        y: bounds.y,
+        w: bounds.w,
+        h: bounds.h,
+        tipoShape: forma?.type ?? '',
+        estado: typeof props.estado === 'string' ? props.estado : undefined,
+        rotuloSala: typeof props.rotulo === 'string' ? props.rotulo : undefined,
+      }
     },
     [editor],
   )
@@ -73,12 +100,16 @@ export function PainelPropriedades({
   aoAplicarY,
   aoAplicarL,
   aoAplicarA,
+  aoTrocarEstado,
+  aoRenomearSala,
 }: {
   selecao: SelecaoPropriedades
   aoAplicarX: (id: TLShapeId, quadrados: number) => void
   aoAplicarY: (id: TLShapeId, quadrados: number) => void
   aoAplicarL: (id: TLShapeId, quadrados: number) => void
   aoAplicarA: (id: TLShapeId, quadrados: number) => void
+  aoTrocarEstado: (id: TLShapeId, estado: string) => void
+  aoRenomearSala: (id: TLShapeId, nome: string) => void
 }) {
   const [colapsado, setColapsado] = useState(false)
 
@@ -108,11 +139,26 @@ export function PainelPropriedades({
       ) : (
         // key = id da forma: força remount ao trocar de seleção, descartando rascunho
         // de edição em andamento de uma forma que deixou de ser a selecionada.
-        <div className="painel-propriedades-grade" key={selecao.id}>
+        <div key={selecao.id}>
+          {selecao.tipoShape === 'sala-mapa' && (
+            <CampoNome
+              valor={selecao.rotuloSala ?? ''}
+              onAplicar={(nome) => aoRenomearSala(selecao.id, nome)}
+            />
+          )}
+          {estadosDaPeca(selecao.tipoShape).length > 0 && (
+            <SeletorEstado
+              opcoes={estadosDaPeca(selecao.tipoShape)}
+              atual={selecao.estado}
+              onEscolher={(estado) => aoTrocarEstado(selecao.id, estado)}
+            />
+          )}
+          <div className="painel-propriedades-grade">
           <CampoQuadrado label="X" valorPx={selecao.x} onAplicar={(q) => aoAplicarX(selecao.id, q)} />
           <CampoQuadrado label="Y" valorPx={selecao.y} onAplicar={(q) => aoAplicarY(selecao.id, q)} />
           <CampoQuadrado label="L" valorPx={selecao.w} onAplicar={(q) => aoAplicarL(selecao.id, q)} minimoPositivo />
           <CampoQuadrado label="A" valorPx={selecao.h} onAplicar={(q) => aoAplicarA(selecao.id, q)} minimoPositivo />
+          </div>
         </div>
       )}
     </div>
@@ -164,6 +210,83 @@ function CampoQuadrado({
         onKeyDown={(e) => {
           if (e.key === 'Enter') (e.target as HTMLInputElement).blur()
           if (e.key === 'Escape') setEditando(false)
+        }}
+      />
+    </label>
+  )
+}
+
+/**
+ * Estados que a peça selecionada aceita. Peça sem estado (parede, símbolo, forma comum)
+ * devolve lista vazia e o seletor nem aparece — o painel só mostra o que faz sentido
+ * para o que está selecionado.
+ */
+function estadosDaPeca(tipoShape: string): Array<{ id: string; rotulo: string; cor: string }> {
+  if (tipoShape === 'sala-mapa') {
+    return ESTADOS_SALA.map((estado) => {
+      const a = aparenciaDaSala(estado)
+      return { id: estado, rotulo: a.rotulo, cor: a.preenchimento }
+    })
+  }
+  if (tipoShape === 'porta-mapa') {
+    return ESTADOS_PORTA.map((estado) => {
+      const a = aparenciaDaPorta(estado)
+      return { id: estado, rotulo: a.rotulo, cor: a.cor }
+    })
+  }
+  return []
+}
+
+/**
+ * Seletor de estado: cada opção mostra a PRÓPRIA COR, porque no mapa é a cor que carrega
+ * o significado — ler "Já limpei" e ver o azul ao lado ensina a legenda sem texto extra.
+ */
+function SeletorEstado({
+  opcoes,
+  atual,
+  onEscolher,
+}: {
+  opcoes: Array<{ id: string; rotulo: string; cor: string }>
+  atual: string | undefined
+  onEscolher: (estado: string) => void
+}) {
+  return (
+    <div className="painel-estado">
+      <span className="painel-propriedades-label">Estado</span>
+      <div className="painel-estado-opcoes">
+        {opcoes.map((opcao) => (
+          <button
+            key={opcao.id}
+            type="button"
+            className={`painel-estado-opcao${atual === opcao.id ? ' ativo' : ''}`}
+            title={opcao.rotulo}
+            onClick={() => onEscolher(opcao.id)}
+          >
+            <span className="painel-estado-cor" style={{ background: opcao.cor }} />
+            {opcao.rotulo}
+          </button>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+/** Nome do cômodo, escrito dentro da própria sala. Aplica no blur/Enter, igual X/Y/L/A. */
+function CampoNome({ valor, onAplicar }: { valor: string; onAplicar: (nome: string) => void }) {
+  const [rascunho, setRascunho] = useState(valor)
+
+  return (
+    <label className="painel-propriedades-campo painel-nome">
+      <span className="painel-propriedades-label">Nome do cômodo</span>
+      <input
+        type="text"
+        className="painel-propriedades-input"
+        value={rascunho}
+        onChange={(e) => setRascunho(e.target.value)}
+        onBlur={() => onAplicar(rascunho)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') (e.target as HTMLInputElement).blur()
+          if (e.key === 'Escape') setRascunho(valor)
         }}
       />
     </label>

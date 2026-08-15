@@ -13,6 +13,7 @@ import { DEGRAUS_ESCADA, ELEMENTOS_PALETA, type ElementoPaleta } from '../lib/pa
 import { GavetaPecas } from './GavetaPecas'
 import { ComandosMapa } from './ComandosMapa'
 import { PORTA_ESPESSURA_PADRAO, PORTA_LARGURA_PADRAO } from './PortaShape'
+import { SALA_ALTURA_PADRAO, SALA_LARGURA_PADRAO } from './SalaMapaShape'
 import { proximoNumero } from '../lib/portaMapa'
 import { definicaoDoSimbolo, type SimboloId } from '../lib/simbolosMapa'
 import { tamanhoDoSimbolo } from './SimboloMapaShape'
@@ -170,6 +171,7 @@ export function MapaToolbar() {
   function aplicarElementoPaleta(elemento: ElementoPaleta) {
     if (elemento.tipo === 'acao') {
       if (elemento.id === 'escada') criarEscada()
+      else if (elemento.id === 'sala') criarSala()
       else if (elemento.id === 'porta') criarPorta()
       else if (elemento.simbolo) criarSimbolo(elemento.simbolo)
       return
@@ -220,10 +222,29 @@ export function MapaToolbar() {
   }
 
   /**
-   * Porta nasce no centro da tela e o usuário arrasta até a parede — ao soltar, ela se
-   * pinta com a cor da sala (`onTranslateEnd` do PortaShape). `bringToFront`
-   * (Editor.ts:6780) garante que ela fique à frente da sala; sem isso o vão sumiria
-   * atrás do preenchimento.
+   * Sala nasce no centro da tela, no estado "pendente" (vermelha) — que é como um cômodo
+   * começa: você ainda não vasculhou. O nome se escreve no painel de propriedades.
+   */
+  function criarSala() {
+    const centro = editor.getViewportPageBounds().center
+    const id = createShapeId()
+    editor.run(() => {
+      editor.createShape({
+        id,
+        type: 'sala-mapa',
+        x: centro.x - SALA_LARGURA_PADRAO / 2,
+        y: centro.y - SALA_ALTURA_PADRAO / 2,
+        props: { w: SALA_LARGURA_PADRAO, h: SALA_ALTURA_PADRAO, estado: 'pendente', rotulo: '' },
+      })
+      editor.setCurrentTool('select')
+      editor.setSelectedShapes([id])
+    })
+  }
+
+  /**
+   * Porta nasce no centro da tela, livre (azul), para o usuário arrastar até a parede.
+   * Fica à frente (`bringToFront`, Editor.ts:6780) porque é uma marca SOBRE a parede — se
+   * nascesse atrás da sala, sumiria.
    */
   function criarPorta() {
     const centro = editor.getViewportPageBounds().center
@@ -234,6 +255,7 @@ export function MapaToolbar() {
         type: 'porta-mapa',
         x: centro.x - PORTA_LARGURA_PADRAO / 2,
         y: centro.y - PORTA_ESPESSURA_PADRAO / 2,
+        props: { w: PORTA_LARGURA_PADRAO, h: PORTA_ESPESSURA_PADRAO, estado: 'livre' },
       })
       editor.bringToFront([id])
       editor.setCurrentTool('select')

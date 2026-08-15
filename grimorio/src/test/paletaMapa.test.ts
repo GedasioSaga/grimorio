@@ -43,12 +43,14 @@ describe('ELEMENTOS_PALETA', () => {
     }
   })
 
-  it('sala: geo rectangle, verde sólida — a base dos mapas de referência', () => {
+  // sala deixou de ser retângulo verde do tldraw: virou shape próprio com ESTADO
+  // (vermelho pendente / azul limpa / escuro sem info), porque essas cores não existem
+  // na paleta do tldraw e ela precisa carregar o nome do cômodo dentro
+  it('sala: shape próprio, sem geo nem estilo pré-aplicado', () => {
     const sala = ELEMENTOS_PALETA.find((e) => e.id === 'sala')!
-    expect(sala.geo).toBe('rectangle')
-    expect(sala.estilos.color).toBe('green')
-    expect(sala.estilos.fill).toBe('solid')
-    expect(sala.estilos.size).toBe('s')
+    expect(sala.tipo).toBe('acao')
+    expect(sala.geo).toBeUndefined()
+    expect(Object.keys(sala.estilos)).toHaveLength(0)
   })
 
   it('parede: geo rectangle, cor branca, fill sólido, traço sólido, tamanho m', () => {
@@ -134,10 +136,10 @@ describe('peças da leva 4a', () => {
     const porTipo = (tipo: ElementoPaleta['tipo']) =>
       ELEMENTOS_PALETA.filter((e) => e.tipo === tipo).map((e) => e.id)
 
-    expect(porTipo('geo')).toEqual(['sala', 'parede'])
+    expect(porTipo('geo')).toEqual(['parede'])
     expect(porTipo('texto')).toEqual(['rotulo'])
     expect(porTipo('acao')).toEqual([
-      'porta', 'janela', 'escada', 'mesa', 'cama', 'bau', 'secreta', 'armadilha', 'marcador',
+      'sala', 'porta', 'janela', 'escada', 'mesa', 'cama', 'bau', 'secreta', 'armadilha', 'marcador',
     ])
   })
 
@@ -173,9 +175,14 @@ describe('peças da leva 4a', () => {
 })
 
 describe('pecaDaFormaCriada — identidade deduzida da própria forma', () => {
-  it('reconhece a sala pelos estilos que a paleta aplica', () => {
-    const sala = { type: 'geo', props: { geo: 'rectangle', color: 'green', fill: 'solid', dash: 'solid', size: 's' } }
+  it('reconhece a sala pelo tipo do shape próprio', () => {
+    const sala = { type: 'sala-mapa', props: { w: 160, h: 112, estado: 'pendente', rotulo: 'Salão' } }
     expect(pecaDaFormaCriada(sala)).toBe('sala')
+  })
+
+  it('amostra decorativa da legenda não conta como peça do mapa', () => {
+    const amostra = { type: 'sala-mapa', meta: { decorativo: true }, props: { estado: 'limpa' } }
+    expect(pecaDaFormaCriada(amostra)).toBeNull()
   })
 
   it('reconhece símbolo desenhado pela prop `simbolo`', () => {

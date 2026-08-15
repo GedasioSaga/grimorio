@@ -142,6 +142,12 @@ button:hover { border-color: var(--dourado); color: var(--dourado-claro); }
 
 /* ---- canvas ---- */
 .canvas-wrap, .mapa-wrap { position: relative; flex: 1; min-height: 0; }
+/* Fundo do mapa no cinza-chumbo das referências do usuário (mapas do Resident Evil),
+   em vez do preto do tema dark do tldraw: as salas escuras "sem informação" precisam se
+   destacar do fundo, e sobre preto puro elas sumiam. `--tl-color-background` é a variável
+   que o próprio tldraw usa em `.tl-background` (node_modules/@tldraw/editor/editor.css:368),
+   então redefini-la aqui vale só dentro do mapa — o Canvas continua como estava. */
+.mapa-wrap { --tl-color-background: #2e2e2e; }
 .canvas-wrap .tl-container, .mapa-wrap .tl-container { height: 100%; }
 .canvas-toolbar {
   /* centralizado no topo: tldraw usa o canto superior esquerdo (toolbar) e
@@ -309,6 +315,25 @@ button:hover { border-color: var(--dourado); color: var(--dourado-claro); }
 }
 .painel-propriedades-input:focus { border-color: var(--dourado); }
 .painel-propriedades-multi { font-size: 13px; color: var(--texto-fraco); text-align: center; padding: 4px; }
+
+/* estado da peça (sala: pendente/limpa/sem-info; porta: livre/trancada/precisa de algo).
+   Cada opção mostra a própria cor porque no mapa é a cor que carrega o significado —
+   ver a opção ao lado do nome ensina a legenda sem precisar de legenda. */
+.painel-estado { display: flex; flex-direction: column; gap: 4px; margin-bottom: 8px; }
+.painel-estado-opcoes { display: flex; flex-direction: column; gap: 2px; }
+.painel-estado-opcao {
+  display: flex; align-items: center; gap: 8px;
+  padding: 5px 6px; border-radius: 4px; font-size: 12px; text-align: left;
+  background: transparent; border: 1px solid transparent; color: var(--texto);
+}
+.painel-estado-opcao:hover { background: var(--fundo-elevado); }
+.painel-estado-opcao.ativo { border-color: var(--dourado); color: var(--dourado-claro); }
+.painel-estado-opcao:active { transform: scale(0.97); }
+.painel-estado-cor {
+  width: 14px; height: 14px; border-radius: 3px; flex: 0 0 auto;
+  border: 1px solid var(--borda);
+}
+.painel-nome { margin-bottom: 8px; }
 .painel-propriedades-reabrir {
   position: absolute; top: 96px; left: 28px; z-index: 300;
   background: var(--fundo-painel); border: 1px solid var(--borda); border-radius: 6px;
