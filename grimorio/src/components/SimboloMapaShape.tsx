@@ -1,6 +1,5 @@
 import { BaseBoxShapeUtil, SVGContainer, T, type RecordProps, type TLShape } from 'tldraw'
 import { definicaoDoSimbolo } from '../lib/simbolosMapa'
-import { CONTORNO_SALA } from '../lib/salaMapa'
 
 // tldraw 4.x: shapes customizados entram no union TLShape via augmentation do
 // TLGlobalShapePropsMap (mesmo padrão de CharacterCardShape.tsx e PortaShape.tsx).
@@ -163,26 +162,6 @@ function desenharSimbolo(simbolo: string, w: number, h: number, rotulo: string) 
           <line x1={0} y1={h * 0.35} x2={w} y2={h * 0.35} stroke={CORES.madeiraTraco} strokeWidth={1.5} />
           <rect x={w / 2 - 2} y={h * 0.35} width={4} height={h * 0.25} fill={CORES.madeiraTraco} />
         </>
-      )
-
-    /**
-     * Divisória: a MESMA linha do contorno da sala, para dividir um cômodo por dentro.
-     *
-     * O traço fica centralizado numa caixa mais alta que ele (8px contra 1.2px): linha de
-     * 1px é quase impossível de acertar com o mouse, então a área de clique é a caixa e
-     * o desenho é só o traço. Girar a forma dá a divisória vertical ou diagonal.
-     */
-    case 'divisoria':
-      return (
-        <line
-          x1={0}
-          y1={h / 2}
-          x2={w}
-          y2={h / 2}
-          stroke={CONTORNO_SALA}
-          strokeWidth={1.2}
-          shapeRendering="crispEdges"
-        />
       )
 
     /**

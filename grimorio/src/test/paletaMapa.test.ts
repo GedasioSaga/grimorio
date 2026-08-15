@@ -150,9 +150,11 @@ describe('peças da leva 4a', () => {
 
     expect(porTipo('geo')).toEqual(['parede'])
     expect(porTipo('texto')).toEqual(['rotulo'])
+    // divisória usa a ferramenta de linha do tldraw, pré-estilada como o contorno da sala
+    expect(porTipo('linha')).toEqual(['divisoria'])
     // só as de construção: os itens também são 'acao' e são conferidos no teste próprio
     expect(porTipo('acao').filter((id) => !ELEMENTOS_PALETA.find((e) => e.id === id)?.item)).toEqual([
-      'sala', 'porta', 'divisoria', 'janela', 'escada', 'mesa', 'cama', 'bau', 'secreta',
+      'sala', 'porta', 'janela', 'escada', 'mesa', 'cama', 'bau', 'secreta',
       'armadilha', 'marcador', 'andar',
     ])
   })

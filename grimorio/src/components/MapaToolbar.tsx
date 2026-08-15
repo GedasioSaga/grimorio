@@ -183,7 +183,9 @@ export function MapaToolbar() {
         const style = STYLE_PROPS_POR_NOME[nomeStyle]
         if (style) editor.setStyleForNextShapes(style, valor)
       }
-      editor.setCurrentTool(elemento.tipo === 'texto' ? 'text' : 'geo')
+      const ferramenta =
+        elemento.tipo === 'texto' ? 'text' : elemento.tipo === 'linha' ? 'line' : 'geo'
+      editor.setCurrentTool(ferramenta)
     })
   }
 

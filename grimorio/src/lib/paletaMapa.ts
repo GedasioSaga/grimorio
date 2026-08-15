@@ -54,10 +54,11 @@ export interface ElementoPaleta {
    * Como a peça entra no mapa:
    * - `geo`: pré-estila a próxima forma (`setStyleForNextShapes`) e liga a ferramenta `geo`
    * - `texto`: idem, mas liga a ferramenta `text`
+   * - `linha`: idem, ligando a ferramenta `line` — traço livre, ponto a ponto
    * - `acao`: a toolbar cria a forma na hora — é o caso da escada (grupo de retângulos),
    *   da porta (shape próprio) e de todo símbolo desenhado (ver `simbolo` abaixo)
    */
-  tipo: 'geo' | 'texto' | 'acao'
+  tipo: 'geo' | 'texto' | 'linha' | 'acao'
   estilos: Record<string, string>
   geo?: string
   /** peça desenhada: qual símbolo o `simbolo-mapa` deve desenhar (ver lib/simbolosMapa.ts) */
@@ -93,12 +94,19 @@ export const ELEMENTOS_PALETA: ElementoPaleta[] = [
     estilos: {},
   },
   {
+    /**
+     * Divisória: a ferramenta de linha do tldraw pré-estilada para sair igual ao contorno
+     * da sala — fina e uniforme. Sem isso ela nasce grossa e irregular (o traço `draw`
+     * imita caneta e afina nas pontas), que foi a reclamação do usuário.
+     *
+     * `grey` (#9fa8b2 no tema escuro) é a cor do tldraw mais próxima do contorno da sala
+     * (#b9c4c9) — a paleta do tldraw é fechada e não tem a cor exata.
+     */
     id: 'divisoria',
     rotulo: 'Divisória',
     glifo: '─',
-    tipo: 'acao',
-    simbolo: 'divisoria',
-    estilos: {},
+    tipo: 'linha',
+    estilos: { color: 'grey', dash: 'solid', size: 's' },
   },
   {
     id: 'janela',
