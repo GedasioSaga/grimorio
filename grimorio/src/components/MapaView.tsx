@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { atom, Tldraw, useValue, defaultShapeUtils, type Editor, type TLComponents, type TLEditorOptions, type TLShapeId } from 'tldraw'
 import 'tldraw/tldraw.css'
 import { useApp } from '../state/store'
@@ -35,9 +35,12 @@ import {
   shapeOculto,
 } from '../lib/camadasMapa'
 import type { CamadaMapa } from '../lib/types'
+import { ProvedorPecaAtiva } from './PecaAtiva'
+import { PortaShapeUtil } from './PortaShape'
+import type { PecaId } from '../lib/paletaMapa'
 
 // mesmos card-shapes do canvas: mapa aceita drop de personagem/cenário/item
-const shapeUtilsCustom = [CharacterCardShapeUtil, CenarioCardShapeUtil, ItemCardShapeUtil]
+const shapeUtilsCustom = [CharacterCardShapeUtil, CenarioCardShapeUtil, ItemCardShapeUtil, PortaShapeUtil]
 const shapeUtilsDoStore = [...defaultShapeUtils, ...shapeUtilsCustom]
 
 // combina os overlays de espaço-de-tela num só slot (InFrontOfTheCanvas aceita 1 componente)
@@ -106,6 +109,12 @@ export function MapaView({ caminho, nome }: { caminho: string; nome: string }) {
   const [camadaAtivaId, setCamadaAtivaId] = useState('base')
   const camadaAtivaIdRef = useRef(camadaAtivaId)
   camadaAtivaIdRef.current = camadaAtivaId
+
+  // peça escolhida na gaveta; lida pelo side effect de criação, por isso vive num ref
+  const pecaAtivaRef = useRef<PecaId | null>(null)
+  const definirPecaAtiva = useCallback((peca: PecaId | null) => {
+    pecaAtivaRef.current = peca
+  }, [])
 
   // seleção pro PainelPropriedades: chega via SelecaoPropriedadesBridge (dentro do
   // <Tldraw>, único lugar com useEditor/useValue) através de contexto — ver
@@ -327,6 +336,7 @@ export function MapaView({ caminho, nome }: { caminho: string; nome: string }) {
         <button onClick={() => void exportar('png')}>Exportar PNG</button>
         <button onClick={() => void exportar('svg')}>Exportar SVG</button>
       </div>
+      <ProvedorPecaAtiva value={definirPecaAtiva}>
       <ProvedorSelecaoPropriedades value={setSelecaoProp}>
       <Tldraw
         store={store}
@@ -385,9 +395,15 @@ export function MapaView({ caminho, nome }: { caminho: string; nome: string }) {
             const ativa = camadaAtivaIdRef.current
             const camadaAtiva = camadasAtom.get().find((c) => c.id === ativa)
             const travadaPelaCamada = !!camadaAtiva?.travada
+            const peca = pecaAtivaRef.current
             return {
               ...shape,
-              meta: { ...shape.meta, camada: ativa, ...(travadaPelaCamada ? { travadoPelaCamada: true } : {}) },
+              meta: {
+                ...shape.meta,
+                camada: ativa,
+                ...(peca ? { peca } : {}),
+                ...(travadaPelaCamada ? { travadoPelaCamada: true } : {}),
+              },
               isLocked: travadaPelaCamada ? true : shape.isLocked,
             }
           })
@@ -399,6 +415,7 @@ export function MapaView({ caminho, nome }: { caminho: string; nome: string }) {
         }}
       />
       </ProvedorSelecaoPropriedades>
+      </ProvedorPecaAtiva>
       <PainelPropriedades
         selecao={selecaoProp}
         aoAplicarX={aoAplicarX}
