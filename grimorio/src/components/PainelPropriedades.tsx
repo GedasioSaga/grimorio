@@ -2,6 +2,7 @@ import { createContext, useContext, useEffect, useState } from 'react'
 import { useEditor, useValue, type TLShapeId } from 'tldraw'
 import { QUADRADO_PX, emQuadrados, parseQuadrados } from '../lib/quadrados'
 import { ESTADOS_SALA, aparenciaDaSala } from '../lib/salaMapa'
+import { definicaoDoSimbolo } from '../lib/simbolosMapa'
 import { ESTADOS_PORTA, aparenciaDaPorta } from './PortaShape'
 
 /** Snapshot reativo da seleção que o painel precisa para se desenhar. */
@@ -17,8 +18,10 @@ export type SelecaoPropriedades =
       tipoShape: string
       /** estado atual, quando a peça tem estado (sala e porta) */
       estado?: string
-      /** nome do cômodo, quando a peça é sala */
+      /** texto que a própria forma desenha: nome do cômodo, número do marcador, andar */
       rotuloSala?: string
+      /** símbolo desenhado, quando o shape é `simbolo-mapa` */
+      simbolo?: string
     }
   | { tipo: 'multi'; w: number; h: number }
   | null
@@ -73,6 +76,7 @@ export function SelecaoPropriedadesBridge() {
         tipoShape: forma?.type ?? '',
         estado: typeof props.estado === 'string' ? props.estado : undefined,
         rotuloSala: typeof props.rotulo === 'string' ? props.rotulo : undefined,
+        simbolo: typeof props.simbolo === 'string' ? props.simbolo : undefined,
       }
     },
     [editor],
@@ -140,8 +144,9 @@ export function PainelPropriedades({
         // key = id da forma: força remount ao trocar de seleção, descartando rascunho
         // de edição em andamento de uma forma que deixou de ser a selecionada.
         <div key={selecao.id}>
-          {selecao.tipoShape === 'sala-mapa' && (
+          {rotuloEditavel(selecao.tipoShape, selecao.simbolo) && (
             <CampoNome
+              titulo={tituloDoCampoTexto(selecao.tipoShape, selecao.simbolo)}
               valor={selecao.rotuloSala ?? ''}
               onAplicar={(nome) => aoRenomearSala(selecao.id, nome)}
             />
@@ -271,13 +276,39 @@ function SeletorEstado({
   )
 }
 
-/** Nome do cômodo, escrito dentro da própria sala. Aplica no blur/Enter, igual X/Y/L/A. */
-function CampoNome({ valor, onAplicar }: { valor: string; onAplicar: (nome: string) => void }) {
+/**
+ * Quais formas têm texto que o usuário escreve: a sala (nome do cômodo), o rótulo de
+ * andar ("1F") e o marcador (o número, que nasce automático mas pode ser corrigido).
+ */
+function rotuloEditavel(tipoShape: string, simbolo: string | undefined): boolean {
+  if (tipoShape === 'sala-mapa') return true
+  if (tipoShape !== 'simbolo-mapa' || !simbolo) return false
+  const definicao = definicaoDoSimbolo(simbolo)
+  return Boolean(definicao?.textoLivre || definicao?.numerado)
+}
+
+function tituloDoCampoTexto(tipoShape: string, simbolo: string | undefined): string {
+  if (tipoShape === 'sala-mapa') return 'Nome do cômodo'
+  if (simbolo === 'andar') return 'Andar'
+  if (simbolo === 'marcador') return 'Número'
+  return 'Texto'
+}
+
+/** Texto que a própria forma desenha. Aplica no blur/Enter, igual X/Y/L/A. */
+function CampoNome({
+  titulo,
+  valor,
+  onAplicar,
+}: {
+  titulo: string
+  valor: string
+  onAplicar: (nome: string) => void
+}) {
   const [rascunho, setRascunho] = useState(valor)
 
   return (
     <label className="painel-propriedades-campo painel-nome">
-      <span className="painel-propriedades-label">Nome do cômodo</span>
+      <span className="painel-propriedades-label">{titulo}</span>
       <input
         type="text"
         className="painel-propriedades-input"

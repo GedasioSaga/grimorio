@@ -164,6 +164,26 @@ function desenharSimbolo(simbolo: string, w: number, h: number, rotulo: string) 
         </>
       )
 
+    /**
+     * Rótulo do andar: texto branco grande, sem caixa nem moldura — é assim nas
+     * referências. O corpo acompanha a altura da caixa, então o usuário controla o
+     * tamanho redimensionando, como faria com qualquer forma.
+     */
+    case 'andar':
+      return (
+        <text
+          x={0}
+          y={h / 2}
+          fill="#ffffff"
+          fontSize={h * 0.82}
+          fontWeight={800}
+          fontFamily="Georgia, 'Times New Roman', serif"
+          dominantBaseline="central"
+        >
+          {rotulo || '1F'}
+        </text>
+      )
+
     default:
       return desenharItem(simbolo, w, h)
   }

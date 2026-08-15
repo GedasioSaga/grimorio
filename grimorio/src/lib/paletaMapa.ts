@@ -41,7 +41,7 @@ import { ITENS_MAPA, type SimboloId } from './simbolosMapa'
 export type PecaId =
   | 'sala' | 'parede' | 'porta' | 'janela' | 'escada'
   | 'secreta' | 'armadilha' | 'marcador' | 'rotulo'
-  | 'mesa' | 'cama' | 'bau'
+  | 'mesa' | 'cama' | 'bau' | 'andar'
   // itens: o id da peça é o mesmo do símbolo, porque um item É o seu desenho
   | 'pocao' | 'erva' | 'chave' | 'documento' | 'moeda'
   | 'espada' | 'municao' | 'livro' | 'tocha' | 'comida'
@@ -162,6 +162,14 @@ export const ELEMENTOS_PALETA: ElementoPaleta[] = [
     glifo: 'A',
     tipo: 'texto',
     estilos: { color: 'white', size: 's' },
+  },
+  {
+    id: 'andar',
+    rotulo: 'Rótulo de andar',
+    glifo: 'ⁿF',
+    tipo: 'acao',
+    simbolo: 'andar',
+    estilos: {},
   },
   // itens largados pelo mapa. Entram no catálogo a partir de `ITENS_MAPA` para não
   // repetir nome e ícone em dois lugares — o desenho continua sendo a fonte da verdade.

@@ -19,7 +19,7 @@
  */
 
 export type SimboloId =
-  | 'janela' | 'secreta' | 'armadilha' | 'marcador' | 'mesa' | 'cama' | 'bau'
+  | 'janela' | 'secreta' | 'armadilha' | 'marcador' | 'mesa' | 'cama' | 'bau' | 'andar'
   // itens largados pelo mapa, como as referências fazem: o mestre bate o olho e sabe o
   // que tem naquela sala sem abrir anotação nenhuma
   | 'pocao' | 'erva' | 'chave' | 'documento' | 'moeda'
@@ -41,6 +41,8 @@ export interface DefinicaoSimbolo {
   numerado?: boolean
   /** item largado pelo mapa (poção, chave…), separado das peças de construção */
   item?: boolean
+  /** símbolo cujo texto o usuário escreve (rótulo de andar) — editável no painel */
+  textoLivre?: boolean
 }
 
 export const SIMBOLOS_MAPA: DefinicaoSimbolo[] = [
@@ -54,6 +56,9 @@ export const SIMBOLOS_MAPA: DefinicaoSimbolo[] = [
   { id: 'mesa', rotulo: 'Mesa', glifo: '▬', largura: 48, altura: 28 },
   { id: 'cama', rotulo: 'Cama', glifo: '▯', largura: 40, altura: 56 },
   { id: 'bau', rotulo: 'Baú', glifo: '▭', largura: 32, altura: 24 },
+  // rótulo do andar: nas referências é um texto branco grande ao lado do bloco de salas
+  // ("1F", "2F", "Upper"), sem moldura. Quem separa os andares de verdade são as camadas.
+  { id: 'andar', rotulo: 'Rótulo de andar', glifo: 'ⁿF', largura: 96, altura: 44, textoLivre: true },
 
   // itens: todos no mesmo quadrado pequeno, para ficarem irmãos visualmente e caberem
   // dentro de uma sala sem cobrir o nome dela

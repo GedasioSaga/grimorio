@@ -316,11 +316,15 @@ export function MapaView({ caminho, nome }: { caminho: string; nome: string }) {
     editor.updateShape({ id, type: shape.type, props: { estado } } as Parameters<typeof editor.updateShape>[0])
   }
 
-  /** Nome do cômodo, que a própria sala desenha no centro dela. */
+  /**
+   * Texto que a própria forma desenha: nome do cômodo na sala, "1F" no rótulo de andar,
+   * número no marcador. Todos guardam o texto na mesma prop `rotulo`.
+   */
   function aoRenomearSala(id: TLShapeId, nome: string) {
     const editor = editorRef.current
     const shape = editor?.getShape(id)
-    if (!editor || !shape || shape.type !== 'sala-mapa') return
+    if (!editor || !shape) return
+    if (shape.type !== 'sala-mapa' && shape.type !== 'simbolo-mapa') return
     editor.updateShape({ id, type: shape.type, props: { rotulo: nome } } as Parameters<typeof editor.updateShape>[0])
   }
 

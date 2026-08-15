@@ -25,7 +25,7 @@ describe('ELEMENTOS_PALETA', () => {
 
     expect(construcao).toEqual([
       'sala', 'parede', 'porta', 'janela', 'escada',
-      'mesa', 'cama', 'bau', 'secreta', 'armadilha', 'marcador', 'rotulo',
+      'mesa', 'cama', 'bau', 'secreta', 'armadilha', 'marcador', 'rotulo', 'andar',
     ])
     expect(itens).toEqual([
       'pocao', 'erva', 'chave', 'documento', 'moeda',
@@ -152,7 +152,8 @@ describe('peças da leva 4a', () => {
     expect(porTipo('texto')).toEqual(['rotulo'])
     // só as de construção: os itens também são 'acao' e são conferidos no teste próprio
     expect(porTipo('acao').filter((id) => !ELEMENTOS_PALETA.find((e) => e.id === id)?.item)).toEqual([
-      'sala', 'porta', 'janela', 'escada', 'mesa', 'cama', 'bau', 'secreta', 'armadilha', 'marcador',
+      'sala', 'porta', 'janela', 'escada', 'mesa', 'cama', 'bau', 'secreta', 'armadilha',
+      'marcador', 'andar',
     ])
   })
 
