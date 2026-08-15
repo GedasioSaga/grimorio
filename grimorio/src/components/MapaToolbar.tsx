@@ -12,7 +12,6 @@ import {
 } from 'tldraw'
 import { DEGRAUS_ESCADA, ELEMENTOS_PALETA, type ElementoPaleta } from '../lib/paletaMapa'
 import { GavetaPecas } from './GavetaPecas'
-import { useDefinirPecaAtiva } from './PecaAtiva'
 import { PORTA_ESPESSURA_PADRAO, PORTA_LARGURA_PADRAO } from './PortaShape'
 import { proximoNumero } from '../lib/portaMapa'
 
@@ -121,7 +120,6 @@ const MINIMO_PARA_DISTRIBUIR = 3
  */
 export function MapaToolbar() {
   const editor = useEditor()
-  const definirPecaAtiva = useDefinirPecaAtiva()
 
   const toolId = useValue('mapa-toolbar-tool-atual', () => editor.getCurrentToolId(), [editor])
   const qtdSelecionada = useValue('mapa-toolbar-qtd-selecionada', () => editor.getSelectedShapeIds().length, [editor])
@@ -166,8 +164,6 @@ export function MapaToolbar() {
   }
 
   function aplicarElementoPaleta(elemento: ElementoPaleta) {
-    definirPecaAtiva(elemento.id)
-
     if (elemento.tipo === 'acao') {
       if (elemento.id === 'escada') criarEscada()
       if (elemento.id === 'porta') criarPorta()

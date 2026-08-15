@@ -9,9 +9,21 @@
 /** Cor de sala usada quando a porta não está sobre nenhuma sala. Bate com a peça `sala`. */
 export const COR_SALA_PADRAO = 'green'
 
+/**
+ * O mínimo que esta lib precisa enxergar de uma forma do tldraw.
+ *
+ * `meta`/`props` entram como `unknown` de propósito: os shapes concretos do tldraw
+ * (`TLArrowShape`, `TLGeoShape`…) têm props tipadas SEM index signature, então exigir
+ * `Record<string, unknown>` aqui obrigaria todo chamador a fazer cast. A conversão fica
+ * neste arquivo, num lugar só, com as checagens de tipo logo abaixo.
+ */
 interface FormaSob {
-  meta?: Record<string, unknown>
-  props?: Record<string, unknown>
+  meta?: unknown
+  props?: unknown
+}
+
+function comoRegistro(valor: unknown): Record<string, unknown> | undefined {
+  return typeof valor === 'object' && valor !== null ? (valor as Record<string, unknown>) : undefined
 }
 
 /**
@@ -22,10 +34,10 @@ interface FormaSob {
  * direta, e não de trás pra frente. Formas escondidas já vêm filtradas de lá, então uma
  * sala em camada oculta nunca tinge a porta.
  */
-export function corDoVao(formasSob: FormaSob[], padrao: string = COR_SALA_PADRAO): string {
+export function corDoVao(formasSob: readonly FormaSob[], padrao: string = COR_SALA_PADRAO): string {
   for (const forma of formasSob) {
-    if (forma.meta?.peca !== 'sala') continue
-    const cor = forma.props?.color
+    if (comoRegistro(forma.meta)?.peca !== 'sala') continue
+    const cor = comoRegistro(forma.props)?.color
     if (typeof cor === 'string' && cor.length > 0) return cor
   }
   return padrao

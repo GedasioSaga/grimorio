@@ -142,3 +142,50 @@ export const ELEMENTOS_PALETA: ElementoPaleta[] = [
 
 /** Quantidade de degraus criados pelo botão "Escada" (ver MapaToolbar.tsx). */
 export const DEGRAUS_ESCADA = 5
+
+/** O que o carimbo de identidade precisa enxergar de uma forma recém-criada. */
+interface FormaCriada {
+  type: string
+  meta?: Record<string, unknown>
+  props?: Record<string, unknown>
+}
+
+/**
+ * Qual peça da paleta uma forma recém-criada É — deduzido da PRÓPRIA forma.
+ *
+ * A primeira versão disto guardava "a última peça clicada na gaveta" num ref e carimbava
+ * esse valor em tudo que nascia. Bug achado na revisão: o ref nunca era esquecido, então
+ * depois de clicar em "Sala" qualquer forma criada em seguida — retângulo genérico, linha,
+ * card de personagem arrastado pra dentro do mapa — nascia marcada como sala. E isso não
+ * era só sujeira de metadado: `corDoVao` (portaMapa.ts) escolhe a cor do vão da porta
+ * procurando formas marcadas como sala, então um retângulo qualquer marcado errado passava
+ * a tingir a porta ao lado.
+ *
+ * Deduzir da forma elimina a classe do problema: não há estado para esquecer de limpar, e
+ * o resultado sempre corresponde ao que está desenhado na tela. O efeito colateral é
+ * assumido: um retângulo desenhado à mão com exatamente os estilos de sala CONTA como
+ * sala — o que é coerente, porque para o leitor do mapa ele é uma sala.
+ */
+export function pecaDaFormaCriada(
+  forma: FormaCriada,
+  elementos: ElementoPaleta[] = ELEMENTOS_PALETA,
+): PecaId | null {
+  // quem cria a forma por código (marcador) já carimba; essa decisão vence a dedução
+  const jaCarimbada = forma.meta?.peca
+  if (typeof jaCarimbada === 'string') return jaCarimbada as PecaId
+
+  // a porta é shape próprio: o tipo já diz o que ela é, sem comparar estilo
+  if (forma.type === 'porta-mapa') return 'porta'
+
+  const tipoAlvo: ElementoPaleta['tipo'] | null =
+    forma.type === 'geo' ? 'geo' : forma.type === 'text' ? 'texto' : null
+  if (!tipoAlvo) return null
+
+  const props = forma.props ?? {}
+  const achada = elementos.find((elemento) => {
+    if (elemento.tipo !== tipoAlvo) return false
+    if (elemento.geo && props.geo !== elemento.geo) return false
+    return Object.entries(elemento.estilos).every(([nome, valor]) => props[nome] === valor)
+  })
+  return achada?.id ?? null
+}

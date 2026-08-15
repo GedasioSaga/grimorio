@@ -58,22 +58,41 @@ export class PortaShapeUtil extends BaseBoxShapeUtil<PortaShapeType> {
     return { w: PORTA_LARGURA_PADRAO, h: PORTA_ESPESSURA_PADRAO, cor: COR_SALA_PADRAO }
   }
 
-  /** Cor da sala sob o CENTRO da porta; sem sala embaixo, mantém a que já está. */
-  private corSob(shape: PortaShapeType): string {
-    const bounds = this.editor.getShapePageBounds(shape.id)
-    if (!bounds) return shape.props.cor
+  /** Cor da sala sob um ponto de página, ignorando a própria porta. */
+  private corSobPonto(ponto: { x: number; y: number }, idPropria: string, corAtual: string): string {
     const formasSob = this.editor
-      .getShapesAtPoint(bounds.center, { hitInside: true })
-      .filter((s) => s.id !== shape.id)
-    return corDoVao(formasSob, shape.props.cor)
+      .getShapesAtPoint(ponto, { hitInside: true })
+      .filter((s) => s.id !== idPropria)
+    return corDoVao(formasSob, corAtual)
   }
 
+  /**
+   * Na CRIAÇÃO o centro vem das coordenadas do próprio record, não de
+   * `getShapePageBounds`: `onBeforeCreate` roda ANTES do `store.put`
+   * (node_modules/@tldraw/editor/src/lib/editor/Editor.ts:8070-8093), então a forma
+   * ainda não existe para consultar e o cache de bounds devolveria `undefined`
+   * (@tldraw/store/src/lib/Store.ts:151). A primeira versão disto usava os bounds e
+   * falhava em silêncio — a porta nascia sempre com a cor padrão, e só acertava a cor
+   * depois que o usuário a arrastasse. Achado na revisão.
+   *
+   * `x`/`y` são do espaço do PAI; a porta nasce solta na página (`criarPorta` em
+   * MapaToolbar.tsx não define `parentId`), então aqui os dois espaços coincidem.
+   */
   override onBeforeCreate(next: PortaShapeType) {
-    return { ...next, props: { ...next.props, cor: this.corSob(next) } }
+    const centro = { x: next.x + next.props.w / 2, y: next.y + next.props.h / 2 }
+    return { ...next, props: { ...next.props, cor: this.corSobPonto(centro, next.id, next.props.cor) } }
   }
 
+  /**
+   * Ao SOLTAR o arrasto os bounds já valem: a posição foi escrita no store a cada tick
+   * do drag (node_modules/tldraw/src/lib/tools/SelectTool/childStates/Translating.ts,
+   * `handleEnd`), então aqui o centro real está disponível.
+   */
   override onTranslateEnd(_initial: PortaShapeType, current: PortaShapeType) {
-    return { id: current.id, type: current.type, props: { ...current.props, cor: this.corSob(current) } }
+    const bounds = this.editor.getShapePageBounds(current.id)
+    if (!bounds) return
+    const cor = this.corSobPonto(bounds.center, current.id, current.props.cor)
+    return { id: current.id, type: current.type, props: { ...current.props, cor } }
   }
 
   component(shape: PortaShapeType) {

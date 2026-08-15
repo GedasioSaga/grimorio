@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { atom, Tldraw, useValue, defaultShapeUtils, type Editor, type TLComponents, type TLEditorOptions, type TLShapeId } from 'tldraw'
 import 'tldraw/tldraw.css'
 import { useApp } from '../state/store'
@@ -35,9 +35,8 @@ import {
   shapeOculto,
 } from '../lib/camadasMapa'
 import type { CamadaMapa } from '../lib/types'
-import { ProvedorPecaAtiva } from './PecaAtiva'
 import { PortaShapeUtil } from './PortaShape'
-import type { PecaId } from '../lib/paletaMapa'
+import { pecaDaFormaCriada } from '../lib/paletaMapa'
 
 // mesmos card-shapes do canvas: mapa aceita drop de personagem/cenário/item
 const shapeUtilsCustom = [CharacterCardShapeUtil, CenarioCardShapeUtil, ItemCardShapeUtil, PortaShapeUtil]
@@ -110,11 +109,6 @@ export function MapaView({ caminho, nome }: { caminho: string; nome: string }) {
   const camadaAtivaIdRef = useRef(camadaAtivaId)
   camadaAtivaIdRef.current = camadaAtivaId
 
-  // peça escolhida na gaveta; lida pelo side effect de criação, por isso vive num ref
-  const pecaAtivaRef = useRef<PecaId | null>(null)
-  const definirPecaAtiva = useCallback((peca: PecaId | null) => {
-    pecaAtivaRef.current = peca
-  }, [])
 
   // seleção pro PainelPropriedades: chega via SelecaoPropriedadesBridge (dentro do
   // <Tldraw>, único lugar com useEditor/useValue) através de contexto — ver
@@ -336,7 +330,6 @@ export function MapaView({ caminho, nome }: { caminho: string; nome: string }) {
         <button onClick={() => void exportar('png')}>Exportar PNG</button>
         <button onClick={() => void exportar('svg')}>Exportar SVG</button>
       </div>
-      <ProvedorPecaAtiva value={definirPecaAtiva}>
       <ProvedorSelecaoPropriedades value={setSelecaoProp}>
       <Tldraw
         store={store}
@@ -395,7 +388,9 @@ export function MapaView({ caminho, nome }: { caminho: string; nome: string }) {
             const ativa = camadaAtivaIdRef.current
             const camadaAtiva = camadasAtom.get().find((c) => c.id === ativa)
             const travadaPelaCamada = !!camadaAtiva?.travada
-            const peca = pecaAtivaRef.current
+            // identidade deduzida da própria forma, não de "última peça clicada" — o
+            // porquê está inteiro no JSDoc de `pecaDaFormaCriada` (paletaMapa.ts).
+            const peca = pecaDaFormaCriada(shape as Parameters<typeof pecaDaFormaCriada>[0])
             return {
               ...shape,
               meta: {
@@ -415,7 +410,6 @@ export function MapaView({ caminho, nome }: { caminho: string; nome: string }) {
         }}
       />
       </ProvedorSelecaoPropriedades>
-      </ProvedorPecaAtiva>
       <PainelPropriedades
         selecao={selecaoProp}
         aoAplicarX={aoAplicarX}

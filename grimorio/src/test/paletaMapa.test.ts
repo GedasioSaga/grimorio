@@ -6,7 +6,7 @@ import {
   DefaultSizeStyle,
   GeoShapeGeoStyle,
 } from 'tldraw'
-import { ELEMENTOS_PALETA, type ElementoPaleta } from '../lib/paletaMapa'
+import { ELEMENTOS_PALETA, pecaDaFormaCriada, type ElementoPaleta } from '../lib/paletaMapa'
 
 // Listas de valores válidos direto do tlschema real (StyleProp.defineEnum expõe `.values`,
 // verificado em node_modules/@tldraw/tlschema/src/styles/StyleProp.ts:112-121 — EnumStyleProp
@@ -166,5 +166,43 @@ describe('peças da leva 4a', () => {
   it('cada peça tem id único', () => {
     const ids = ELEMENTOS_PALETA.map((e) => e.id)
     expect(new Set(ids).size).toBe(ids.length)
+  })
+})
+
+describe('pecaDaFormaCriada — identidade deduzida da própria forma', () => {
+  it('reconhece a sala pelos estilos que a paleta aplica', () => {
+    const sala = { type: 'geo', props: { geo: 'rectangle', color: 'green', fill: 'solid', dash: 'solid', size: 's' } }
+    expect(pecaDaFormaCriada(sala)).toBe('sala')
+  })
+
+  it('não confunde móvel com sala (mesma forma, cor diferente)', () => {
+    const movel = { type: 'geo', props: { geo: 'rectangle', color: 'grey', fill: 'solid', dash: 'solid', size: 's' } }
+    expect(pecaDaFormaCriada(movel)).toBe('movel')
+  })
+
+  it('forma comum, que não bate com peça nenhuma, fica sem identidade', () => {
+    const solta = { type: 'geo', props: { geo: 'rectangle', color: 'blue', fill: 'none', dash: 'draw', size: 'l' } }
+    expect(pecaDaFormaCriada(solta)).toBeNull()
+  })
+
+  it('a porta é reconhecida pelo tipo do shape, não por estilo', () => {
+    expect(pecaDaFormaCriada({ type: 'porta-mapa', props: { w: 32, h: 14, cor: 'green' } })).toBe('porta')
+  })
+
+  it('respeita identidade já carimbada por quem criou a forma', () => {
+    const marcador = { type: 'geo', meta: { peca: 'marcador' }, props: { geo: 'ellipse', color: 'yellow' } }
+    expect(pecaDaFormaCriada(marcador)).toBe('marcador')
+  })
+
+  it('reconhece o rótulo pelo estilo de texto', () => {
+    expect(pecaDaFormaCriada({ type: 'text', props: { color: 'white', size: 's' } })).toBe('rotulo')
+  })
+
+  it('card de entidade solto no mapa não vira peça', () => {
+    expect(pecaDaFormaCriada({ type: 'character-card', props: { w: 240, h: 320 } })).toBeNull()
+  })
+
+  it('forma sem props não quebra', () => {
+    expect(pecaDaFormaCriada({ type: 'geo' })).toBeNull()
   })
 })
