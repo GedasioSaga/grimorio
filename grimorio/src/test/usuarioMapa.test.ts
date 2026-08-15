@@ -36,6 +36,27 @@ describe('usuário do mapa (snap sempre ligado, sem vazar pro resto do app)', ()
     expect(getUserPreferences().isSnapMode).toBe(true)
   })
 
+  it('desligar o snap pelo menu do tldraw vale só para aquele mapa', () => {
+    const usuario = criarUsuarioDoMapa()
+    const outroMapa = criarUsuarioDoMapa()
+
+    // é o que o item "Snap" do MainMenu nativo faz: updateUserPreferences({ isSnapMode: false })
+    usuario.setUserPreferences({ ...usuario.userPreferences.get(), isSnapMode: false })
+
+    expect(usuario.userPreferences.get().isSnapMode).toBe(false)
+    expect(outroMapa.userPreferences.get().isSnapMode).toBe(true)
+    expect(getUserPreferences().isSnapMode).toBe(false) // global segue intocado
+  })
+
+  it('gravar outra preferência não religa o snap que o usuário desligou no mapa', () => {
+    const usuario = criarUsuarioDoMapa()
+    usuario.setUserPreferences({ ...usuario.userPreferences.get(), isSnapMode: false })
+
+    usuario.setUserPreferences({ ...usuario.userPreferences.get(), colorScheme: 'dark' })
+
+    expect(usuario.userPreferences.get().isSnapMode).toBe(false)
+  })
+
   it('continua reativo ao resto das preferências globais', () => {
     const usuario = criarUsuarioDoMapa()
     expect(usuario.userPreferences.get().colorScheme).toBe('light')

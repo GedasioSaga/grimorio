@@ -166,8 +166,26 @@ export function MapaView({ caminho, nome }: { caminho: string; nome: string }) {
     if (camadaAtivaIdRef.current === id) setCamadaAtivaId(idHerdeira)
   }
 
+  /**
+   * Esconder uma camada também TIRA DA SELEÇÃO as formas dela: `getSelectedShapeIds`
+   * devolve o estado de seleção cru da página, sem filtrar o que está escondido
+   * (node_modules/@tldraw/editor/src/lib/editor/Editor.ts:1681-1683), e forma
+   * selecionada-mas-invisível continua obedecendo a tudo — alinhar/distribuir da barra
+   * contextual, os campos do painel de propriedades, as setas do teclado. O usuário
+   * moveria às cegas algo que só reaparece deslocado ao religar a camada.
+   */
   function aoAlternarOcultaCamada(id: string) {
-    atualizarCamadas(alternarOculta(camadasAtom.get(), id))
+    const novo = alternarOculta(camadasAtom.get(), id)
+    const editor = editorRef.current
+    if (editor && novo.find((c) => c.id === id)?.oculta) {
+      const selecionadas = editor.getSelectedShapeIds()
+      const visiveis = selecionadas.filter((sid) => {
+        const shape = editor.getShape(sid)
+        return shape ? camadaDoShape(shape.meta, novo).id !== id : false
+      })
+      if (visiveis.length !== selecionadas.length) editor.setSelectedShapes(visiveis)
+    }
+    atualizarCamadas(novo)
   }
 
   /**

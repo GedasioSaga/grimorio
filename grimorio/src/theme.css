@@ -215,12 +215,23 @@ button:hover { border-color: var(--dourado); color: var(--dourado-claro); }
 .mapa-toolbar-coluna {
   display: flex; flex-direction: column; align-items: center; gap: 6px;
   margin-bottom: 8px; pointer-events: none;
+  /* a fileira do rodapé (zoom + toolbar) é um flex sem wrap do próprio tldraw e o
+     ancestral .tlui-layout é overflow:clip — sem poder encolher, os botões das pontas
+     sumiriam sem aviso em janela estreita. min-width:0 libera o encolhimento e o
+     flex-wrap de baixo quebra os botões em duas linhas em vez de escondê-los. */
+  min-width: 0;
 }
 .mapa-toolbar {
-  display: flex; align-items: center; gap: 2px;
+  display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 2px;
   background: var(--fundo); border: 1px solid var(--borda); border-radius: 6px;
   padding: 4px;
   pointer-events: auto;
+}
+/* barra contextual (alinhar/distribuir): mesma caixa da toolbar, com um tom a mais de
+   destaque — pista de que essa fileira é temporária, presa à seleção atual. */
+.mapa-toolbar-contextual {
+  background: var(--fundo-elevado);
+  border-color: color-mix(in srgb, var(--dourado) 35%, var(--borda));
 }
 .mapa-toolbar .btn-icon { font-size: 15px; padding: 5px 8px; }
 .mapa-toolbar .btn-icon.ativo { border-color: var(--dourado); color: var(--dourado-claro); background: var(--fundo-elevado); }
@@ -231,10 +242,10 @@ button:hover { border-color: var(--dourado); color: var(--dourado-claro); }
 /* controle de zoom (slot components.NavigationPanel, no lugar do minimap nativo):
    mesma fileira da toolbar, encostado no rodapé — ver ControleZoom.tsx. */
 .mapa-zoom {
-  display: flex; align-items: center; gap: 2px;
+  display: flex; align-items: center; flex-wrap: wrap; justify-content: center; gap: 2px;
   background: var(--fundo); border: 1px solid var(--borda); border-radius: 6px;
   padding: 4px; margin: 0 6px 8px 8px;
-  pointer-events: auto;
+  min-width: 0; pointer-events: auto;
 }
 .mapa-zoom .btn-icon { font-size: 15px; padding: 5px 8px; }
 .mapa-zoom .btn-icon:active { transform: scale(0.97); }
