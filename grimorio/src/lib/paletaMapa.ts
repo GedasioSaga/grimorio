@@ -36,9 +36,12 @@
  * aceitável quando não há textura própria de "traço grosso vazado" no fill tldraw.
  */
 
+import type { SimboloId } from './simbolosMapa'
+
 export type PecaId =
   | 'sala' | 'parede' | 'porta' | 'janela' | 'escada'
-  | 'movel' | 'secreta' | 'armadilha' | 'marcador' | 'rotulo'
+  | 'secreta' | 'armadilha' | 'marcador' | 'rotulo'
+  | 'mesa' | 'cama' | 'bau'
 
 export interface ElementoPaleta {
   id: PecaId
@@ -48,11 +51,14 @@ export interface ElementoPaleta {
    * Como a peça entra no mapa:
    * - `geo`: pré-estila a próxima forma (`setStyleForNextShapes`) e liga a ferramenta `geo`
    * - `texto`: idem, mas liga a ferramenta `text`
-   * - `acao`: a toolbar cria a forma na hora (escada, porta e marcador não são geo puro)
+   * - `acao`: a toolbar cria a forma na hora — é o caso da escada (grupo de retângulos),
+   *   da porta (shape próprio) e de todo símbolo desenhado (ver `simbolo` abaixo)
    */
   tipo: 'geo' | 'texto' | 'acao'
   estilos: Record<string, string>
   geo?: string
+  /** peça desenhada: qual símbolo o `simbolo-mapa` deve desenhar (ver lib/simbolosMapa.ts) */
+  simbolo?: SimboloId
 }
 
 export const ELEMENTOS_PALETA: ElementoPaleta[] = [
@@ -85,10 +91,10 @@ export const ELEMENTOS_PALETA: ElementoPaleta[] = [
   {
     id: 'janela',
     rotulo: 'Janela',
-    glifo: '▭',
-    tipo: 'geo',
-    geo: 'rectangle',
-    estilos: { color: 'light-blue', fill: 'none', dash: 'solid', size: 's' },
+    glifo: '▤',
+    tipo: 'acao',
+    simbolo: 'janela',
+    estilos: {},
   },
   {
     id: 'escada',
@@ -98,38 +104,53 @@ export const ELEMENTOS_PALETA: ElementoPaleta[] = [
     estilos: {},
   },
   {
-    // mobília ocupa espaço dentro da sala sem competir com a parede: cinza, sólido, fino
-    id: 'movel',
-    rotulo: 'Móvel',
+    id: 'mesa',
+    rotulo: 'Mesa',
     glifo: '▬',
-    tipo: 'geo',
-    geo: 'rectangle',
-    estilos: { color: 'grey', fill: 'solid', dash: 'solid', size: 's' },
+    tipo: 'acao',
+    simbolo: 'mesa',
+    estilos: {},
   },
   {
-    // tracejado violeta: some no mapa impresso e salta quando o mestre procura
+    id: 'cama',
+    rotulo: 'Cama',
+    glifo: '▯',
+    tipo: 'acao',
+    simbolo: 'cama',
+    estilos: {},
+  },
+  {
+    id: 'bau',
+    rotulo: 'Baú',
+    glifo: '▭',
+    tipo: 'acao',
+    simbolo: 'bau',
+    estilos: {},
+  },
+  {
     id: 'secreta',
     rotulo: 'Passagem secreta',
-    glifo: '◈',
-    tipo: 'geo',
-    geo: 'rectangle',
-    estilos: { color: 'violet', fill: 'none', dash: 'dashed', size: 's' },
+    glifo: 'Ⓢ',
+    tipo: 'acao',
+    simbolo: 'secreta',
+    estilos: {},
   },
   {
     id: 'armadilha',
     rotulo: 'Armadilha',
-    glifo: '⚠',
-    tipo: 'geo',
-    geo: 'triangle',
-    estilos: { color: 'red', fill: 'none', dash: 'solid', size: 's' },
+    glifo: '◆',
+    tipo: 'acao',
+    simbolo: 'armadilha',
+    estilos: {},
   },
   {
-    // círculo com número, amarrando o ponto do mapa à anotação escrita
+    // círculo cheio com número, amarrando o ponto do mapa à anotação escrita
     id: 'marcador',
     rotulo: 'Marcador numerado',
     glifo: '①',
     tipo: 'acao',
-    estilos: { color: 'yellow', fill: 'solid', dash: 'solid', size: 's' },
+    simbolo: 'marcador',
+    estilos: {},
   },
   {
     id: 'rotulo',
@@ -176,6 +197,13 @@ export function pecaDaFormaCriada(
 
   // a porta é shape próprio: o tipo já diz o que ela é, sem comparar estilo
   if (forma.type === 'porta-mapa') return 'porta'
+
+  // símbolos desenhados carregam o próprio nome na prop `simbolo`
+  if (forma.type === 'simbolo-mapa') {
+    const simbolo = forma.props?.simbolo
+    if (typeof simbolo !== 'string') return null
+    return elementos.find((e) => e.simbolo === simbolo)?.id ?? null
+  }
 
   const tipoAlvo: ElementoPaleta['tipo'] | null =
     forma.type === 'geo' ? 'geo' : forma.type === 'text' ? 'texto' : null

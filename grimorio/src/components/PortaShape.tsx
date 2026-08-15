@@ -95,27 +95,40 @@ export class PortaShapeUtil extends BaseBoxShapeUtil<PortaShapeType> {
     return { id: current.id, type: current.type, props: { ...current.props, cor } }
   }
 
+  /**
+   * Desenho da família "sólida" (escolhida pelo usuário em 15/08): jamba como BLOCO, não
+   * como risquinho. A primeira versão usava `<line>` de 1.5px e sumia no mapa — a marca
+   * do vão precisa ter a mesma presença visual da parede que ela interrompe.
+   *
+   * O arco de abertura passa DE PROPÓSITO para fora da caixa do shape (uma porta de 32×14
+   * não comporta um arco de raio útil por dentro). Isso é seguro: `.tl-svg-container` é
+   * `overflow: visible` (node_modules/@tldraw/editor/editor.css:1203-1212).
+   */
   component(shape: PortaShapeType) {
     const { w, h, cor } = shape.props
     const tema = getDefaultColorTheme({ isDarkMode: this.editor.user.getIsDarkMode() })
     const corDoBuraco = getColorValue(tema, cor as never, 'semi')
     const corDoTraco = getColorValue(tema, cor as never, 'solid')
-    const raio = Math.min(w, h * 2)
+
+    const espessuraJamba = Math.max(2, h * 0.32)
+    const alturaJamba = h * 1.3
+    const sobra = (alturaJamba - h) / 2
+    const raio = w * 0.9
 
     return (
       <SVGContainer>
         {/* o buraco: apaga o contorno da parede no vão */}
         <rect x={0} y={0} width={w} height={h} fill={corDoBuraco} />
-        {/* jambas: onde a parede recomeça dos dois lados */}
-        <line x1={0} y1={0} x2={0} y2={h} stroke={corDoTraco} strokeWidth={1.5} />
-        <line x1={w} y1={0} x2={w} y2={h} stroke={corDoTraco} strokeWidth={1.5} />
-        {/* arco de abertura */}
+        {/* jambas: blocos marcando onde a parede recomeça dos dois lados */}
+        <rect x={0} y={-sobra} width={espessuraJamba} height={alturaJamba} fill={corDoTraco} />
+        <rect x={w - espessuraJamba} y={-sobra} width={espessuraJamba} height={alturaJamba} fill={corDoTraco} />
+        {/* arco de abertura: sugere o lado para onde a folha gira */}
         <path
-          d={`M 0 ${h} A ${raio} ${raio} 0 0 1 ${Math.min(w, raio)} ${h - Math.min(h, raio)}`}
+          d={`M ${espessuraJamba} ${h} A ${raio} ${raio} 0 0 1 ${espessuraJamba + raio} ${h + raio}`}
           fill="none"
           stroke={corDoTraco}
-          strokeWidth={1}
-          opacity={0.6}
+          strokeWidth={1.2}
+          opacity={0.5}
         />
       </SVGContainer>
     )

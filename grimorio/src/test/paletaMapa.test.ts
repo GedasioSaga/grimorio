@@ -18,12 +18,13 @@ const SIZES_VALIDOS = new Set<string>(DefaultSizeStyle.values)
 const GEOS_VALIDOS = new Set<string>(GeoShapeGeoStyle.values)
 
 describe('ELEMENTOS_PALETA', () => {
-  // leva 4a: catálogo cresceu de 5 pra 10 peças (móvel, secreta, armadilha, marcador, rótulo) — ver describe abaixo
-  it('tem os 10 elementos da paleta RPG', () => {
-    expect(ELEMENTOS_PALETA).toHaveLength(10)
+  // leva 4a: catálogo cresceu de 5 pra 12 peças; as que viraram símbolo DESENHADO
+  // (janela, secreta, armadilha, marcador, mesa, cama, baú) não são mais geo pré-estilado
+  it('tem os 12 elementos da paleta RPG', () => {
+    expect(ELEMENTOS_PALETA).toHaveLength(12)
     expect(ELEMENTOS_PALETA.map((e) => e.id)).toEqual([
       'sala', 'parede', 'porta', 'janela', 'escada',
-      'movel', 'secreta', 'armadilha', 'marcador', 'rotulo',
+      'mesa', 'cama', 'bau', 'secreta', 'armadilha', 'marcador', 'rotulo',
     ])
   })
 
@@ -67,12 +68,12 @@ describe('ELEMENTOS_PALETA', () => {
     expect(Object.keys(porta.estilos)).toHaveLength(0)
   })
 
-  it('janela: geo rectangle, cor light-blue, sem fill, tamanho s', () => {
+  // janela deixou de ser retângulo azul vazio e virou símbolo desenhado (moldura + vidro)
+  it('janela: símbolo desenhado, sem geo nem estilo', () => {
     const janela = ELEMENTOS_PALETA.find((e) => e.id === 'janela')!
-    expect(janela.geo).toBe('rectangle')
-    expect(janela.estilos.color).toBe('light-blue')
-    expect(janela.estilos.fill).toBe('none')
-    expect(janela.estilos.size).toBe('s')
+    expect(janela.tipo).toBe('acao')
+    expect(janela.simbolo).toBe('janela')
+    expect(janela.geo).toBeUndefined()
   })
 
   it('escada não pré-estila geo (mecânica é criar formas na hora)', () => {
@@ -133,9 +134,11 @@ describe('peças da leva 4a', () => {
     const porTipo = (tipo: ElementoPaleta['tipo']) =>
       ELEMENTOS_PALETA.filter((e) => e.tipo === tipo).map((e) => e.id)
 
-    expect(porTipo('geo')).toEqual(['sala', 'parede', 'janela', 'movel', 'secreta', 'armadilha'])
+    expect(porTipo('geo')).toEqual(['sala', 'parede'])
     expect(porTipo('texto')).toEqual(['rotulo'])
-    expect(porTipo('acao')).toEqual(['porta', 'escada', 'marcador'])
+    expect(porTipo('acao')).toEqual([
+      'porta', 'janela', 'escada', 'mesa', 'cama', 'bau', 'secreta', 'armadilha', 'marcador',
+    ])
   })
 
   it('toda peça geo declara a forma tldraw e ao menos um estilo', () => {
@@ -175,9 +178,14 @@ describe('pecaDaFormaCriada — identidade deduzida da própria forma', () => {
     expect(pecaDaFormaCriada(sala)).toBe('sala')
   })
 
-  it('não confunde móvel com sala (mesma forma, cor diferente)', () => {
-    const movel = { type: 'geo', props: { geo: 'rectangle', color: 'grey', fill: 'solid', dash: 'solid', size: 's' } }
-    expect(pecaDaFormaCriada(movel)).toBe('movel')
+  it('reconhece símbolo desenhado pela prop `simbolo`', () => {
+    const cama = { type: 'simbolo-mapa', props: { w: 40, h: 56, simbolo: 'cama', rotulo: '' } }
+    expect(pecaDaFormaCriada(cama)).toBe('cama')
+  })
+
+  it('símbolo desconhecido não vira peça', () => {
+    const estranho = { type: 'simbolo-mapa', props: { w: 40, h: 40, simbolo: 'trono', rotulo: '' } }
+    expect(pecaDaFormaCriada(estranho)).toBeNull()
   })
 
   it('forma comum, que não bate com peça nenhuma, fica sem identidade', () => {

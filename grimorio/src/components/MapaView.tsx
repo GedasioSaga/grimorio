@@ -36,10 +36,11 @@ import {
 } from '../lib/camadasMapa'
 import type { CamadaMapa } from '../lib/types'
 import { PortaShapeUtil } from './PortaShape'
+import { SimboloMapaShapeUtil } from './SimboloMapaShape'
 import { pecaDaFormaCriada } from '../lib/paletaMapa'
 
 // mesmos card-shapes do canvas: mapa aceita drop de personagem/cenário/item
-const shapeUtilsCustom = [CharacterCardShapeUtil, CenarioCardShapeUtil, ItemCardShapeUtil, PortaShapeUtil]
+const shapeUtilsCustom = [CharacterCardShapeUtil, CenarioCardShapeUtil, ItemCardShapeUtil, PortaShapeUtil, SimboloMapaShapeUtil]
 const shapeUtilsDoStore = [...defaultShapeUtils, ...shapeUtilsCustom]
 
 // combina os overlays de espaço-de-tela num só slot (InFrontOfTheCanvas aceita 1 componente)

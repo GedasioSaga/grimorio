@@ -5,7 +5,6 @@ import {
   DefaultFillStyle,
   DefaultSizeStyle,
   GeoShapeGeoStyle,
-  toRichText,
   useEditor,
   useValue,
   type StyleProp,
@@ -14,6 +13,8 @@ import { DEGRAUS_ESCADA, ELEMENTOS_PALETA, type ElementoPaleta } from '../lib/pa
 import { GavetaPecas } from './GavetaPecas'
 import { PORTA_ESPESSURA_PADRAO, PORTA_LARGURA_PADRAO } from './PortaShape'
 import { proximoNumero } from '../lib/portaMapa'
+import { definicaoDoSimbolo, type SimboloId } from '../lib/simbolosMapa'
+import { tamanhoDoSimbolo } from './SimboloMapaShape'
 
 /** Style props do tldraw indexados pelo mesmo nome usado em `ElementoPaleta.estilos`. */
 const STYLE_PROPS_POR_NOME: Record<string, StyleProp<string>> = {
@@ -166,8 +167,8 @@ export function MapaToolbar() {
   function aplicarElementoPaleta(elemento: ElementoPaleta) {
     if (elemento.tipo === 'acao') {
       if (elemento.id === 'escada') criarEscada()
-      if (elemento.id === 'porta') criarPorta()
-      if (elemento.id === 'marcador') criarMarcador()
+      else if (elemento.id === 'porta') criarPorta()
+      else if (elemento.simbolo) criarSimbolo(elemento.simbolo)
       return
     }
 
@@ -238,45 +239,40 @@ export function MapaToolbar() {
   }
 
   /**
-   * Marcador: círculo amarelo com o próximo número livre. O número sai de
-   * `proximoNumero` (lib pura), lendo os marcadores que já existem na página pelo
-   * `meta.peca`. `richText` é campo real do geo shape
-   * (node_modules/@tldraw/tlschema/src/shapes/TLGeoShape.ts:109), montado com o helper
-   * `toRichText` (:141).
+   * Cria um símbolo DESENHADO no centro da tela (janela, secreta, armadilha, marcador,
+   * mesa, cama, baú). Nasce selecionado para o usuário já arrastar até o lugar.
+   *
+   * O marcador é o único que carrega texto: o número sai de `proximoNumero` (lib pura)
+   * lendo o `rotulo` dos marcadores que já existem na página. Somar 1 ao MAIOR, e não
+   * contar quantos são, é o que evita repetir número depois de apagar um do meio.
    */
-  function criarMarcador() {
+  function criarSimbolo(simbolo: SimboloId) {
     const centro = editor.getViewportPageBounds().center
-    const existentes = editor
-      .getCurrentPageShapes()
-      .filter((s) => (s.meta as Record<string, unknown>).peca === 'marcador')
-      .map((s) => {
-        const props = (s as { props?: { richText?: unknown } }).props
-        return typeof props?.richText === 'object' && props.richText !== null
-          ? extrairTexto(props.richText)
-          : ''
-      })
-    const numero = proximoNumero(existentes)
+    const { w, h } = tamanhoDoSimbolo(simbolo)
+
+    let rotulo = ''
+    if (definicaoDoSimbolo(simbolo)?.numerado) {
+      const existentes = editor
+        .getCurrentPageShapes()
+        .filter((s) => s.type === 'simbolo-mapa')
+        .map((s) => s as unknown as { props: { simbolo: string; rotulo: string } })
+        .filter((s) => s.props.simbolo === simbolo)
+        .map((s) => s.props.rotulo)
+      rotulo = String(proximoNumero(existentes))
+    }
+
     const id = createShapeId()
     editor.run(() => {
       editor.createShape({
         id,
-        type: 'geo',
-        x: centro.x - 16,
-        y: centro.y - 16,
-        meta: { peca: 'marcador' },
-        props: {
-          geo: 'ellipse',
-          w: 32,
-          h: 32,
-          color: 'yellow',
-          fill: 'solid',
-          dash: 'solid',
-          size: 's',
-          richText: toRichText(String(numero)),
-        },
+        type: 'simbolo-mapa',
+        x: centro.x - w / 2,
+        y: centro.y - h / 2,
+        props: { w, h, simbolo, rotulo },
       })
       editor.bringToFront([id])
       editor.setCurrentTool('select')
+      editor.setSelectedShapes([id])
     })
   }
 
@@ -362,16 +358,3 @@ export function MapaToolbar() {
   )
 }
 
-/** Texto puro de um `richText` do tldraw, para ler o número de um marcador. */
-function extrairTexto(richText: unknown): string {
-  const pilha: unknown[] = [richText]
-  let saida = ''
-  while (pilha.length) {
-    const no = pilha.pop()
-    if (!no || typeof no !== 'object') continue
-    const registro = no as Record<string, unknown>
-    if (typeof registro.text === 'string') saida += registro.text
-    if (Array.isArray(registro.content)) pilha.push(...registro.content)
-  }
-  return saida
-}
