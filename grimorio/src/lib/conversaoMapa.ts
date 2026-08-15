@@ -46,7 +46,7 @@ export function planoDeConversao(
   // sala é o caso que mais importa converter: é o que o mapa antigo tem de sobra.
   // Vira `sala-mapa` no estado "pendente" — o usuário troca depois no painel.
   if (elemento.id === 'sala') {
-    return { tipo: 'substituir', peca: 'sala', novoTipo: 'sala-mapa', props: { estado: 'pendente', rotulo: '' } }
+    return { tipo: 'substituir', peca: 'sala', novoTipo: 'sala-mapa', props: { estado: 'pendente', rotulo: '', cor: '' } }
   }
 
   if (elemento.tipo === 'geo' || elemento.tipo === 'texto') {

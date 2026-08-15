@@ -1,7 +1,7 @@
 import { createContext, useContext, useEffect, useState } from 'react'
 import { useEditor, useValue, type TLShapeId } from 'tldraw'
 import { QUADRADO_PX, emQuadrados, parseQuadrados } from '../lib/quadrados'
-import { ESTADOS_SALA, aparenciaDaSala } from '../lib/salaMapa'
+import { CORES_SALA, ESTADOS_SALA, aparenciaDaSala } from '../lib/salaMapa'
 import { definicaoDoSimbolo } from '../lib/simbolosMapa'
 import { ESTADOS_PORTA, aparenciaDaPorta } from './PortaShape'
 
@@ -22,6 +22,8 @@ export type SelecaoPropriedades =
       rotuloSala?: string
       /** símbolo desenhado, quando o shape é `simbolo-mapa` */
       simbolo?: string
+      /** cor escolhida à mão na sala; vazio = usa a cor do estado */
+      cor?: string
     }
   | { tipo: 'multi'; w: number; h: number }
   | null
@@ -77,6 +79,7 @@ export function SelecaoPropriedadesBridge() {
         estado: typeof props.estado === 'string' ? props.estado : undefined,
         rotuloSala: typeof props.rotulo === 'string' ? props.rotulo : undefined,
         simbolo: typeof props.simbolo === 'string' ? props.simbolo : undefined,
+        cor: typeof props.cor === 'string' ? props.cor : undefined,
       }
     },
     [editor],
@@ -106,6 +109,7 @@ export function PainelPropriedades({
   aoAplicarA,
   aoTrocarEstado,
   aoRenomearSala,
+  aoTrocarCor,
 }: {
   selecao: SelecaoPropriedades
   aoAplicarX: (id: TLShapeId, quadrados: number) => void
@@ -114,6 +118,7 @@ export function PainelPropriedades({
   aoAplicarA: (id: TLShapeId, quadrados: number) => void
   aoTrocarEstado: (id: TLShapeId, estado: string) => void
   aoRenomearSala: (id: TLShapeId, nome: string) => void
+  aoTrocarCor: (id: TLShapeId, cor: string) => void
 }) {
   const [colapsado, setColapsado] = useState(false)
 
@@ -157,6 +162,9 @@ export function PainelPropriedades({
               atual={selecao.estado}
               onEscolher={(estado) => aoTrocarEstado(selecao.id, estado)}
             />
+          )}
+          {selecao.tipoShape === 'sala-mapa' && (
+            <SeletorCor atual={selecao.cor ?? ''} onEscolher={(cor) => aoTrocarCor(selecao.id, cor)} />
           )}
           <div className="painel-propriedades-grade">
           <CampoQuadrado label="X" valorPx={selecao.x} onAplicar={(q) => aoAplicarX(selecao.id, q)} />
@@ -321,5 +329,40 @@ function CampoNome({
         }}
       />
     </label>
+  )
+}
+
+/**
+ * Cor da sala escolhida à mão, que sobrepõe a do estado.
+ *
+ * O primeiro botão devolve o controle ao estado — sem ele, quem trocasse a cor uma vez
+ * ficaria preso a ela e o vermelho/azul deixaria de significar pendente/limpa naquela
+ * sala para sempre.
+ */
+function SeletorCor({ atual, onEscolher }: { atual: string; onEscolher: (cor: string) => void }) {
+  return (
+    <div className="painel-estado">
+      <span className="painel-propriedades-label">Cor</span>
+      <div className="painel-cores">
+        <button
+          type="button"
+          className={`painel-cor-auto${atual === '' ? ' ativo' : ''}`}
+          title="Usar a cor do estado"
+          onClick={() => onEscolher('')}
+        >
+          auto
+        </button>
+        {CORES_SALA.map((cor) => (
+          <button
+            key={cor.id}
+            type="button"
+            className={`painel-cor${atual === cor.valor ? ' ativo' : ''}`}
+            title={cor.nome}
+            style={{ background: cor.valor }}
+            onClick={() => onEscolher(cor.valor)}
+          />
+        ))}
+      </div>
+    </div>
   )
 }

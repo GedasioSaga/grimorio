@@ -341,6 +341,21 @@ button:hover { border-color: var(--dourado); color: var(--dourado-claro); }
   border: 1px solid var(--borda);
 }
 .painel-nome { margin-bottom: 8px; }
+
+/* cores da sala: grade de amostras, com "auto" devolvendo o controle ao estado */
+.painel-cores { display: flex; flex-wrap: wrap; gap: 4px; }
+.painel-cor {
+  width: 22px; height: 22px; border-radius: 4px; padding: 0;
+  border: 1px solid var(--borda);
+}
+.painel-cor:hover { border-color: var(--texto-fraco); }
+.painel-cor.ativo { border-color: var(--dourado); box-shadow: 0 0 0 1px var(--dourado); }
+.painel-cor:active, .painel-cor-auto:active { transform: scale(0.94); }
+.painel-cor-auto {
+  height: 22px; padding: 0 8px; border-radius: 4px; font-size: 11px;
+  background: transparent; border: 1px dashed var(--borda); color: var(--texto-fraco);
+}
+.painel-cor-auto.ativo { border-style: solid; border-color: var(--dourado); color: var(--dourado-claro); }
 .painel-propriedades-reabrir {
   position: absolute; top: 96px; left: 28px; z-index: 300;
   background: var(--fundo-painel); border: 1px solid var(--borda); border-radius: 6px;

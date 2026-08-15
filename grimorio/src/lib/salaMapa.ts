@@ -37,12 +37,37 @@ const APARENCIAS: Record<EstadoSala, Omit<AparenciaSala, 'estado'>> = {
 export const ESTADOS_SALA: EstadoSala[] = ['pendente', 'limpa', 'sem-info']
 
 /**
+ * Cores que o usuário pode escolher para uma sala, além da cor padrão do estado.
+ *
+ * O estado continua sendo a SEMÂNTICA (o que aquela sala significa para o mestre); a cor
+ * escolhida à mão é aparência, e sobrepõe só naquela sala. Serve para o que o estado não
+ * cobre: separar alas de um castelo, marcar território de uma facção, distinguir andares
+ * que se encostam no mesmo mapa.
+ *
+ * A paleta é fechada de propósito e no mesmo registro escuro das referências — cor livre
+ * de seletor RGB dá salas berrantes que brigam com o resto do mapa.
+ */
+export const CORES_SALA: Array<{ id: string; nome: string; valor: string }> = [
+  { id: 'tijolo', nome: 'Tijolo', valor: '#7d3b3b' },
+  { id: 'petroleo', nome: 'Petróleo', valor: '#40596b' },
+  { id: 'carvao', nome: 'Carvão', valor: '#1c1c1c' },
+  { id: 'musgo', nome: 'Musgo', valor: '#3f6b4a' },
+  { id: 'ametista', nome: 'Ametista', valor: '#55406b' },
+  { id: 'ocre', nome: 'Ocre', valor: '#7d6535' },
+  { id: 'chumbo', nome: 'Chumbo', valor: '#4a4a4a' },
+  { id: 'vinho', nome: 'Vinho', valor: '#6b2f4a' },
+]
+
+/**
  * Aparência de um estado. Estado desconhecido (arquivo de versão futura, ou editado à
  * mão) cai em `sem-info` em vez de sumir: sala invisível seria pior que sala neutra.
  */
-export function aparenciaDaSala(estado: string): AparenciaSala {
+export function aparenciaDaSala(estado: string, corEscolhida?: string): AparenciaSala {
   const chave = (ESTADOS_SALA as string[]).includes(estado) ? (estado as EstadoSala) : 'sem-info'
-  return { estado: chave, ...APARENCIAS[chave] }
+  const base = { estado: chave, ...APARENCIAS[chave] }
+  // cor escolhida à mão sobrepõe só o preenchimento: contorno e cor do texto continuam
+  // vindo do estado, senão o usuário precisaria acertar três cores para trocar uma
+  return corEscolhida ? { ...base, preenchimento: corEscolhida } : base
 }
 
 /**

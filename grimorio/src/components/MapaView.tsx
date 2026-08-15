@@ -328,6 +328,14 @@ export function MapaView({ caminho, nome }: { caminho: string; nome: string }) {
     editor.updateShape({ id, type: shape.type, props: { rotulo: nome } } as Parameters<typeof editor.updateShape>[0])
   }
 
+  /** Cor escolhida à mão para a sala; string vazia devolve o controle ao estado. */
+  function aoTrocarCor(id: TLShapeId, cor: string) {
+    const editor = editorRef.current
+    const shape = editor?.getShape(id)
+    if (!editor || !shape || shape.type !== 'sala-mapa') return
+    editor.updateShape({ id, type: shape.type, props: { cor } } as Parameters<typeof editor.updateShape>[0])
+  }
+
   async function exportar(formato: 'png' | 'svg') {
     const editor = editorRef.current
     if (!editor || !repo) return
@@ -440,6 +448,7 @@ export function MapaView({ caminho, nome }: { caminho: string; nome: string }) {
         aoAplicarA={aoAplicarA}
         aoTrocarEstado={aoTrocarEstado}
         aoRenomearSala={aoRenomearSala}
+        aoTrocarCor={aoTrocarCor}
       />
       <PainelCamadas
         camadas={camadas}

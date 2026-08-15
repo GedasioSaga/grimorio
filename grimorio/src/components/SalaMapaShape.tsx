@@ -10,6 +10,8 @@ declare module '@tldraw/tlschema' {
       estado: string
       /** nome do cômodo, escrito dentro da própria sala */
       rotulo: string
+      /** cor escolhida à mão; vazio significa "usar a cor do estado" */
+      cor: string
     }
   }
 }
@@ -44,15 +46,16 @@ export class SalaMapaShapeUtil extends BaseBoxShapeUtil<SalaMapaShapeType> {
     h: T.positiveNumber,
     estado: T.string,
     rotulo: T.string,
+    cor: T.string,
   }
 
   getDefaultProps(): SalaMapaShapeType['props'] {
-    return { w: SALA_LARGURA_PADRAO, h: SALA_ALTURA_PADRAO, estado: 'pendente', rotulo: '' }
+    return { w: SALA_LARGURA_PADRAO, h: SALA_ALTURA_PADRAO, estado: 'pendente', rotulo: '', cor: '' }
   }
 
   component(shape: SalaMapaShapeType) {
-    const { w, h, estado, rotulo } = shape.props
-    const aparencia = aparenciaDaSala(estado)
+    const { w, h, estado, rotulo, cor } = shape.props
+    const aparencia = aparenciaDaSala(estado, cor || undefined)
     const linhas = quebrarRotulo(rotulo, w, FONTE_ROTULO)
     const alturaTexto = linhas.length * ENTRELINHA
     const primeiraLinhaY = h / 2 - alturaTexto / 2 + ENTRELINHA / 2

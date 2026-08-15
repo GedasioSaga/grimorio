@@ -234,7 +234,7 @@ export function MapaToolbar() {
         type: 'sala-mapa',
         x: centro.x - SALA_LARGURA_PADRAO / 2,
         y: centro.y - SALA_ALTURA_PADRAO / 2,
-        props: { w: SALA_LARGURA_PADRAO, h: SALA_ALTURA_PADRAO, estado: 'pendente', rotulo: '' },
+        props: { w: SALA_LARGURA_PADRAO, h: SALA_ALTURA_PADRAO, estado: 'pendente', rotulo: '', cor: '' },
       })
       editor.setCurrentTool('select')
       editor.setSelectedShapes([id])

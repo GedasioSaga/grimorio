@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { aparenciaDaSala, quebrarRotulo, ESTADOS_SALA } from '../lib/salaMapa'
+import { CORES_SALA, aparenciaDaSala, quebrarRotulo, ESTADOS_SALA } from '../lib/salaMapa'
 
 describe('aparenciaDaSala', () => {
   it('pendente é vermelha e limpa é azul — a cor É a informação', () => {
@@ -45,5 +45,35 @@ describe('quebrarRotulo', () => {
 
   it('espaços extras não viram linha vazia', () => {
     expect(quebrarRotulo('  Sala   dos   Guardas  ', 200, 11)).toEqual(['Sala dos Guardas'])
+  })
+})
+
+describe('cor escolhida à mão', () => {
+  it('sobrepõe o preenchimento do estado', () => {
+    const a = aparenciaDaSala('pendente', '#3f6b4a')
+    expect(a.preenchimento).toBe('#3f6b4a')
+  })
+
+  it('não mexe no contorno nem na cor do texto — trocar uma cor não vira trocar três', () => {
+    const padrao = aparenciaDaSala('pendente')
+    const custom = aparenciaDaSala('pendente', '#3f6b4a')
+    expect(custom.contorno).toBe(padrao.contorno)
+    expect(custom.texto).toBe(padrao.texto)
+  })
+
+  it('sem cor escolhida, manda o estado', () => {
+    expect(aparenciaDaSala('limpa', undefined).preenchimento).toBe('#40596b')
+    expect(aparenciaDaSala('limpa', '').preenchimento).toBe('#40596b')
+  })
+
+  it('o estado continua sendo o estado, mesmo com cor trocada', () => {
+    expect(aparenciaDaSala('pendente', '#3f6b4a').estado).toBe('pendente')
+  })
+
+  it('toda cor da paleta é hex válido e tem nome', () => {
+    for (const cor of CORES_SALA) {
+      expect(cor.valor, cor.id).toMatch(/^#[0-9a-f]{6}$/)
+      expect(cor.nome.length, cor.id).toBeGreaterThan(0)
+    }
   })
 })
