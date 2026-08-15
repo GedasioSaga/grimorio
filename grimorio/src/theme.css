@@ -175,18 +175,148 @@ button:hover { border-color: var(--dourado); color: var(--dourado-claro); }
   border: 1px solid var(--borda); border-radius: 4px; padding: 2px 6px;
   pointer-events: none; white-space: nowrap;
 }
+/* réguas graduadas em quadrados (topo + esquerda), canto de interseção com botão de grade.
+   Vivem no mesmo slot InFrontOfTheCanvas do .mapa-medida: pointer-events:none no
+   container (herdado de .tl-canvas__in-front), então só o botão do canto reativa. */
+.mapa-regua {
+  position: absolute; z-index: 250;
+  background: var(--fundo); pointer-events: none;
+  overflow: hidden;
+}
+.mapa-regua-topo { top: 0; right: 0; height: 20px; }
+.mapa-regua-esquerda { left: 0; bottom: 0; width: 20px; }
+.mapa-regua-tique {
+  position: absolute;
+  background: var(--borda);
+}
+.mapa-regua-tique:not(.vertical) { top: 0; bottom: 0; width: 1px; }
+.mapa-regua-tique.vertical { left: 0; right: 0; height: 1px; }
+.mapa-regua-tique.com-rotulo:not(.vertical) { background: var(--texto-fraco); }
+.mapa-regua-tique.vertical.com-rotulo { background: var(--texto-fraco); }
+.mapa-regua-rotulo {
+  position: absolute; top: 2px; left: 3px;
+  font-size: 10px; color: var(--texto-fraco); white-space: nowrap;
+}
+.mapa-regua-tique.vertical .mapa-regua-rotulo {
+  top: 3px; left: 2px; transform: rotate(-90deg); transform-origin: left top;
+}
+/* preenchimento passivo da junção das réguas — o liga/desliga da grade mudou pra
+   MapaToolbar (fix da revisão: aqui ficava atrás do MainMenu nativo do tldraw). */
+.mapa-regua-canto {
+  position: absolute; top: 0; left: 0; z-index: 260;
+  background: var(--fundo); border: 1px solid var(--borda); border-radius: 0 0 4px 0;
+}
+
 /* toolbar própria do mapa (slot components.Toolbar): o pai (.tlui-layout__bottom__main)
    já centraliza embaixo com display:flex — só falta reativar pointer-events, que o
-   ancestral .tlui-layout zera para o resto da tela não ficar bloqueada. */
+   ancestral .tlui-layout zera para o resto da tela não ficar bloqueada.
+   A coluna empilha a barra contextual de alinhar/distribuir ACIMA da toolbar principal,
+   que assim não se desloca quando a seleção muda (ver JSDoc de MapaToolbar.tsx). */
+.mapa-toolbar-coluna {
+  display: flex; flex-direction: column; align-items: center; gap: 6px;
+  margin-bottom: 8px; pointer-events: none;
+  /* a fileira do rodapé (zoom + toolbar) é um flex sem wrap do próprio tldraw e o
+     ancestral .tlui-layout é overflow:clip — sem poder encolher, os botões das pontas
+     sumiriam sem aviso em janela estreita. min-width:0 libera o encolhimento e o
+     flex-wrap de baixo quebra os botões em duas linhas em vez de escondê-los. */
+  min-width: 0;
+}
 .mapa-toolbar {
-  display: flex; align-items: center; gap: 2px;
+  display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 2px;
   background: var(--fundo); border: 1px solid var(--borda); border-radius: 6px;
-  padding: 4px; margin-bottom: 8px;
+  padding: 4px;
   pointer-events: auto;
+}
+/* barra contextual (alinhar/distribuir): mesma caixa da toolbar, com um tom a mais de
+   destaque — pista de que essa fileira é temporária, presa à seleção atual. */
+.mapa-toolbar-contextual {
+  background: var(--fundo-elevado);
+  border-color: color-mix(in srgb, var(--dourado) 35%, var(--borda));
 }
 .mapa-toolbar .btn-icon { font-size: 15px; padding: 5px 8px; }
 .mapa-toolbar .btn-icon.ativo { border-color: var(--dourado); color: var(--dourado-claro); background: var(--fundo-elevado); }
+.mapa-toolbar .btn-icon:active:not(:disabled) { transform: scale(0.97); }
+.mapa-toolbar .btn-icon:disabled { opacity: 0.35; cursor: default; }
 .mapa-toolbar-divisor { width: 1px; align-self: stretch; margin: 4px 2px; background: var(--borda); }
+
+/* controle de zoom (slot components.NavigationPanel, no lugar do minimap nativo):
+   mesma fileira da toolbar, encostado no rodapé — ver ControleZoom.tsx. */
+.mapa-zoom {
+  display: flex; align-items: center; flex-wrap: wrap; justify-content: center; gap: 2px;
+  background: var(--fundo); border: 1px solid var(--borda); border-radius: 6px;
+  padding: 4px; margin: 0 6px 8px 8px;
+  min-width: 0; pointer-events: auto;
+}
+.mapa-zoom .btn-icon { font-size: 15px; padding: 5px 8px; }
+.mapa-zoom .btn-icon:active { transform: scale(0.97); }
+.mapa-zoom-valor {
+  min-width: 52px; padding: 5px 6px; font-size: 12px;
+  background: transparent; border: 1px solid transparent; border-radius: 4px;
+  color: var(--texto); font-variant-numeric: tabular-nums;
+}
+.mapa-zoom-valor:hover { border-color: var(--borda); color: var(--dourado-claro); }
+.mapa-zoom-valor:active { transform: scale(0.97); }
+
+/* painel de propriedades (X/Y/L/A em quadrados): coluna direita do .mapa-wrap, fora
+   do tldraw, ACIMA do painel de camadas (mesmo padrão de layout/colapso). `top` vem
+   inline (fixo, 8px — nunca se move) e o PainelCamadas recebe `topPx` calculado no
+   MapaView pra não sobrepor quando os dois estão visíveis ao mesmo tempo. */
+.painel-propriedades {
+  position: absolute; top: 8px; right: 8px; z-index: 300;
+  width: 200px; display: flex; flex-direction: column;
+  background: var(--fundo-painel); border: 1px solid var(--borda); border-radius: 6px;
+  padding: 8px; gap: 8px;
+}
+.painel-propriedades-cabecalho {
+  display: flex; align-items: center; justify-content: space-between;
+  color: var(--dourado-claro); font-size: 12px; text-transform: uppercase; letter-spacing: 1px;
+}
+.painel-propriedades-grade { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.painel-propriedades-campo { display: flex; flex-direction: column; gap: 2px; font-size: 11px; color: var(--texto-fraco); }
+.painel-propriedades-label { padding-left: 2px; }
+.painel-propriedades-input {
+  background: var(--fundo); border: 1px solid var(--borda); border-radius: 4px;
+  color: var(--texto); padding: 4px 6px; font-size: 13px; outline: none; width: 100%;
+}
+.painel-propriedades-input:focus { border-color: var(--dourado); }
+.painel-propriedades-multi { font-size: 13px; color: var(--texto-fraco); text-align: center; padding: 4px; }
+.painel-propriedades-reabrir {
+  position: absolute; top: 8px; right: 8px; z-index: 300;
+  background: var(--fundo-painel); border: 1px solid var(--borda); border-radius: 6px;
+  padding: 6px 8px; font-size: 15px;
+}
+
+/* painel de camadas: coluna direita do .mapa-wrap, fora do tldraw */
+.painel-camadas {
+  position: absolute; top: 8px; right: 8px; bottom: 8px; z-index: 300;
+  width: 200px; display: flex; flex-direction: column;
+  background: var(--fundo-painel); border: 1px solid var(--borda); border-radius: 6px;
+  padding: 8px; gap: 6px; overflow: hidden;
+}
+.painel-camadas-cabecalho {
+  display: flex; align-items: center; justify-content: space-between;
+  color: var(--dourado-claro); font-size: 12px; text-transform: uppercase; letter-spacing: 1px;
+}
+.painel-camadas-lista { list-style: none; margin: 0; padding: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 2px; }
+.painel-camadas-item {
+  display: flex; align-items: center; justify-content: space-between; gap: 4px;
+  padding: 4px 6px; border-radius: 4px; cursor: pointer; font-size: 13px;
+}
+.painel-camadas-item:hover { background: var(--fundo-elevado); }
+.painel-camadas-item.ativa { background: var(--fundo-elevado); border: 1px solid var(--dourado); }
+.painel-camadas-nome { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; }
+.painel-camadas-acoes { display: flex; align-items: center; gap: 1px; }
+.painel-camadas-acoes .btn-icon { font-size: 11px; padding: 2px 4px; }
+.painel-camadas-add {
+  align-self: stretch; padding: 5px; border-radius: 4px; border: 1px dashed var(--borda);
+  color: var(--texto-fraco); background: transparent;
+}
+.painel-camadas-add:hover { color: var(--dourado-claro); border-color: var(--dourado); }
+.painel-camadas-reabrir {
+  position: absolute; top: 8px; right: 8px; z-index: 300;
+  background: var(--fundo-painel); border: 1px solid var(--borda); border-radius: 6px;
+  padding: 6px 8px; font-size: 15px;
+}
 
 /* ---- cartão de personagem ---- */
 .char-card {

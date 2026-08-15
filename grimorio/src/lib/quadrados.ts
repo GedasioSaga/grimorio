@@ -29,9 +29,52 @@ export function medidaDeCaixa(wPx: number, hPx: number, quadradoPx: number): str
   return `${emQuadrados(wPx, quadradoPx)}×${emQuadrados(hPx, quadradoPx)}`
 }
 
+/**
+ * Parseia o texto digitado no painel de propriedades (X/Y/L/A) para um número de
+ * quadrados. Aceita vírgula ou ponto como separador decimal ("6", "6,5", "6.5").
+ * Rejeita vazio, negativo e não-numérico devolvendo `null` — quem chama decide o
+ * que fazer (reverter pro valor atual sem aplicar).
+ */
+export function parseQuadrados(texto: string): number | null {
+  const limpo = texto.trim()
+  if (limpo === '') return null
+  const normalizado = limpo.replace(',', '.')
+  if (!/^\d+(\.\d+)?$/.test(normalizado)) return null
+  const valor = Number(normalizado)
+  if (!Number.isFinite(valor)) return null
+  return valor
+}
+
+/** Converte quadrados em px de página (inverso de `emQuadrados`). */
+export function quadradosParaPx(quadrados: number, quadradoPx: number): number {
+  return quadrados * quadradoPx
+}
+
 /** Distância entre as bordas mais próximas de duas caixas, em px; 0 quando sobrepõem/encostam. */
 export function distanciaEntreCaixas(a: Caixa, b: Caixa): number {
   const dx = Math.max(a.x - (b.x + b.w), b.x - (a.x + a.w), 0)
   const dy = Math.max(a.y - (b.y + b.h), b.y - (a.y + a.h), 0)
   return Math.sqrt(dx * dx + dy * dy)
+}
+
+/** Passos "redondos" de quadrado disponíveis pra régua, do mais denso ao mais esparso. */
+const PASSOS_REGUA = [1, 2, 5, 10, 20, 50, 100, 200, 500, 1000, 2000, 5000, 10000]
+
+/** Espaço mínimo em px de tela entre dois tiques, pra não virar borrão em zoom baixo. */
+const TIQUE_MIN_PX = 8
+
+/**
+ * Passo da régua do mapa em quadrados, dado o zoom atual do editor.
+ *
+ * `tique`: de quantos em quantos quadrados desenhar um traço menor.
+ * `rotulo`: de quantos em quantos quadrados escrever o número (sempre 5×tique,
+ * então nunca fica mais denso que o tique nem sobrepõe o vizinho).
+ *
+ * Pega o menor passo da lista cujo espaçamento em tela (passo × zoom × QUADRADO_PX)
+ * já alcança `TIQUE_MIN_PX` — em zoom alto isso cai em 1 quadrado por tique; em zoom
+ * baixo, sobe pros múltiplos redondos seguintes.
+ */
+export function passoDaRegua(zoom: number): { tique: number; rotulo: number } {
+  const tique = PASSOS_REGUA.find((passo) => passo * zoom * QUADRADO_PX >= TIQUE_MIN_PX) ?? PASSOS_REGUA[PASSOS_REGUA.length - 1]
+  return { tique, rotulo: tique * 5 }
 }

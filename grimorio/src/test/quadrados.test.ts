@@ -1,5 +1,13 @@
 import { describe, expect, it } from 'vitest'
-import { distanciaEntreCaixas, emQuadrados, medidaDeCaixa, type Caixa } from '../lib/quadrados'
+import {
+  distanciaEntreCaixas,
+  emQuadrados,
+  medidaDeCaixa,
+  parseQuadrados,
+  passoDaRegua,
+  quadradosParaPx,
+  type Caixa,
+} from '../lib/quadrados'
 
 describe('emQuadrados', () => {
   it('converte px inteiro em quadrados inteiros', () => {
@@ -66,5 +74,106 @@ describe('distanciaEntreCaixas', () => {
     const a: Caixa = { x: 0, y: 0, w: 10, h: 10 }
     const b: Caixa = { x: 13, y: 14, w: 10, h: 10 }
     expect(distanciaEntreCaixas(a, b)).toBe(distanciaEntreCaixas(b, a))
+  })
+})
+
+describe('parseQuadrados', () => {
+  it('aceita número inteiro', () => {
+    expect(parseQuadrados('6')).toBe(6)
+  })
+
+  it('aceita vírgula como separador decimal', () => {
+    expect(parseQuadrados('6,5')).toBe(6.5)
+  })
+
+  it('aceita ponto como separador decimal', () => {
+    expect(parseQuadrados('6.5')).toBe(6.5)
+  })
+
+  it('aceita zero', () => {
+    expect(parseQuadrados('0')).toBe(0)
+  })
+
+  it('ignora espaços nas pontas', () => {
+    expect(parseQuadrados('  6,5  ')).toBe(6.5)
+  })
+
+  it('rejeita string vazia', () => {
+    expect(parseQuadrados('')).toBeNull()
+  })
+
+  it('rejeita string só com espaços', () => {
+    expect(parseQuadrados('   ')).toBeNull()
+  })
+
+  it('rejeita negativo', () => {
+    expect(parseQuadrados('-2')).toBeNull()
+  })
+
+  it('rejeita texto que não é número', () => {
+    expect(parseQuadrados('abc')).toBeNull()
+  })
+
+  it('aceita mais de uma casa decimal (arredondamento é responsabilidade de exibição, não do parser)', () => {
+    expect(parseQuadrados('6,55')).toBe(6.55)
+  })
+
+  it('rejeita duas vírgulas', () => {
+    expect(parseQuadrados('6,5,5')).toBeNull()
+  })
+
+  it('rejeita NaN literal', () => {
+    expect(parseQuadrados('NaN')).toBeNull()
+  })
+})
+
+describe('quadradosParaPx', () => {
+  it('converte quadrados inteiros em px', () => {
+    expect(quadradosParaPx(6, 32)).toBe(192)
+  })
+
+  it('converte quadrados fracionários em px', () => {
+    expect(quadradosParaPx(6.5, 32)).toBe(208)
+  })
+
+  it('converte zero', () => {
+    expect(quadradosParaPx(0, 32)).toBe(0)
+  })
+})
+
+describe('passoDaRegua', () => {
+  it('zoom 100%: tique por quadrado, rótulo a cada 5', () => {
+    expect(passoDaRegua(1)).toEqual({ tique: 1, rotulo: 5 })
+  })
+
+  it('zoom alto (400%): continua por quadrado', () => {
+    expect(passoDaRegua(4)).toEqual({ tique: 1, rotulo: 5 })
+  })
+
+  it('no limiar exato onde 1 quadrado ainda cabe (zoom = 0.25 → 8px/quadrado)', () => {
+    expect(passoDaRegua(0.25)).toEqual({ tique: 1, rotulo: 5 })
+  })
+
+  it('logo abaixo do limiar, passa a agrupar de 2 em 2', () => {
+    expect(passoDaRegua(0.24)).toEqual({ tique: 2, rotulo: 10 })
+  })
+
+  it('zoom baixo (10%): passos mais esparsos, sem sobrepor rótulo', () => {
+    expect(passoDaRegua(0.1)).toEqual({ tique: 5, rotulo: 25 })
+  })
+
+  it('zoom bem baixo (5%): passo ainda maior', () => {
+    expect(passoDaRegua(0.05)).toEqual({ tique: 5, rotulo: 25 })
+  })
+
+  it('zoom extremo (1%): usa o maior passo antes de virar borrão', () => {
+    expect(passoDaRegua(0.01)).toEqual({ tique: 50, rotulo: 250 })
+  })
+
+  it('nunca deixa o rótulo mais denso que o tique (rótulo é sempre múltiplo de 5×tique)', () => {
+    for (const zoom of [8, 2, 1, 0.5, 0.25, 0.2, 0.1, 0.05, 0.02, 0.01, 0.005]) {
+      const { tique, rotulo } = passoDaRegua(zoom)
+      expect(rotulo).toBe(tique * 5)
+    }
   })
 })

@@ -18,9 +18,9 @@ const SIZES_VALIDOS = new Set<string>(DefaultSizeStyle.values)
 const GEOS_VALIDOS = new Set<string>(GeoShapeGeoStyle.values)
 
 describe('ELEMENTOS_PALETA', () => {
-  it('tem os 4 elementos da paleta RPG', () => {
-    expect(ELEMENTOS_PALETA).toHaveLength(4)
-    expect(ELEMENTOS_PALETA.map((e) => e.id)).toEqual(['parede', 'porta', 'janela', 'escada'])
+  it('tem os 5 elementos da paleta RPG', () => {
+    expect(ELEMENTOS_PALETA).toHaveLength(5)
+    expect(ELEMENTOS_PALETA.map((e) => e.id)).toEqual(['sala', 'parede', 'porta', 'janela', 'escada'])
   })
 
   it('cada elemento tem rótulo pt-BR e glifo não vazios', () => {
@@ -36,6 +36,14 @@ describe('ELEMENTOS_PALETA', () => {
         expect(Object.keys(el.estilos).length).toBeGreaterThan(0)
       }
     }
+  })
+
+  it('sala: geo rectangle, verde sólida — a base dos mapas de referência', () => {
+    const sala = ELEMENTOS_PALETA.find((e) => e.id === 'sala')!
+    expect(sala.geo).toBe('rectangle')
+    expect(sala.estilos.color).toBe('green')
+    expect(sala.estilos.fill).toBe('solid')
+    expect(sala.estilos.size).toBe('s')
   })
 
   it('parede: geo rectangle, cor branca, fill sólido, traço sólido, tamanho m', () => {

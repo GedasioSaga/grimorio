@@ -37,7 +37,7 @@
  */
 
 export interface ElementoPaleta {
-  id: 'parede' | 'porta' | 'janela' | 'escada'
+  id: 'sala' | 'parede' | 'porta' | 'janela' | 'escada'
   rotulo: string
   glifo: string
   /** estilos tldraw a aplicar nas próximas formas (chave = nome do style, valor = valor válido) */
@@ -46,6 +46,15 @@ export interface ElementoPaleta {
 }
 
 export const ELEMENTOS_PALETA: ElementoPaleta[] = [
+  {
+    // salas preenchidas com contorno fino são a base dos mapas de referência do
+    // usuário (estilo Resident Evil); a cor troca depois no painel de estilos
+    id: 'sala',
+    rotulo: 'Sala',
+    glifo: '⬛',
+    geo: 'rectangle',
+    estilos: { color: 'green', fill: 'solid', dash: 'solid', size: 's' },
+  },
   {
     id: 'parede',
     rotulo: 'Parede',
