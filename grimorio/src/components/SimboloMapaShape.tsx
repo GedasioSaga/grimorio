@@ -165,6 +165,154 @@ function desenharSimbolo(simbolo: string, w: number, h: number, rotulo: string) 
       )
 
     default:
+      return desenharItem(simbolo, w, h)
+  }
+}
+
+/**
+ * Itens largados pelo mapa. Desenhados na mesma linguagem sólida das peças, mas com um
+ * contorno escuro por baixo: o ícone cai em cima de sala vermelha, azul ou escura, e sem
+ * o contorno ele se perde no fundo em pelo menos uma delas.
+ *
+ * Cada desenho usa fração de `w`/`h` em vez de px fixos, para o ícone continuar correto
+ * quando o usuário aumenta um item que quer destacar.
+ */
+function desenharItem(simbolo: string, w: number, h: number) {
+  const traco = '#1a1a1a'
+
+  switch (simbolo) {
+    /** frasco de poção: cura, o item mais comum de qualquer mesa */
+    case 'pocao':
+      return (
+        <g stroke={traco} strokeWidth={1}>
+          <rect x={w * 0.38} y={h * 0.08} width={w * 0.24} height={h * 0.18} fill="#8a7b6b" />
+          <path
+            d={`M ${w * 0.32} ${h * 0.95} L ${w * 0.32} ${h * 0.42} L ${w * 0.42} ${h * 0.26} L ${w * 0.58} ${h * 0.26} L ${w * 0.68} ${h * 0.42} L ${w * 0.68} ${h * 0.95} Z`}
+            fill="#c0392b"
+          />
+        </g>
+      )
+
+    /** erva: three-leaf, o verde que se lê de longe */
+    case 'erva':
+      return (
+        <g stroke={traco} strokeWidth={0.8} fill="#2e9e5b">
+          <ellipse cx={w * 0.5} cy={h * 0.28} rx={w * 0.16} ry={h * 0.22} />
+          <ellipse cx={w * 0.26} cy={h * 0.58} rx={w * 0.16} ry={h * 0.22} transform={`rotate(-35 ${w * 0.26} ${h * 0.58})`} />
+          <ellipse cx={w * 0.74} cy={h * 0.58} rx={w * 0.16} ry={h * 0.22} transform={`rotate(35 ${w * 0.74} ${h * 0.58})`} />
+          <line x1={w * 0.5} y1={h * 0.5} x2={w * 0.5} y2={h * 0.95} stroke="#1f6e40" strokeWidth={1.4} />
+        </g>
+      )
+
+    case 'chave':
+      return (
+        <g stroke={traco} strokeWidth={0.8} fill="#d4a017">
+          <circle cx={w * 0.28} cy={h * 0.32} r={w * 0.2} />
+          <circle cx={w * 0.28} cy={h * 0.32} r={w * 0.08} fill={traco} stroke="none" />
+          <rect x={w * 0.4} y={h * 0.42} width={w * 0.14} height={h * 0.5} transform={`rotate(-35 ${w * 0.4} ${h * 0.42})`} />
+          <rect x={w * 0.58} y={h * 0.66} width={w * 0.2} height={h * 0.12} />
+        </g>
+      )
+
+    /** documento: a folha com linhas escritas, e o canto dobrado que diz "papel" */
+    case 'documento':
+      return (
+        <g stroke={traco} strokeWidth={0.9}>
+          <path
+            d={`M ${w * 0.22} ${h * 0.08} L ${w * 0.62} ${h * 0.08} L ${w * 0.8} ${h * 0.28} L ${w * 0.8} ${h * 0.92} L ${w * 0.22} ${h * 0.92} Z`}
+            fill="#e8dcc0"
+          />
+          <path d={`M ${w * 0.62} ${h * 0.08} L ${w * 0.62} ${h * 0.28} L ${w * 0.8} ${h * 0.28}`} fill="#c9bda0" />
+          <g stroke="#8a7b5b" strokeWidth={0.9}>
+            <line x1={w * 0.32} y1={h * 0.46} x2={w * 0.7} y2={h * 0.46} />
+            <line x1={w * 0.32} y1={h * 0.6} x2={w * 0.7} y2={h * 0.6} />
+            <line x1={w * 0.32} y1={h * 0.74} x2={w * 0.58} y2={h * 0.74} />
+          </g>
+        </g>
+      )
+
+    /** moedas empilhadas: tesouro, não uma moeda perdida */
+    case 'moeda':
+      return (
+        <g stroke={traco} strokeWidth={0.9} fill="#d4a017">
+          <ellipse cx={w * 0.5} cy={h * 0.74} rx={w * 0.34} ry={h * 0.16} />
+          <ellipse cx={w * 0.5} cy={h * 0.54} rx={w * 0.34} ry={h * 0.16} />
+          <ellipse cx={w * 0.5} cy={h * 0.34} rx={w * 0.34} ry={h * 0.16} fill="#e8bd3a" />
+        </g>
+      )
+
+    case 'espada':
+      return (
+        <g stroke={traco} strokeWidth={0.9}>
+          <path
+            d={`M ${w * 0.5} ${h * 0.06} L ${w * 0.6} ${h * 0.24} L ${w * 0.6} ${h * 0.66} L ${w * 0.4} ${h * 0.66} L ${w * 0.4} ${h * 0.24} Z`}
+            fill="#b8c0c8"
+          />
+          <rect x={w * 0.24} y={h * 0.66} width={w * 0.52} height={h * 0.1} fill="#8a6a3a" />
+          <rect x={w * 0.44} y={h * 0.76} width={w * 0.12} height={h * 0.2} fill="#6a4a26" />
+        </g>
+      )
+
+    /** flechas: munição em linguagem de RPG, não cartucho */
+    case 'municao':
+      return (
+        <g stroke="#b07a3a" strokeWidth={Math.max(1, w * 0.07)} strokeLinecap="round">
+          <line x1={w * 0.2} y1={h * 0.85} x2={w * 0.72} y2={h * 0.2} />
+          <line x1={w * 0.36} y1={h * 0.9} x2={w * 0.88} y2={h * 0.25} />
+          <g stroke={traco} strokeWidth={0.9}>
+            <path d={`M ${w * 0.72} ${h * 0.2} l ${w * 0.12} ${-h * 0.12} l 0 ${h * 0.2} z`} fill="#d8d8d8" />
+            <path d={`M ${w * 0.88} ${h * 0.25} l ${w * 0.1} ${-h * 0.14} l ${-w * 0.02} ${h * 0.22} z`} fill="#d8d8d8" />
+          </g>
+        </g>
+      )
+
+    case 'livro':
+      return (
+        <g stroke={traco} strokeWidth={0.9}>
+          <rect x={w * 0.2} y={h * 0.14} width={w * 0.6} height={h * 0.72} rx={1} fill="#7b4fa8" />
+          <rect x={w * 0.2} y={h * 0.14} width={w * 0.14} height={h * 0.72} fill="#5c3782" />
+          <line x1={w * 0.44} y1={h * 0.32} x2={w * 0.7} y2={h * 0.32} stroke="#d9c7ee" strokeWidth={1.2} />
+          <line x1={w * 0.44} y1={h * 0.46} x2={w * 0.7} y2={h * 0.46} stroke="#d9c7ee" strokeWidth={1.2} />
+        </g>
+      )
+
+    case 'tocha':
+      return (
+        <g stroke={traco} strokeWidth={0.9}>
+          <rect x={w * 0.44} y={h * 0.42} width={w * 0.12} height={h * 0.54} fill="#6a4a26" />
+          <path
+            d={`M ${w * 0.5} ${h * 0.04} C ${w * 0.78} ${h * 0.24} ${w * 0.72} ${h * 0.46} ${w * 0.5} ${h * 0.5} C ${w * 0.28} ${h * 0.46} ${w * 0.22} ${h * 0.24} ${w * 0.5} ${h * 0.04} Z`}
+            fill="#e8802b"
+          />
+          <path
+            d={`M ${w * 0.5} ${h * 0.18} C ${w * 0.64} ${h * 0.3} ${w * 0.6} ${h * 0.42} ${w * 0.5} ${h * 0.44} C ${w * 0.4} ${h * 0.42} ${w * 0.36} ${h * 0.3} ${w * 0.5} ${h * 0.18} Z`}
+            fill="#f5c542"
+            stroke="none"
+          />
+        </g>
+      )
+
+    case 'comida':
+      return (
+        <g stroke={traco} strokeWidth={0.9}>
+          <path
+            d={`M ${w * 0.28} ${h * 0.3} C ${w * 0.28} ${h * 0.1} ${w * 0.78} ${h * 0.1} ${w * 0.78} ${h * 0.38} C ${w * 0.78} ${h * 0.66} ${w * 0.44} ${h * 0.74} ${w * 0.36} ${h * 0.6} Z`}
+            fill="#a5673f"
+          />
+          <line
+            x1={w * 0.36}
+            y1={h * 0.6}
+            x2={w * 0.14}
+            y2={h * 0.94}
+            stroke="#e8dcc0"
+            strokeWidth={Math.max(1.5, w * 0.1)}
+            strokeLinecap="round"
+          />
+        </g>
+      )
+
+    /** símbolo desconhecido: retângulo tracejado neutro, para o usuário ver e poder apagar */
+    default:
       return (
         <rect
           x={0}

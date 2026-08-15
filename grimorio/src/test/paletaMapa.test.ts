@@ -18,14 +18,26 @@ const SIZES_VALIDOS = new Set<string>(DefaultSizeStyle.values)
 const GEOS_VALIDOS = new Set<string>(GeoShapeGeoStyle.values)
 
 describe('ELEMENTOS_PALETA', () => {
-  // leva 4a: catálogo cresceu de 5 pra 12 peças; as que viraram símbolo DESENHADO
-  // (janela, secreta, armadilha, marcador, mesa, cama, baú) não são mais geo pré-estilado
-  it('tem os 12 elementos da paleta RPG', () => {
-    expect(ELEMENTOS_PALETA).toHaveLength(12)
-    expect(ELEMENTOS_PALETA.map((e) => e.id)).toEqual([
+  // catálogo em duas famílias: o que CONSTRÓI o mapa e o que é ACHADO nele
+  it('tem as peças de construção seguidas dos itens', () => {
+    const construcao = ELEMENTOS_PALETA.filter((e) => !e.item).map((e) => e.id)
+    const itens = ELEMENTOS_PALETA.filter((e) => e.item).map((e) => e.id)
+
+    expect(construcao).toEqual([
       'sala', 'parede', 'porta', 'janela', 'escada',
       'mesa', 'cama', 'bau', 'secreta', 'armadilha', 'marcador', 'rotulo',
     ])
+    expect(itens).toEqual([
+      'pocao', 'erva', 'chave', 'documento', 'moeda',
+      'espada', 'municao', 'livro', 'tocha', 'comida',
+    ])
+  })
+
+  it('todo item é um símbolo desenhado, criado por ação', () => {
+    for (const item of ELEMENTOS_PALETA.filter((e) => e.item)) {
+      expect(item.tipo, `${item.id}`).toBe('acao')
+      expect(item.simbolo, `${item.id}`).toBe(item.id)
+    }
   })
 
   it('cada elemento tem rótulo pt-BR e glifo não vazios', () => {
@@ -138,7 +150,8 @@ describe('peças da leva 4a', () => {
 
     expect(porTipo('geo')).toEqual(['parede'])
     expect(porTipo('texto')).toEqual(['rotulo'])
-    expect(porTipo('acao')).toEqual([
+    // só as de construção: os itens também são 'acao' e são conferidos no teste próprio
+    expect(porTipo('acao').filter((id) => !ELEMENTOS_PALETA.find((e) => e.id === id)?.item)).toEqual([
       'sala', 'porta', 'janela', 'escada', 'mesa', 'cama', 'bau', 'secreta', 'armadilha', 'marcador',
     ])
   })

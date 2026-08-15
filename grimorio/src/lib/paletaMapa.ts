@@ -36,12 +36,15 @@
  * aceitável quando não há textura própria de "traço grosso vazado" no fill tldraw.
  */
 
-import type { SimboloId } from './simbolosMapa'
+import { ITENS_MAPA, type SimboloId } from './simbolosMapa'
 
 export type PecaId =
   | 'sala' | 'parede' | 'porta' | 'janela' | 'escada'
   | 'secreta' | 'armadilha' | 'marcador' | 'rotulo'
   | 'mesa' | 'cama' | 'bau'
+  // itens: o id da peça é o mesmo do símbolo, porque um item É o seu desenho
+  | 'pocao' | 'erva' | 'chave' | 'documento' | 'moeda'
+  | 'espada' | 'municao' | 'livro' | 'tocha' | 'comida'
 
 export interface ElementoPaleta {
   id: PecaId
@@ -59,6 +62,8 @@ export interface ElementoPaleta {
   geo?: string
   /** peça desenhada: qual símbolo o `simbolo-mapa` deve desenhar (ver lib/simbolosMapa.ts) */
   simbolo?: SimboloId
+  /** item largado pelo mapa — a gaveta agrupa esses numa seção separada das construções */
+  item?: boolean
 }
 
 export const ELEMENTOS_PALETA: ElementoPaleta[] = [
@@ -158,6 +163,19 @@ export const ELEMENTOS_PALETA: ElementoPaleta[] = [
     tipo: 'texto',
     estilos: { color: 'white', size: 's' },
   },
+  // itens largados pelo mapa. Entram no catálogo a partir de `ITENS_MAPA` para não
+  // repetir nome e ícone em dois lugares — o desenho continua sendo a fonte da verdade.
+  ...ITENS_MAPA.map(
+    (item): ElementoPaleta => ({
+      id: item.id as PecaId,
+      rotulo: item.rotulo,
+      glifo: item.glifo,
+      tipo: 'acao',
+      simbolo: item.id,
+      estilos: {},
+      item: true,
+    }),
+  ),
 ]
 
 /** Quantidade de degraus criados pelo botão "Escada" (ver MapaToolbar.tsx). */

@@ -248,12 +248,19 @@ button:hover { border-color: var(--dourado); color: var(--dourado-claro); }
 /* gaveta de peças: grade flutuante ACIMA da toolbar (a toolbar mora no rodapé, então a
    grade sobe; `bottom: 100%` a ancora na borda de cima do botão). */
 .gaveta-pecas { position: relative; display: flex; }
-.gaveta-pecas-grade {
+.gaveta-pecas-painel {
   position: absolute; bottom: 100%; left: 50%; transform: translateX(-50%);
   margin-bottom: 6px; z-index: 400;
-  display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 2px;
-  width: 300px; padding: 6px;
+  width: 320px; max-height: 60vh; overflow-y: auto; padding: 6px;
   background: var(--fundo); border: 1px solid var(--borda); border-radius: 6px;
+}
+.gaveta-pecas-secao + .gaveta-pecas-secao { margin-top: 8px; }
+.gaveta-pecas-titulo {
+  display: block; padding: 2px 4px 4px;
+  font-size: 10px; letter-spacing: 1px; text-transform: uppercase; color: var(--texto-fraco);
+}
+.gaveta-pecas-grade {
+  display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 2px;
 }
 .gaveta-pecas-item {
   display: flex; align-items: center; gap: 8px;

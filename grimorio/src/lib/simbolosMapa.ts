@@ -18,7 +18,15 @@
  * carrega significado e não deve variar por acidente.
  */
 
-export type SimboloId = 'janela' | 'secreta' | 'armadilha' | 'marcador' | 'mesa' | 'cama' | 'bau'
+export type SimboloId =
+  | 'janela' | 'secreta' | 'armadilha' | 'marcador' | 'mesa' | 'cama' | 'bau'
+  // itens largados pelo mapa, como as referências fazem: o mestre bate o olho e sabe o
+  // que tem naquela sala sem abrir anotação nenhuma
+  | 'pocao' | 'erva' | 'chave' | 'documento' | 'moeda'
+  | 'espada' | 'municao' | 'livro' | 'tocha' | 'comida'
+
+/** Lado do ícone de item, em px de página (~2/3 de um quadrado da grade). */
+const ITEM_PX = 22
 
 export interface DefinicaoSimbolo {
   id: SimboloId
@@ -31,6 +39,8 @@ export interface DefinicaoSimbolo {
   altura: number
   /** símbolo que carrega texto próprio — hoje só o marcador numerado */
   numerado?: boolean
+  /** item largado pelo mapa (poção, chave…), separado das peças de construção */
+  item?: boolean
 }
 
 export const SIMBOLOS_MAPA: DefinicaoSimbolo[] = [
@@ -44,7 +54,23 @@ export const SIMBOLOS_MAPA: DefinicaoSimbolo[] = [
   { id: 'mesa', rotulo: 'Mesa', glifo: '▬', largura: 48, altura: 28 },
   { id: 'cama', rotulo: 'Cama', glifo: '▯', largura: 40, altura: 56 },
   { id: 'bau', rotulo: 'Baú', glifo: '▭', largura: 32, altura: 24 },
+
+  // itens: todos no mesmo quadrado pequeno, para ficarem irmãos visualmente e caberem
+  // dentro de uma sala sem cobrir o nome dela
+  { id: 'pocao', rotulo: 'Poção', glifo: '🧪', largura: ITEM_PX, altura: ITEM_PX, item: true },
+  { id: 'erva', rotulo: 'Erva', glifo: '🌿', largura: ITEM_PX, altura: ITEM_PX, item: true },
+  { id: 'chave', rotulo: 'Chave', glifo: '🗝', largura: ITEM_PX, altura: ITEM_PX, item: true },
+  { id: 'documento', rotulo: 'Documento', glifo: '📄', largura: ITEM_PX, altura: ITEM_PX, item: true },
+  { id: 'moeda', rotulo: 'Moedas', glifo: '🪙', largura: ITEM_PX, altura: ITEM_PX, item: true },
+  { id: 'espada', rotulo: 'Arma', glifo: '⚔', largura: ITEM_PX, altura: ITEM_PX, item: true },
+  { id: 'municao', rotulo: 'Munição', glifo: '➶', largura: ITEM_PX, altura: ITEM_PX, item: true },
+  { id: 'livro', rotulo: 'Livro', glifo: '📕', largura: ITEM_PX, altura: ITEM_PX, item: true },
+  { id: 'tocha', rotulo: 'Tocha', glifo: '🔥', largura: ITEM_PX, altura: ITEM_PX, item: true },
+  { id: 'comida', rotulo: 'Comida', glifo: '🍖', largura: ITEM_PX, altura: ITEM_PX, item: true },
 ]
+
+/** Itens do mapa — o subconjunto que a gaveta agrupa numa seção própria. */
+export const ITENS_MAPA = SIMBOLOS_MAPA.filter((s) => s.item)
 
 export function definicaoDoSimbolo(id: string): DefinicaoSimbolo | undefined {
   return SIMBOLOS_MAPA.find((s) => s.id === id)
