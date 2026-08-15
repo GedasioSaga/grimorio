@@ -66,6 +66,12 @@ describe('shapes próprios do Mapa registram tipo e props', () => {
     expect(Object.keys(PortaShapeUtil.props)).toEqual(['w', 'h', 'estado'])
   })
 
+  it('LinhaMapaShapeUtil', async () => {
+    const { LinhaMapaShapeUtil } = await import('../components/LinhaMapaShape')
+    expect(LinhaMapaShapeUtil.type).toBe('linha-mapa')
+    expect(Object.keys(LinhaMapaShapeUtil.props)).toEqual(['dx', 'dy'])
+  })
+
   it('SimboloMapaShapeUtil', async () => {
     const { SimboloMapaShapeUtil } = await import('../components/SimboloMapaShape')
     expect(SimboloMapaShapeUtil.type).toBe('simbolo-mapa')
@@ -75,6 +81,7 @@ describe('shapes próprios do Mapa registram tipo e props', () => {
   it('cada shape próprio tem um tipo distinto — tipo repetido derruba o editor inteiro', async () => {
     const tipos = [
       (await import('../components/SalaMapaShape')).SalaMapaShapeUtil.type,
+      (await import('../components/LinhaMapaShape')).LinhaMapaShapeUtil.type,
       (await import('../components/PortaShape')).PortaShapeUtil.type,
       (await import('../components/SimboloMapaShape')).SimboloMapaShapeUtil.type,
       (await import('../components/CharacterCardShape')).CharacterCardShapeUtil.type,

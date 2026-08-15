@@ -14,6 +14,7 @@ import { GavetaPecas } from './GavetaPecas'
 import { ComandosMapa } from './ComandosMapa'
 import { PORTA_ESPESSURA_PADRAO, PORTA_LARGURA_PADRAO } from './PortaShape'
 import { SALA_ALTURA_PADRAO, SALA_LARGURA_PADRAO } from './SalaMapaShape'
+import { LINHA_COMPRIMENTO_PADRAO } from './LinhaMapaShape'
 import { proximoNumero } from '../lib/portaMapa'
 import { definicaoDoSimbolo, type SimboloId } from '../lib/simbolosMapa'
 import { tamanhoDoSimbolo } from './SimboloMapaShape'
@@ -173,6 +174,7 @@ export function MapaToolbar() {
       if (elemento.id === 'escada') criarEscada()
       else if (elemento.id === 'sala') criarSala()
       else if (elemento.id === 'porta') criarPorta()
+      else if (elemento.id === 'divisoria') criarDivisoria()
       else if (elemento.simbolo) criarSimbolo(elemento.simbolo)
       return
     }
@@ -260,6 +262,27 @@ export function MapaToolbar() {
         props: { w: PORTA_LARGURA_PADRAO, h: PORTA_ESPESSURA_PADRAO, estado: 'livre' },
       })
       editor.bringToFront([id])
+      editor.setCurrentTool('select')
+      editor.setSelectedShapes([id])
+    })
+  }
+
+  /**
+   * Divisória: nasce horizontal no centro da tela, e o usuário estica e gira arrastando
+   * as pontas (as alças do próprio shape). Não vai para a frente como a porta — divisória
+   * é parede, fica no mesmo plano das outras.
+   */
+  function criarDivisoria() {
+    const centro = editor.getViewportPageBounds().center
+    const id = createShapeId()
+    editor.run(() => {
+      editor.createShape({
+        id,
+        type: 'linha-mapa',
+        x: centro.x - LINHA_COMPRIMENTO_PADRAO / 2,
+        y: centro.y,
+        props: { dx: LINHA_COMPRIMENTO_PADRAO, dy: 0 },
+      })
       editor.setCurrentTool('select')
       editor.setSelectedShapes([id])
     })
