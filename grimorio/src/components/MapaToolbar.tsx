@@ -20,6 +20,30 @@ const STYLE_PROPS_POR_NOME: Record<string, StyleProp<string>> = {
 }
 
 /**
+ * Alinhar e distribuir usam as ações NATIVAS do tldraw — `editor.alignShapes(ids, op)`
+ * e `editor.distributeShapes(ids, op)`, verificadas em
+ * node_modules/@tldraw/editor/src/lib/editor/Editor.ts:7247-7250 (as seis operações
+ * abaixo são exatamente a união aceita pela assinatura) e :7325. Nada de matemática
+ * própria de bounds aqui.
+ */
+const ALINHAMENTOS = [
+  { titulo: 'Alinhar à esquerda', icone: '⇤', operacao: 'left' },
+  { titulo: 'Centralizar na horizontal', icone: '↔', operacao: 'center-horizontal' },
+  { titulo: 'Alinhar à direita', icone: '⇥', operacao: 'right' },
+  { titulo: 'Alinhar pelo topo', icone: '⤒', operacao: 'top' },
+  { titulo: 'Centralizar na vertical', icone: '↕', operacao: 'center-vertical' },
+  { titulo: 'Alinhar pela base', icone: '⤓', operacao: 'bottom' },
+] as const
+
+/** Espaçar igualmente — só faz sentido com 3+ formas (com 2 não há nada entre elas). */
+const DISTRIBUICOES = [
+  { titulo: 'Distribuir na horizontal', icone: '⋯', operacao: 'horizontal' },
+  { titulo: 'Distribuir na vertical', icone: '⋮', operacao: 'vertical' },
+] as const
+
+const MINIMO_PARA_DISTRIBUIR = 3
+
+/**
  * Toolbar própria do mapa, substituindo a do tldraw (slot `components.Toolbar`).
  *
  * Mecanismo verificado em `node_modules/tldraw/src/lib/ui/hooks/useTools.tsx`
@@ -78,11 +102,23 @@ const STYLE_PROPS_POR_NOME: Record<string, StyleProp<string>> = {
  * `editor.getInstanceState().isGridMode` via `useValue` (mesmo padrão de `toolId`/
  * `geoAtual` acima), alternado com `editor.updateInstanceState({ isGridMode: !atual })`
  * — a mesma chamada que `MapaView.tsx` usa para ligar a grade por padrão no `onMount`.
+ *
+ * ## Barra contextual de alinhar/distribuir (Fatia 3, Task D)
+ *
+ * Aparece ACIMA da toolbar principal, não dentro dela: `.tlui-layout__bottom__main` é
+ * `justify-content: center` (tldraw.css:3007-3012), então engordar a fileira de baixo
+ * empurraria horizontalmente todos os botões já existentes toda vez que a seleção
+ * passasse de 1 para 2 formas — o botão que o usuário ia clicar fugiria do lugar. Numa
+ * segunda linha, a toolbar principal fica parada.
+ *
+ * Sem animação de entrada, de propósito: selecionar formas é a ação mais repetida da
+ * tela, e movimento repetido vira ruído e lentidão percebida.
  */
 export function MapaToolbar() {
   const editor = useEditor()
 
   const toolId = useValue('mapa-toolbar-tool-atual', () => editor.getCurrentToolId(), [editor])
+  const qtdSelecionada = useValue('mapa-toolbar-qtd-selecionada', () => editor.getSelectedShapeIds().length, [editor])
   const geoAtual = useValue(
     'mapa-toolbar-geo-atual',
     () => editor.getStyleForNextShape(GeoShapeGeoStyle),
@@ -194,38 +230,72 @@ export function MapaToolbar() {
   ]
 
   return (
-    <div className="mapa-toolbar">
-      {botoes.map((b) => (
+    <div className="mapa-toolbar-coluna">
+      {qtdSelecionada >= 2 && (
+        <div className="mapa-toolbar mapa-toolbar-contextual">
+          {ALINHAMENTOS.map((a) => (
+            <button
+              key={a.operacao}
+              type="button"
+              className="btn-icon"
+              title={a.titulo}
+              onClick={() => editor.alignShapes(editor.getSelectedShapeIds(), a.operacao)}
+            >
+              {a.icone}
+            </button>
+          ))}
+          <div className="mapa-toolbar-divisor" aria-hidden="true" />
+          {DISTRIBUICOES.map((d) => (
+            <button
+              key={d.operacao}
+              type="button"
+              className="btn-icon"
+              title={
+                qtdSelecionada < MINIMO_PARA_DISTRIBUIR
+                  ? `${d.titulo} (precisa de ${MINIMO_PARA_DISTRIBUIR} formas)`
+                  : d.titulo
+              }
+              disabled={qtdSelecionada < MINIMO_PARA_DISTRIBUIR}
+              onClick={() => editor.distributeShapes(editor.getSelectedShapeIds(), d.operacao)}
+            >
+              {d.icone}
+            </button>
+          ))}
+        </div>
+      )}
+      <div className="mapa-toolbar">
+        {botoes.map((b) => (
+          <button
+            key={b.titulo}
+            type="button"
+            className={`btn-icon${b.ativo ? ' ativo' : ''}`}
+            title={b.titulo}
+            onClick={b.aoClicar}
+          >
+            {b.icone}
+          </button>
+        ))}
         <button
-          key={b.titulo}
           type="button"
-          className={`btn-icon${b.ativo ? ' ativo' : ''}`}
-          title={b.titulo}
-          onClick={b.aoClicar}
+          className={`btn-icon${isGridMode ? ' ativo' : ''}`}
+          title={isGridMode ? 'Esconder grade' : 'Mostrar grade'}
+          onClick={alternarGrade}
         >
-          {b.icone}
+          ⊞
         </button>
-      ))}
-      <button
-        type="button"
-        className={`btn-icon${isGridMode ? ' ativo' : ''}`}
-        title={isGridMode ? 'Esconder grade' : 'Mostrar grade'}
-        onClick={alternarGrade}
-      >
-        ⊞
-      </button>
-      <div className="mapa-toolbar-divisor" aria-hidden="true" />
-      {ELEMENTOS_PALETA.map((elemento) => (
-        <button
-          key={elemento.id}
-          type="button"
-          className={`btn-icon${elementoPaletaAtivo?.id === elemento.id ? ' ativo' : ''}`}
-          title={elemento.rotulo}
-          onClick={() => aplicarElementoPaleta(elemento)}
-        >
-          {elemento.glifo}
-        </button>
-      ))}
+        <div className="mapa-toolbar-divisor" aria-hidden="true" />
+        {ELEMENTOS_PALETA.map((elemento) => (
+          <button
+            key={elemento.id}
+            type="button"
+            className={`btn-icon${elementoPaletaAtivo?.id === elemento.id ? ' ativo' : ''}`}
+            title={elemento.rotulo}
+            onClick={() => aplicarElementoPaleta(elemento)}
+          >
+            {elemento.glifo}
+          </button>
+        ))}
+      </div>
     </div>
   )
 }

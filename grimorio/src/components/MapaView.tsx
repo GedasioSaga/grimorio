@@ -12,6 +12,7 @@ import { ItemCardShapeUtil } from './ItemCardShape'
 import { MedidasMapa } from './MedidasMapa'
 import { ReguasMapa } from './ReguasMapa'
 import { MapaToolbar } from './MapaToolbar'
+import { ControleZoom } from './ControleZoom'
 import { PainelCamadas } from './PainelCamadas'
 import {
   PainelPropriedades,
@@ -20,6 +21,7 @@ import {
   type SelecaoPropriedades,
 } from './PainelPropriedades'
 import { registrarEditor, desregistrarEditor } from '../lib/canvasAtivo'
+import { criarUsuarioDoMapa } from '../lib/usuarioMapa'
 import { QUADRADO_PX, quadradosParaPx } from '../lib/quadrados'
 import {
   alternarOculta,
@@ -49,8 +51,14 @@ function MapaOverlay() {
   )
 }
 
-// constante de módulo: não recriar o objeto de components a cada render
-const componentsMapa: TLComponents = { InFrontOfTheCanvas: MapaOverlay, Toolbar: MapaToolbar }
+// constante de módulo: não recriar o objeto de components a cada render.
+// `NavigationPanel` (minimap + menu de zoom nativos, em inglês) dá lugar ao
+// `ControleZoom` — mesmo slot, mesma faixa de rodapé da toolbar; ver ControleZoom.tsx.
+const componentsMapa: TLComponents = {
+  InFrontOfTheCanvas: MapaOverlay,
+  Toolbar: MapaToolbar,
+  NavigationPanel: ControleZoom,
+}
 
 // altura aproximada do PainelPropriedades (cabeçalho + 4 campos + paddings), pra empurrar
 // o PainelCamadas pra baixo sem sobrepor quando os dois estão visíveis na mesma coluna.
@@ -80,6 +88,16 @@ export function MapaView({ caminho, nome }: { caminho: string; nome: string }) {
   if (!camadasAtomRef.current) camadasAtomRef.current = atom<CamadaMapa[]>('mapa-camadas', camadasDoDoc(undefined))
   const camadasAtom = camadasAtomRef.current
   const camadas = useValue(camadasAtom)
+
+  /**
+   * Usuário só do mapa: snap sempre ligado sem contaminar o Canvas (o porquê inteiro
+   * está em `usuarioMapa.ts`). Criado uma vez via `useRef` pelo mesmo motivo do atom
+   * acima — `user` está no array de deps do `useLayoutEffect` que cria o editor
+   * (node_modules/@tldraw/editor/src/lib/TldrawEditor.tsx:516), então uma identidade
+   * nova a cada render recriaria o editor inteiro.
+   */
+  const usuarioMapaRef = useRef<ReturnType<typeof criarUsuarioDoMapa> | null>(null)
+  if (!usuarioMapaRef.current) usuarioMapaRef.current = criarUsuarioDoMapa()
 
   const [camadaAtivaId, setCamadaAtivaId] = useState('base')
   const camadaAtivaIdRef = useRef(camadaAtivaId)
@@ -292,6 +310,7 @@ export function MapaView({ caminho, nome }: { caminho: string; nome: string }) {
         store={store}
         shapeUtils={shapeUtilsCustom}
         components={componentsMapa}
+        user={usuarioMapaRef.current}
         getShapeVisibility={getShapeVisibilityRef.current}
         onMount={(editor) => {
           registrarEditor(editor)
