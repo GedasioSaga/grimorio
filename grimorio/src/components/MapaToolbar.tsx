@@ -15,6 +15,8 @@ import { ComandosMapa } from './ComandosMapa'
 import { AcoesMapaIA } from './AcoesMapaIA'
 import { PORTA_ESPESSURA_PADRAO, PORTA_LARGURA_PADRAO } from '../lib/portaMapa'
 import { SALA_ALTURA_PADRAO, SALA_LARGURA_PADRAO } from './SalaMapaShape'
+import { PONTOS_SALA_POLIGONO_PADRAO } from '../lib/salaPoligonoMapa'
+import { CORREDOR_ALTURA_PADRAO, CORREDOR_LARGURA_PADRAO } from './CorredorMapaShape'
 import { proximoNumero } from '../lib/portaMapa'
 import { definicaoDoSimbolo, type SimboloId } from '../lib/simbolosMapa'
 import { tamanhoDoSimbolo } from './SimboloMapaShape'
@@ -173,6 +175,8 @@ export function MapaToolbar() {
     if (elemento.tipo === 'acao') {
       if (elemento.id === 'escada') criarEscada()
       else if (elemento.id === 'sala') criarSala()
+      else if (elemento.id === 'sala-poligono') criarSalaPoligono()
+      else if (elemento.id === 'corredor') criarCorredor()
       else if (elemento.id === 'porta') criarPorta()
       else if (elemento.simbolo) criarSimbolo(elemento.simbolo)
       return
@@ -238,6 +242,51 @@ export function MapaToolbar() {
         x: centro.x - SALA_LARGURA_PADRAO / 2,
         y: centro.y - SALA_ALTURA_PADRAO / 2,
         props: { w: SALA_LARGURA_PADRAO, h: SALA_ALTURA_PADRAO, estado: 'pendente', rotulo: '', cor: '' },
+      })
+      editor.setCurrentTool('select')
+      editor.setSelectedShapes([id])
+    })
+  }
+
+  /**
+   * Sala em polígono nasce com os vértices de nascença (cômodo em L, `PONTOS_SALA_POLIGONO_PADRAO`)
+   * centrada na tela — mesmo estado/cor inicial da sala retangular ("pendente"). O usuário
+   * reforma a silhueta arrastando os vértices depois (ver `getHandles`/`onHandleDrag` em
+   * `SalaPoligonoMapaShape.tsx`).
+   */
+  function criarSalaPoligono() {
+    const centro = editor.getViewportPageBounds().center
+    const largura = Math.max(...PONTOS_SALA_POLIGONO_PADRAO.map((p) => p.x))
+    const altura = Math.max(...PONTOS_SALA_POLIGONO_PADRAO.map((p) => p.y))
+    const id = createShapeId()
+    editor.run(() => {
+      editor.createShape({
+        id,
+        type: 'sala-poligono-mapa',
+        x: centro.x - largura / 2,
+        y: centro.y - altura / 2,
+        props: { pontos: PONTOS_SALA_POLIGONO_PADRAO, estado: 'pendente', rotulo: '', cor: '' },
+      })
+      editor.setCurrentTool('select')
+      editor.setSelectedShapes([id])
+    })
+  }
+
+  /**
+   * Corredor nasce no centro da tela — o usuário redimensiona (arrasta as alças, é uma
+   * caixa comum) até o comprimento e a largura do caminho real, e encosta as pontas nas
+   * salas que ele liga.
+   */
+  function criarCorredor() {
+    const centro = editor.getViewportPageBounds().center
+    const id = createShapeId()
+    editor.run(() => {
+      editor.createShape({
+        id,
+        type: 'corredor-mapa',
+        x: centro.x - CORREDOR_LARGURA_PADRAO / 2,
+        y: centro.y - CORREDOR_ALTURA_PADRAO / 2,
+        props: { w: CORREDOR_LARGURA_PADRAO, h: CORREDOR_ALTURA_PADRAO },
       })
       editor.setCurrentTool('select')
       editor.setSelectedShapes([id])

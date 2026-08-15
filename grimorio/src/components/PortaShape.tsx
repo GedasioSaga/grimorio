@@ -1,6 +1,7 @@
 import { BaseBoxShapeUtil, SVGContainer, T, type RecordProps, type TLShape } from 'tldraw'
 // estado e cor da porta vivem na lib pura, como os da sala — ver o cabeçalho de portaMapa.ts
-import { PORTA_ESPESSURA_PADRAO, PORTA_LARGURA_PADRAO, aparenciaDaPorta } from '../lib/portaMapa'
+import { PORTA_ESPESSURA_PADRAO, PORTA_LARGURA_PADRAO } from '../lib/portaMapa'
+import { desenharPorta } from '../lib/desenhoPorta'
 
 declare module '@tldraw/tlschema' {
   interface TLGlobalShapePropsMap {
@@ -42,12 +43,7 @@ export class PortaShapeUtil extends BaseBoxShapeUtil<PortaShapeType> {
 
   component(shape: PortaShapeType) {
     const { w, h, estado } = shape.props
-    const { cor } = aparenciaDaPorta(estado)
-    return (
-      <SVGContainer>
-        <rect x={0} y={0} width={w} height={h} rx={1} fill={cor} />
-      </SVGContainer>
-    )
+    return <SVGContainer>{desenharPorta({ w, h, estado })}</SVGContainer>
   }
 
   indicator(shape: PortaShapeType) {

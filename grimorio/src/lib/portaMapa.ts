@@ -14,9 +14,17 @@
  * como uma delas ganha um estado novo e a outra rejeita ele em silêncio.
  */
 
-/** Vão padrão: uma barra curta e fina, atravessada na parede. */
-export const PORTA_LARGURA_PADRAO = 28
-export const PORTA_ESPESSURA_PADRAO = 8
+/**
+ * Vão padrão: uma barra curta e fina, atravessada na parede.
+ *
+ * A espessura é a que decide se a porta parece ENCAIXADA na parede ou flutuando por cima
+ * dela (queixa do usuário nas referências: "8.png" tinha 8px, quatro vezes a espessura do
+ * contorno da sala — `ESPESSURA_CONTORNO_SALA = 2` em salaMapa.ts — e parecia um bloco
+ * solto sobre a linha, não um trecho de parede diferente. 4px fica perto o bastante da
+ * linha para ler como parte dela, e ainda dá área de clique/seleção sem precisar de rx.
+ */
+export const PORTA_LARGURA_PADRAO = 20
+export const PORTA_ESPESSURA_PADRAO = 4
 
 export type EstadoPorta = 'livre' | 'trancada' | 'atencao'
 

@@ -39,7 +39,7 @@
 import { ITENS_MAPA, type SimboloId } from './simbolosMapa'
 
 export type PecaId =
-  | 'sala' | 'parede' | 'porta' | 'janela' | 'escada'
+  | 'sala' | 'sala-poligono' | 'corredor' | 'parede' | 'porta' | 'janela' | 'escada'
   | 'secreta' | 'armadilha' | 'marcador' | 'rotulo'
   | 'mesa' | 'cama' | 'bau' | 'andar' | 'divisoria'
   // itens: o id da peça é o mesmo do símbolo, porque um item É o seu desenho
@@ -74,6 +74,23 @@ export const ELEMENTOS_PALETA: ElementoPaleta[] = [
     id: 'sala',
     rotulo: 'Sala',
     glifo: '⬛',
+    tipo: 'acao',
+    estilos: {},
+  },
+  {
+    // cômodo em L/T de peça única — ver SalaPoligonoMapaShape.tsx. Entra pela mesma
+    // mecânica de ação da sala retangular; os vértices se arrastam depois de criada.
+    id: 'sala-poligono',
+    rotulo: 'Sala (polígono)',
+    glifo: '⬠',
+    tipo: 'acao',
+    estilos: {},
+  },
+  {
+    // costura duas salas na mesma massa — ver lib/corredorMapa.ts para o porquê.
+    id: 'corredor',
+    rotulo: 'Corredor',
+    glifo: '▬',
     tipo: 'acao',
     estilos: {},
   },
@@ -242,6 +259,8 @@ export function pecaDaFormaCriada(
   // shapes próprios: o tipo já diz o que a peça é, sem comparar estilo
   if (forma.type === 'porta-mapa') return 'porta'
   if (forma.type === 'sala-mapa') return 'sala'
+  if (forma.type === 'sala-poligono-mapa') return 'sala-poligono'
+  if (forma.type === 'corredor-mapa') return 'corredor'
 
   // símbolos desenhados carregam o próprio nome na prop `simbolo`
   if (forma.type === 'simbolo-mapa') {

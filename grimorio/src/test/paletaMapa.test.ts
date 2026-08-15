@@ -24,7 +24,7 @@ describe('ELEMENTOS_PALETA', () => {
     const itens = ELEMENTOS_PALETA.filter((e) => e.item).map((e) => e.id)
 
     expect(construcao).toEqual([
-      'sala', 'parede', 'porta', 'divisoria', 'janela', 'escada',
+      'sala', 'sala-poligono', 'corredor', 'parede', 'porta', 'divisoria', 'janela', 'escada',
       'mesa', 'cama', 'bau', 'secreta', 'armadilha', 'marcador', 'rotulo', 'andar',
     ])
     expect(itens).toEqual([
@@ -155,7 +155,7 @@ describe('peças da leva 4a', () => {
     expect(porTipo('linha')).toEqual(['divisoria'])
     // só as de construção: os itens também são 'acao' e são conferidos no teste próprio
     expect(porTipo('acao').filter((id) => !ELEMENTOS_PALETA.find((e) => e.id === id)?.item)).toEqual([
-      'sala', 'porta', 'janela', 'escada', 'mesa', 'cama', 'bau', 'secreta',
+      'sala', 'sala-poligono', 'corredor', 'porta', 'janela', 'escada', 'mesa', 'cama', 'bau', 'secreta',
       'armadilha', 'marcador', 'andar',
     ])
   })
@@ -195,6 +195,16 @@ describe('pecaDaFormaCriada — identidade deduzida da própria forma', () => {
   it('reconhece a sala pelo tipo do shape próprio', () => {
     const sala = { type: 'sala-mapa', props: { w: 160, h: 112, estado: 'pendente', rotulo: 'Salão' } }
     expect(pecaDaFormaCriada(sala)).toBe('sala')
+  })
+
+  it('reconhece a sala em polígono pelo tipo do shape próprio', () => {
+    const salaPoligono = { type: 'sala-poligono-mapa', props: { pontos: [{ x: 0, y: 0 }], estado: 'pendente', rotulo: 'Cripta', cor: '' } }
+    expect(pecaDaFormaCriada(salaPoligono)).toBe('sala-poligono')
+  })
+
+  it('reconhece o corredor pelo tipo do shape próprio', () => {
+    const corredor = { type: 'corredor-mapa', props: { w: 120, h: 40 } }
+    expect(pecaDaFormaCriada(corredor)).toBe('corredor')
   })
 
   it('amostra decorativa da legenda não conta como peça do mapa', () => {

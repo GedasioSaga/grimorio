@@ -25,8 +25,13 @@ export type SimboloId =
   | 'pocao' | 'erva' | 'chave' | 'documento' | 'moeda'
   | 'espada' | 'municao' | 'livro' | 'tocha' | 'comida'
 
-/** Lado do ícone de item, em px de página (~2/3 de um quadrado da grade). */
-const ITEM_PX = 22
+/**
+ * Tamanho de nascença do PINO de item — mais alto que largo, de propósito: é a mesma
+ * silhueta de gota das referências (`14.png`), não mais um ícone quadrado. Ver o porquê
+ * inteiro (família de pino em vez de dez ilustrações) no cabeçalho de `desenhoSimbolo.tsx`.
+ */
+export const PINO_ITEM_LARGURA = 18
+export const PINO_ITEM_ALTURA = 24
 
 export interface DefinicaoSimbolo {
   id: SimboloId
@@ -62,16 +67,16 @@ export const SIMBOLOS_MAPA: DefinicaoSimbolo[] = [
 
   // itens: todos no mesmo quadrado pequeno, para ficarem irmãos visualmente e caberem
   // dentro de uma sala sem cobrir o nome dela
-  { id: 'pocao', rotulo: 'Poção', glifo: '🧪', largura: ITEM_PX, altura: ITEM_PX, item: true },
-  { id: 'erva', rotulo: 'Erva', glifo: '🌿', largura: ITEM_PX, altura: ITEM_PX, item: true },
-  { id: 'chave', rotulo: 'Chave', glifo: '🗝', largura: ITEM_PX, altura: ITEM_PX, item: true },
-  { id: 'documento', rotulo: 'Documento', glifo: '📄', largura: ITEM_PX, altura: ITEM_PX, item: true },
-  { id: 'moeda', rotulo: 'Moedas', glifo: '🪙', largura: ITEM_PX, altura: ITEM_PX, item: true },
-  { id: 'espada', rotulo: 'Arma', glifo: '⚔', largura: ITEM_PX, altura: ITEM_PX, item: true },
-  { id: 'municao', rotulo: 'Munição', glifo: '➶', largura: ITEM_PX, altura: ITEM_PX, item: true },
-  { id: 'livro', rotulo: 'Livro', glifo: '📕', largura: ITEM_PX, altura: ITEM_PX, item: true },
-  { id: 'tocha', rotulo: 'Tocha', glifo: '🔥', largura: ITEM_PX, altura: ITEM_PX, item: true },
-  { id: 'comida', rotulo: 'Comida', glifo: '🍖', largura: ITEM_PX, altura: ITEM_PX, item: true },
+  { id: 'pocao', rotulo: 'Poção', glifo: '🧪', largura: PINO_ITEM_LARGURA, altura: PINO_ITEM_ALTURA, item: true },
+  { id: 'erva', rotulo: 'Erva', glifo: '🌿', largura: PINO_ITEM_LARGURA, altura: PINO_ITEM_ALTURA, item: true },
+  { id: 'chave', rotulo: 'Chave', glifo: '🗝', largura: PINO_ITEM_LARGURA, altura: PINO_ITEM_ALTURA, item: true },
+  { id: 'documento', rotulo: 'Documento', glifo: '📄', largura: PINO_ITEM_LARGURA, altura: PINO_ITEM_ALTURA, item: true },
+  { id: 'moeda', rotulo: 'Moedas', glifo: '🪙', largura: PINO_ITEM_LARGURA, altura: PINO_ITEM_ALTURA, item: true },
+  { id: 'espada', rotulo: 'Arma', glifo: '⚔', largura: PINO_ITEM_LARGURA, altura: PINO_ITEM_ALTURA, item: true },
+  { id: 'municao', rotulo: 'Munição', glifo: '➶', largura: PINO_ITEM_LARGURA, altura: PINO_ITEM_ALTURA, item: true },
+  { id: 'livro', rotulo: 'Livro', glifo: '📕', largura: PINO_ITEM_LARGURA, altura: PINO_ITEM_ALTURA, item: true },
+  { id: 'tocha', rotulo: 'Tocha', glifo: '🔥', largura: PINO_ITEM_LARGURA, altura: PINO_ITEM_ALTURA, item: true },
+  { id: 'comida', rotulo: 'Comida', glifo: '🍖', largura: PINO_ITEM_LARGURA, altura: PINO_ITEM_ALTURA, item: true },
 ]
 
 /** Itens do mapa — o subconjunto que a gaveta agrupa numa seção própria. */

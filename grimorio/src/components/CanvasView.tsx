@@ -9,6 +9,7 @@ import { PortaShapeUtil } from './PortaShape'
 import { SimboloMapaShapeUtil } from './SimboloMapaShape'
 import { SalaMapaShapeUtil } from './SalaMapaShape'
 import { LinhaMapaShapeUtil } from './LinhaMapaShape'
+import { ItemMapaShapeUtil } from './ItemMapaShape'
 import { registrarEditor, desregistrarEditor } from '../lib/canvasAtivo'
 import { useDocumentoTldraw } from './canvasDoc'
 import { criarHandlersDeDrop } from './dropsDeEntidade'
@@ -18,10 +19,13 @@ import { registrarAtalhos } from './atalhosCanvas'
 // Constantes em nível de módulo: arrays recriados a cada render remontam o editor.
 // `shapeUtilsCustom` vai na prop `shapeUtils` do <Tldraw> (que soma aos defaults);
 // o store precisa do schema completo (defaults + customizados).
-// PortaShapeUtil entra aqui mesmo sendo peça de MAPA: o clipboard do tldraw é comum às
-// duas telas, e colar uma porta num canvas sem o tipo registrado faz `getShapeUtil`
-// lançar (Editor.ts:1050-1054). Registrar é uma linha; o erro seria na cara do usuário.
-const shapeUtilsCustom = [CharacterCardShapeUtil, CenarioCardShapeUtil, ItemCardShapeUtil, PortaShapeUtil, SimboloMapaShapeUtil, SalaMapaShapeUtil, LinhaMapaShapeUtil]
+// PortaShapeUtil/ItemMapaShapeUtil entram aqui mesmo sendo peça de MAPA: o clipboard do
+// tldraw é comum às duas telas, e colar uma porta (ou um pino de item) num canvas sem o
+// tipo registrado faz `getShapeUtil` lançar (Editor.ts:1050-1054). Registrar é uma linha;
+// o erro seria na cara do usuário. Isso NÃO muda o que soltar um Item da sidebar cria
+// aqui — `criarHandlersDeDrop` só cria `item-mapa` quando chamado com
+// `itemViraMiniatura: true`, e o `CanvasView` não passa essa opção (ver dropsDeEntidade.tsx).
+const shapeUtilsCustom = [CharacterCardShapeUtil, CenarioCardShapeUtil, ItemCardShapeUtil, ItemMapaShapeUtil, PortaShapeUtil, SimboloMapaShapeUtil, SalaMapaShapeUtil, LinhaMapaShapeUtil]
 const shapeUtilsDoStore = [...defaultShapeUtils, ...shapeUtilsCustom]
 
 export function CanvasView({ caminho, nome }: { caminho: string; nome: string }) {

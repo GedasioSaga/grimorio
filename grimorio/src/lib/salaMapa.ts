@@ -16,6 +16,24 @@
 
 export type EstadoSala = 'pendente' | 'limpa' | 'sem-info'
 
+/**
+ * Preto ou branco por cima de `fundo`, escolhido por luminância (fórmula YIQ — mais barata
+ * que contraste WCAG completo, e sobra precisão pra só decidir entre duas opções).
+ *
+ * Existe porque `CORES_SALA` ganhou tom claro (ex.: marfim) e texto branco sobre marfim
+ * some. Calculado a partir do preenchimento FINAL (estado ou cor escolhida à mão) em vez
+ * de fixo por estado, porque senão toda cor clara nova exigiria lembrar de acertar o
+ * texto à parte — e um dia alguém esquece.
+ */
+function corTextoContraste(fundo: string): string {
+  const hex = fundo.replace('#', '')
+  const r = parseInt(hex.substring(0, 2), 16)
+  const g = parseInt(hex.substring(2, 4), 16)
+  const b = parseInt(hex.substring(4, 6), 16)
+  const luminancia = (r * 299 + g * 587 + b * 114) / 1000
+  return luminancia > 140 ? '#1a1a1a' : '#efefef'
+}
+
 export interface AparenciaSala {
   estado: EstadoSala
   rotulo: string
@@ -43,14 +61,32 @@ export const CONTORNO_SALA = '#9fa8b2'
 export const ESPESSURA_CONTORNO_SALA = 2
 const CONTORNO = CONTORNO_SALA
 
-const APARENCIAS: Record<EstadoSala, Omit<AparenciaSala, 'estado'>> = {
-  pendente: { rotulo: 'Ainda tem coisa', preenchimento: '#7d3b3b', contorno: CONTORNO, texto: '#ffffff' },
-  limpa: { rotulo: 'Já limpei', preenchimento: '#40596b', contorno: CONTORNO, texto: '#ffffff' },
-  'sem-info': { rotulo: 'Sem informação', preenchimento: '#1c1c1c', contorno: CONTORNO, texto: '#cfcfcf' },
+/**
+ * Preenchimento de cada estado — tom MÉDIO, não escuro-muddy.
+ *
+ * `#7d3b3b`/`#40596b` (versão anterior) ficavam próximos demais do preto: o resultado era
+ * a "sala feia" que o usuário reclamou. As referências (RE2 cinza, mapas verdes) usam tom
+ * mais claro e saturado, que se destaca do fundo do canvas (`#2e2e2e`, ver `theme.css`)
+ * sem virar neon. `sem-info` sobe de `#1c1c1c` pra `#3d3d3d`: perto do preto puro a sala
+ * some contra o fundo escuro do editor; um cinza levemente mais claro que o fundo do
+ * canvas ainda lê como "sala sem cor", só que sem sumir.
+ *
+ * `texto` não é mais fixo por estado — ver `corTextoContraste`, calculado em cima do
+ * preenchimento final (estado ou cor escolhida à mão).
+ */
+const APARENCIAS: Record<EstadoSala, Omit<AparenciaSala, 'estado' | 'texto'>> = {
+  pendente: { rotulo: 'Ainda tem coisa', preenchimento: '#9c4f4a', contorno: CONTORNO },
+  limpa: { rotulo: 'Já limpei', preenchimento: '#43698c', contorno: CONTORNO },
+  'sem-info': { rotulo: 'Sem informação', preenchimento: '#3d3d3d', contorno: CONTORNO },
 }
 
-/** Ordem em que os estados aparecem no painel de propriedades. */
-export const ESTADOS_SALA: EstadoSala[] = ['pendente', 'limpa', 'sem-info']
+/**
+ * Ordem em que os estados aparecem no painel de propriedades. `sem-info` vem primeiro
+ * porque é o estado em que a sala nasce agora (ver `getDefaultProps` em
+ * `SalaMapaShape.tsx`) — o seletor deve ler como "neutro → descobri algo → resolvi",
+ * não mais abrir já em "pendente".
+ */
+export const ESTADOS_SALA: EstadoSala[] = ['sem-info', 'pendente', 'limpa']
 
 /**
  * Cores que o usuário pode escolher para uma sala, além da cor padrão do estado.
@@ -60,18 +96,24 @@ export const ESTADOS_SALA: EstadoSala[] = ['pendente', 'limpa', 'sem-info']
  * cobre: separar alas de um castelo, marcar território de uma facção, distinguir andares
  * que se encostam no mesmo mapa.
  *
- * A paleta é fechada de propósito e no mesmo registro escuro das referências — cor livre
- * de seletor RGB dá salas berrantes que brigam com o resto do mapa.
+ * A paleta é fechada de propósito e no mesmo registro de tom médio dos estados acima —
+ * cor livre de seletor RGB dá salas berrantes que brigam com o resto do mapa.
+ *
+ * `marfim` é a primeira cor CLARA da paleta (pedido do usuário: o mapa que ele mesmo
+ * desenha à mão tem salas claras com texto escuro). `corTextoContraste`, usada em
+ * `aparenciaDaSala`, garante que o rótulo vire escuro sozinho quando a sala usa marfim —
+ * sem isso o texto branco padrão some no fundo claro.
  */
 export const CORES_SALA: Array<{ id: string; nome: string; valor: string }> = [
-  { id: 'tijolo', nome: 'Tijolo', valor: '#7d3b3b' },
-  { id: 'petroleo', nome: 'Petróleo', valor: '#40596b' },
-  { id: 'carvao', nome: 'Carvão', valor: '#1c1c1c' },
+  { id: 'tijolo', nome: 'Tijolo', valor: '#8a4340' },
+  { id: 'petroleo', nome: 'Petróleo', valor: '#3f6d86' },
+  { id: 'carvao', nome: 'Carvão', valor: '#3a3a3a' },
   { id: 'musgo', nome: 'Musgo', valor: '#3f6b4a' },
   { id: 'ametista', nome: 'Ametista', valor: '#55406b' },
   { id: 'ocre', nome: 'Ocre', valor: '#7d6535' },
   { id: 'chumbo', nome: 'Chumbo', valor: '#4a4a4a' },
   { id: 'vinho', nome: 'Vinho', valor: '#6b2f4a' },
+  { id: 'marfim', nome: 'Marfim', valor: '#e8dfc8' },
 ]
 
 /**
@@ -80,10 +122,12 @@ export const CORES_SALA: Array<{ id: string; nome: string; valor: string }> = [
  */
 export function aparenciaDaSala(estado: string, corEscolhida?: string): AparenciaSala {
   const chave = (ESTADOS_SALA as string[]).includes(estado) ? (estado as EstadoSala) : 'sem-info'
-  const base = { estado: chave, ...APARENCIAS[chave] }
-  // cor escolhida à mão sobrepõe só o preenchimento: contorno e cor do texto continuam
-  // vindo do estado, senão o usuário precisaria acertar três cores para trocar uma
-  return corEscolhida ? { ...base, preenchimento: corEscolhida } : base
+  const aparenciaEstado = APARENCIAS[chave]
+  // cor escolhida à mão sobrepõe só o preenchimento: o contorno continua vindo do estado,
+  // senão o usuário precisaria acertar duas cores para trocar uma. A cor do texto é
+  // recalculada em cima do preenchimento final — ver `corTextoContraste`.
+  const preenchimento = corEscolhida || aparenciaEstado.preenchimento
+  return { estado: chave, ...aparenciaEstado, preenchimento, texto: corTextoContraste(preenchimento) }
 }
 
 /**

@@ -9,6 +9,7 @@ import { registrarAtalhos } from './atalhosCanvas'
 import { CharacterCardShapeUtil } from './CharacterCardShape'
 import { CenarioCardShapeUtil } from './CenarioCardShape'
 import { ItemCardShapeUtil } from './ItemCardShape'
+import { ItemMapaShapeUtil } from './ItemMapaShape'
 import { MedidasMapa } from './MedidasMapa'
 import { ReguasMapa } from './ReguasMapa'
 import { MapaToolbar } from './MapaToolbar'
@@ -38,12 +39,18 @@ import type { CamadaMapa } from '../lib/types'
 import { PortaShapeUtil } from './PortaShape'
 import { SimboloMapaShapeUtil } from './SimboloMapaShape'
 import { SalaMapaShapeUtil } from './SalaMapaShape'
+import { SalaPoligonoMapaShapeUtil } from './SalaPoligonoMapaShape'
+import { CorredorMapaShapeUtil } from './CorredorMapaShape'
 import { LinhaMapaShapeUtil } from './LinhaMapaShape'
 import { pecaDaFormaCriada } from '../lib/paletaMapa'
 import { retirarPlantaPendente } from '../lib/mapaIAPendente'
 
-// mesmos card-shapes do canvas: mapa aceita drop de personagem/cenário/item
-const shapeUtilsCustom = [CharacterCardShapeUtil, CenarioCardShapeUtil, ItemCardShapeUtil, PortaShapeUtil, SimboloMapaShapeUtil, SalaMapaShapeUtil, LinhaMapaShapeUtil]
+// mesmos card-shapes do canvas: mapa aceita drop de personagem/cenário/item.
+// `ItemCardShapeUtil` continua registrado mesmo o mapa não criando mais `item-card` por
+// drop (ver `criarHandlersDeDrop` chamado abaixo): mapas salvos ANTES desta mudança podem
+// ter um `item-card` colado à mão, e desregistrar o tipo faria o documento inteiro ser
+// recusado ao carregar (mesmo motivo do `PortaShapeUtil` no `CanvasView.tsx`).
+const shapeUtilsCustom = [CharacterCardShapeUtil, CenarioCardShapeUtil, ItemCardShapeUtil, ItemMapaShapeUtil, PortaShapeUtil, SimboloMapaShapeUtil, SalaMapaShapeUtil, SalaPoligonoMapaShapeUtil, CorredorMapaShapeUtil, LinhaMapaShapeUtil]
 const shapeUtilsDoStore = [...defaultShapeUtils, ...shapeUtilsCustom]
 
 // combina os overlays de espaço-de-tela num só slot (InFrontOfTheCanvas aceita 1 componente)
@@ -71,7 +78,7 @@ export function MapaView({ caminho, nome }: { caminho: string; nome: string }) {
   const vaultPath = useApp((s) => s.vaultPath)
   const editorRef = useRef<Editor | null>(null)
   const { store, erro, salvandoErro } = useDocumentoTldraw(caminho, shapeUtilsDoStore)
-  const { aoArrastarSobre, aoSoltar } = criarHandlersDeDrop(editorRef, vaultPath)
+  const { aoArrastarSobre, aoSoltar } = criarHandlersDeDrop(editorRef, vaultPath, { itemViraMiniatura: true })
   const [copiaOk, setCopiaOk] = useState(false)
   const [copiaErro, setCopiaErro] = useState<string | null>(null)
 

@@ -11,7 +11,7 @@ import {
   type TLShape,
   type TLShapePartial,
 } from 'tldraw'
-import { CONTORNO_SALA } from '../lib/salaMapa'
+import { desenharLinha } from '../lib/desenhoLinha'
 
 declare module '@tldraw/tlschema' {
   interface TLGlobalShapePropsMap {
@@ -27,9 +27,6 @@ export type LinhaMapaShapeType = TLShape<'linha-mapa'>
 
 /** Comprimento de nascença: 4 quadrados na horizontal. */
 export const LINHA_COMPRIMENTO_PADRAO = 128
-
-/** Mesma espessura do contorno da sala — ver SalaMapaShape. */
-const ESPESSURA = 1.2
 
 /**
  * LEGADO — não está mais na paleta, e nada cria shapes deste tipo.
@@ -117,7 +114,7 @@ export class LinhaMapaShapeUtil extends ShapeUtil<LinhaMapaShapeType> {
     const { dx, dy } = shape.props
     return (
       <SVGContainer>
-        <line x1={0} y1={0} x2={dx} y2={dy} stroke={CONTORNO_SALA} strokeWidth={ESPESSURA} strokeLinecap="round" />
+        {desenharLinha({ dx, dy })}
         {/* faixa transparente larga: dá o que clicar sem engrossar o traço visível */}
         <line x1={0} y1={0} x2={dx} y2={dy} stroke="transparent" strokeWidth={10} />
       </SVGContainer>

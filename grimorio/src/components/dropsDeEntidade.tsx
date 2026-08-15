@@ -14,6 +14,7 @@ import { MIME_CENARIO } from './CenariosSoltos'
 import { MIME_ITEM } from './ItensSoltos'
 import { cardsPorEntidade, ligarCenarioNoCanvas, ligarRelacoesNoCanvas } from './ligacoesCanvas'
 import type { SalaMapaShapeType } from './SalaMapaShape'
+import { ITEM_MAPA_ALTURA_PADRAO, ITEM_MAPA_LARGURA_PADRAO } from './ItemMapaShape'
 
 const MIME_PERSONAGEM = 'application/x-grimorio-personagem'
 const MIME_IMAGEM = 'application/x-grimorio-imagem'
@@ -106,6 +107,10 @@ function salaSobPonto(editor: Editor, ponto: { x: number; y: number }): SalaMapa
 export function criarHandlersDeDrop(
   editorRef: React.RefObject<Editor | null>,
   vaultPath: string | null,
+  // Item solto no MAPA vira miniatura (pino), não o card grande — pedido explícito do
+  // usuário: "isso só na parte de mapa, o canvas continuaria normal". `MapaView.tsx`
+  // passa `true`; `CanvasView.tsx` não passa nada (mantém o `item-card` de sempre).
+  opcoes: { itemViraMiniatura?: boolean } = {},
 ): { aoArrastarSobre(e: React.DragEvent): void; aoSoltar(e: React.DragEvent): void } {
   return {
     // Fase capture: o canvas interno do tldraw chama preventDefault +
@@ -150,6 +155,21 @@ export function criarHandlersDeDrop(
             editor.updateShape<SalaMapaShapeType>({ id: sala.id, type: 'sala-mapa', props: { cenarioId: id } })
             return
           }
+        }
+
+        // Item solto no MAPA: pino pequeno (`item-mapa`), não o card grande. Ramo próprio
+        // e SEM passar pelo `ligarRelacoesNoCanvas` abaixo — `cardsPorEntidade` só
+        // reconhece 'item-card' (ver ligacoesCanvas.ts), então um `item-mapa` nunca
+        // ganharia seta de relação mesmo se passasse por ali; melhor não fingir que tenta.
+        if (mime === MIME_ITEM && opcoes.itemViraMiniatura) {
+          editor.createShape({
+            id: createShapeId(),
+            type: 'item-mapa',
+            x: ponto.x - ITEM_MAPA_LARGURA_PADRAO / 2,
+            y: ponto.y - ITEM_MAPA_ALTURA_PADRAO / 2,
+            props: { itemId: id },
+          })
+          return
         }
 
         // Batch: card + setas viram UM passo de undo (Ctrl+Z desfaz o drop inteiro).

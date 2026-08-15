@@ -3,8 +3,8 @@ import { CORES_SALA, aparenciaDaSala, quebrarRotulo, ESTADOS_SALA } from '../lib
 
 describe('aparenciaDaSala', () => {
   it('pendente é vermelha e limpa é azul — a cor É a informação', () => {
-    expect(aparenciaDaSala('pendente').preenchimento).toBe('#7d3b3b')
-    expect(aparenciaDaSala('limpa').preenchimento).toBe('#40596b')
+    expect(aparenciaDaSala('pendente').preenchimento).toBe('#9c4f4a')
+    expect(aparenciaDaSala('limpa').preenchimento).toBe('#43698c')
   })
 
   it('todos os estados têm contorno e cor de texto', () => {
@@ -62,8 +62,8 @@ describe('cor escolhida à mão', () => {
   })
 
   it('sem cor escolhida, manda o estado', () => {
-    expect(aparenciaDaSala('limpa', undefined).preenchimento).toBe('#40596b')
-    expect(aparenciaDaSala('limpa', '').preenchimento).toBe('#40596b')
+    expect(aparenciaDaSala('limpa', undefined).preenchimento).toBe('#43698c')
+    expect(aparenciaDaSala('limpa', '').preenchimento).toBe('#43698c')
   })
 
   it('o estado continua sendo o estado, mesmo com cor trocada', () => {
@@ -75,5 +75,16 @@ describe('cor escolhida à mão', () => {
       expect(cor.valor, cor.id).toMatch(/^#[0-9a-f]{6}$/)
       expect(cor.nome.length, cor.id).toBeGreaterThan(0)
     }
+  })
+
+  it('cor clara (marfim) vira texto escuro sozinha — senão o rótulo some', () => {
+    const marfim = CORES_SALA.find((c) => c.id === 'marfim')!
+    const a = aparenciaDaSala('pendente', marfim.valor)
+    expect(a.preenchimento).toBe(marfim.valor)
+    expect(a.texto).toBe('#1a1a1a')
+  })
+
+  it('cor escura continua com texto claro', () => {
+    expect(aparenciaDaSala('sem-info').texto).toBe('#efefef')
   })
 })

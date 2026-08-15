@@ -26,3 +26,8 @@ dist-ssr
 # segredos — nunca commitar
 .env
 .env.*
+
+# amostra visual do mapa: HTML gerado a partir dos modulos reais, para screenshot.
+# E saida de build, nao fonte — quem manda sao os modulos que ela importa.
+.amostra
+.playwright-mcp

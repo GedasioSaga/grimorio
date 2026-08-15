@@ -1,6 +1,6 @@
 import { BaseBoxShapeUtil, SVGContainer, T, createShapePropsMigrationIds, createShapePropsMigrationSequence, type RecordProps, type TLShape } from 'tldraw'
 import { useApp } from '../state/store'
-import { ESPESSURA_CONTORNO_SALA, aparenciaDaSala, quebrarRotulo } from '../lib/salaMapa'
+import { desenharCorpoSala } from '../lib/desenhoSala'
 import { resolverVinculoSala } from '../lib/vinculoSalaCenario'
 
 declare module '@tldraw/tlschema' {
@@ -24,10 +24,6 @@ export type SalaMapaShapeType = TLShape<'sala-mapa'>
 
 export const SALA_LARGURA_PADRAO = 160
 export const SALA_ALTURA_PADRAO = 112
-
-/** Corpo do nome do cômodo, em px de página. */
-const FONTE_ROTULO = 12
-const ENTRELINHA = 14
 
 /**
  * Sala do mapa: retângulo preenchido com a cor do ESTADO e o nome do cômodo escrito
@@ -76,7 +72,10 @@ export class SalaMapaShapeUtil extends BaseBoxShapeUtil<SalaMapaShapeType> {
   })
 
   getDefaultProps(): SalaMapaShapeType['props'] {
-    return { w: SALA_LARGURA_PADRAO, h: SALA_ALTURA_PADRAO, estado: 'pendente', rotulo: '', cor: '', cenarioId: '' }
+    // padrão é 'sem-info', não 'pendente': a IA marcava tudo como pendente e o mapa
+    // inteiro saía vermelho de cara — metade da queixa "horrível" do usuário era isso.
+    // 'sem-info' nasce neutro; o mestre promove pra vermelho/azul quando de fato sabe.
+    return { w: SALA_LARGURA_PADRAO, h: SALA_ALTURA_PADRAO, estado: 'sem-info', rotulo: '', cor: '', cenarioId: '' }
   }
 
   /**
@@ -119,10 +118,6 @@ export class SalaMapaShapeUtil extends BaseBoxShapeUtil<SalaMapaShapeType> {
   }
 }
 
-/** Tamanho do badge de vínculo, no canto superior-direito da sala. */
-const BADGE_RAIO = 8
-const BADGE_MARGEM = 4
-
 function CorpoSala({ shape }: { shape: SalaMapaShapeType }) {
   const { w, h, estado, rotulo, cor, cenarioId } = shape.props
   // nome do cenário vinculado (se existir) é o bastante pro resolvedor puro decidir
@@ -138,70 +133,5 @@ function CorpoSala({ shape }: { shape: SalaMapaShapeType }) {
     !carregando,
   )
 
-  const aparencia = aparenciaDaSala(estado, cor || undefined)
-  const linhas = quebrarRotulo(rotulo, w, FONTE_ROTULO)
-  const alturaTexto = linhas.length * ENTRELINHA
-  const primeiraLinhaY = h / 2 - alturaTexto / 2 + ENTRELINHA / 2
-
-  const badgeCx = w - BADGE_MARGEM - BADGE_RAIO
-  const badgeCy = BADGE_MARGEM + BADGE_RAIO
-  const badgeCabe = w > (BADGE_RAIO + BADGE_MARGEM) * 2 && h > (BADGE_RAIO + BADGE_MARGEM) * 2
-
-  return (
-    <SVGContainer>
-      <rect
-        x={0}
-        y={0}
-        width={w}
-        height={h}
-        fill={aparencia.preenchimento}
-        stroke={aparencia.contorno}
-        strokeWidth={ESPESSURA_CONTORNO_SALA}
-      />
-      {linhas.map((linha, i) => (
-        <text
-          key={i}
-          x={w / 2}
-          y={primeiraLinhaY + i * ENTRELINHA}
-          fill={aparencia.texto}
-          fontSize={FONTE_ROTULO}
-          fontFamily="system-ui, sans-serif"
-          textAnchor="middle"
-          dominantBaseline="central"
-        >
-          {linha}
-        </text>
-      ))}
-      {/* `carregando` fica de fora: a sala tem vínculo, mas o cache de cenários ainda não
-          chegou. Desenhar o ⚠ aqui acusaria estrago que não houve, e o aviso vira ruído. Assim
-          que `carregarCenarios` termina, o zustand re-renderiza e o 🔗 aparece sozinho. */}
-      {(vinculo.estado === 'vinculado' || vinculo.estado === 'quebrado') && badgeCabe && (
-        <g>
-          <title>
-            {vinculo.estado === 'vinculado'
-              ? `Abre "${vinculo.nomeCenario}" (duplo clique)`
-              : 'Vínculo quebrado: o cenário foi excluído'}
-          </title>
-          <circle
-            cx={badgeCx}
-            cy={badgeCy}
-            r={BADGE_RAIO}
-            fill={vinculo.estado === 'vinculado' ? '#2f6f4f' : '#8a3b2f'}
-            stroke={aparencia.contorno}
-            strokeWidth={1}
-          />
-          <text
-            x={badgeCx}
-            y={badgeCy}
-            fontSize={BADGE_RAIO * 1.3}
-            textAnchor="middle"
-            dominantBaseline="central"
-            fill="#ffffff"
-          >
-            {vinculo.estado === 'vinculado' ? '🔗' : '⚠'}
-          </text>
-        </g>
-      )}
-    </SVGContainer>
-  )
+  return <SVGContainer>{desenharCorpoSala({ w, h, estado, rotulo, cor, vinculo })}</SVGContainer>
 }
