@@ -43,6 +43,16 @@ export class NotebookRepo {
     return proxima
   }
 
+  /**
+   * Roda `op` na MESMA fila de `salvarCorpo`/`moverPagina`, para quem mexe nos arquivos do
+   * caderno por fora desta classe (ex.: mover página para a lixeira, que é operação do
+   * `VaultRepo`, não deste repo). Sem isso, mover concorreria com um autosave em voo e um dos
+   * dois perderia — exatamente o motivo de existir a fila única, ver comentário da classe.
+   */
+  async naFilaExterna<T>(op: () => Promise<T>): Promise<T> {
+    return this.naFila(this.CHAVE_FILA, op)
+  }
+
   async inicializar(): Promise<void> {
     await this.fs.mkdirAll(this.raiz)
   }

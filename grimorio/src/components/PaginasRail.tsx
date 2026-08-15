@@ -126,9 +126,17 @@ function LinhaPagina({
 
   async function excluir(e: React.MouseEvent) {
     e.stopPropagation()
-    if (!(await ask(`Excluir "${node.titulo}" e as subpáginas?`, { title: 'Grimório', kind: 'warning' }))) return
+    if (!(await ask(`Mover "${node.titulo}" e as subpáginas para a lixeira?`, { title: 'Grimório', kind: 'warning' }))) return
+    const vaultRepo = useApp.getState().repo
+    if (!vaultRepo) return
     await comAviso(async () => {
-      await repo.excluirPagina(node.slug)
+      const slugs = [...coletarSlugs([node], new Set())]
+      // `cadernoDirRel` É o dir `.notas` (`dirNotasDoMapa(docCaminho)`); reverter dá o .json do doc dono
+      const docCaminho = cadernoDirRel.replace(/\.notas$/, '.json')
+      // na MESMA fila de salvarCorpo/moverPagina: sem isso, mover concorreria com um
+      // autosave em voo na página que está saindo
+      await repo.naFilaExterna(() =>
+        vaultRepo.moverPaginaParaLixeira({ docCaminho, dirNotas: cadernoDirRel, nome: node.titulo, slugs }))
       await recarregar()
     })
   }

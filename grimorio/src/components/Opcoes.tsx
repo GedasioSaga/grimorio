@@ -4,9 +4,10 @@ import { SeletorTema } from './SeletorTema'
 import { OpcoesCofre } from './OpcoesCofre'
 import { OpcoesIA } from './OpcoesIA'
 import { OpcoesNuvem } from './OpcoesNuvem'
+import { OpcoesLixeira } from './OpcoesLixeira'
 import { useMiniaturas } from '../state/miniaturas'
 
-export type AbaOpcoes = 'cofre' | 'nuvem' | 'aparencia' | 'ia'
+export type AbaOpcoes = 'cofre' | 'nuvem' | 'aparencia' | 'ia' | 'lixeira'
 
 interface OpcoesState {
   aberto: boolean
@@ -29,6 +30,7 @@ const ABAS: { id: AbaOpcoes; rotulo: string }[] = [
   { id: 'nuvem', rotulo: 'Nuvem' },
   { id: 'aparencia', rotulo: 'Aparência' },
   { id: 'ia', rotulo: 'IA' },
+  { id: 'lixeira', rotulo: 'Lixeira' },
 ]
 
 /** Liga/desliga a miniatura do retrato nas listas de itens, personagens e cenários. */
@@ -96,6 +98,7 @@ export function HostOpcoes() {
             </>
           )}
           {aba === 'ia' && <OpcoesIA />}
+          {aba === 'lixeira' && <OpcoesLixeira />}
         </div>
       </div>
     </div>

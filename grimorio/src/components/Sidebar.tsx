@@ -203,9 +203,9 @@ function CampanhaItem({ camp, aoMudar }: { camp: CampanhaNode; aoMudar: () => Pr
 
   async function excluir() {
     if (!repo) return
-    if (!(await ask(`Excluir a campanha "${camp.nome}" e todo o conteúdo dela?`, { title: 'Grimório', kind: 'warning' }))) return
+    if (!(await ask(`Mover a campanha "${camp.nome}" e todo o conteúdo dela para a lixeira?`, { title: 'Grimório', kind: 'warning' }))) return
     await comAvisoDeErro(async () => {
-      await repo.excluirCampanha(camp.slug)
+      await repo.moverCampanhaParaLixeira(camp.slug, camp.nome, camp.id || undefined)
       await aoMudar()
     })
   }
@@ -293,11 +293,11 @@ function ItemLinha({ item, tipo, tipoAbertura, aoMudar, aoEtiquetar }: {
   async function excluir(e: React.MouseEvent) {
     e.stopPropagation()
     if (!repo) return
-    if (!(await ask(`Excluir "${item.nome}"?`, { title: 'Grimório', kind: 'warning' }))) return
+    if (!(await ask(`Mover "${item.nome}" para a lixeira?`, { title: 'Grimório', kind: 'warning' }))) return
     await comAvisoDeErro(async () => {
-      // itens de mapa/caderno (canvas) podem ter uma pasta .notas irmã — remove junto
-      if (tipo === 'canvas') await repo.excluirItemComNotas(item.caminho)
-      else await repo.excluirItem(item.caminho)
+      // mapa é 'mapa'; sessão/canvas/escrita entram como 'canvas' (moverParaLixeira já leva a .notas irmã junto)
+      const tipoLixeira = tipo === 'canvas' ? (tipoAbertura === 'mapa' ? 'mapa' : 'canvas') : 'personagem'
+      await repo.moverParaLixeira(tipoLixeira, item.caminho, item.nome, item.id)
       await aoMudar()
     })
   }

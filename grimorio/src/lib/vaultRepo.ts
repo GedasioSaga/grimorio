@@ -15,6 +15,8 @@ import { normalizarFoco } from './focoRetrato'
 import { normalizarVinculos } from './vinculos'
 import { normalizarChat, type MensagemChat } from './chatIA'
 import { normalizarLayoutTeia, type LayoutSalvo } from './grafoLayoutPersistido'
+import { LixeiraExecutor } from './lixeiraExecutar'
+import type { EntradaLixeira, TipoLixeira } from './lixeira'
 
 function agora(): string {
   return new Date().toISOString()
@@ -147,11 +149,14 @@ export function normalizarItem(raw: Record<string, any>): Item {
  */
 export class VaultRepo {
   private filas = new Map<string, Promise<unknown>>()
+  private lixeira: LixeiraExecutor
 
   constructor(
     private raiz: string,
     private fs: FsBridge,
-  ) {}
+  ) {
+    this.lixeira = new LixeiraExecutor(raiz, fs)
+  }
 
   /** Serializa operações por caminho: nunca duas escritas simultâneas no mesmo arquivo. */
   private naFila<T>(caminho: string, op: () => Promise<T>): Promise<T> {
@@ -404,6 +409,75 @@ export class VaultRepo {
 
   async excluirCampanha(slug: string): Promise<void> {
     await this.fs.removePath(this.abs(`campanhas/${slug}`))
+  }
+
+  // ---------- lixeira ----------
+
+  /** Separa `dir/arquivo` num par (dir, nomeDoArquivo) — usado pelos `moverXParaLixeira`. */
+  private separarDir(caminho: string): { dir: string; nome: string } {
+    const nome = caminho.split('/').pop() ?? caminho
+    const dir = caminho.slice(0, caminho.length - nome.length - 1)
+    return { dir, nome }
+  }
+
+  /**
+   * Move um personagem, item, canvas ou mapa (arquivo `.json` + `.notas` irmã, se houver) para a
+   * lixeira, em vez de apagar. NÃO mexe em `vinculos.json`: a entidade continua existindo (só
+   * fora da árvore que a sidebar/busca/teia varrem), e é isso que faz o vínculo reaparecer
+   * sozinho se o item for restaurado — ver `esvaziarLixeira` para a limpeza definitiva.
+   */
+  async moverParaLixeira(tipo: TipoLixeira, caminho: string, nome: string, entidadeId?: string): Promise<string> {
+    const { dir, nome: nomeArquivo } = this.separarDir(caminho)
+    return this.lixeira.moverArquivoParaLixeira({
+      tipo, nome, origemDir: dir, nomeArquivo, caminhoArquivo: caminho, entidadeId,
+    })
+  }
+
+  /** Move o cenário (a PASTA inteira — notas e imagens dentro) para a lixeira. */
+  async moverCenarioParaLixeira(dir: string, nome: string, entidadeId?: string): Promise<string> {
+    const { dir: dirPai, nome: nomeArquivo } = this.separarDir(dir)
+    return this.lixeira.moverPastaParaLixeira({
+      tipo: 'cenario', nome, origemDirPai: dirPai, nomeArquivo, caminhoPasta: dir, entidadeId,
+    })
+  }
+
+  /** Move uma pasta organizacional (personagens/itens/cenários soltos) inteira para a lixeira. */
+  async moverPastaParaLixeira(dir: string, nome: string, entidadeId?: string): Promise<string> {
+    const { dir: dirPai, nome: nomeArquivo } = this.separarDir(dir)
+    return this.lixeira.moverPastaParaLixeira({
+      tipo: 'pasta', nome, origemDirPai: dirPai, nomeArquivo, caminhoPasta: dir, entidadeId,
+    })
+  }
+
+  /**
+   * Move a campanha (pasta `campanhas/<slug>` inteira — sessões, personagens, canvases, escrita)
+   * para a lixeira. Mesmo risco de "apagou por engano" que os outros tipos, só que em escala
+   * maior: uma campanha carrega dezenas de entidades, e é exatamente por isso que fica na
+   * dúvida-vira-lixeira em vez de exclusão direta.
+   */
+  async moverCampanhaParaLixeira(slug: string, nome: string, entidadeId?: string): Promise<string> {
+    return this.lixeira.moverPastaParaLixeira({
+      tipo: 'campanha', nome, origemDirPai: 'campanhas', nomeArquivo: slug, caminhoPasta: `campanhas/${slug}`, entidadeId,
+    })
+  }
+
+  /** Move uma página de caderno (e as descendentes, já coletadas por quem chama) para a lixeira. */
+  async moverPaginaParaLixeira(params: { docCaminho: string; dirNotas: string; nome: string; slugs: string[] }): Promise<string> {
+    return this.lixeira.moverPaginasParaLixeira(params)
+  }
+
+  async listarLixeira(): Promise<EntradaLixeira[]> {
+    return this.lixeira.listar()
+  }
+
+  /** Restaura ao lugar de origem (recriando-o se preciso); devolve a entrada restaurada. */
+  async restaurarDaLixeira(id: string): Promise<EntradaLixeira> {
+    return this.lixeira.restaurar(id)
+  }
+
+  /** Apaga tudo da lixeira, de vez. Devolve os `entidadeId` das entradas removidas, para quem chama limpar `vinculos.json`. */
+  async esvaziarLixeira(): Promise<string[]> {
+    return this.lixeira.esvaziar()
   }
 
   // ---------- cenários ----------

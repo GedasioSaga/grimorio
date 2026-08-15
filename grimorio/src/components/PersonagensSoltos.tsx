@@ -157,11 +157,12 @@ function PastaLinha({ pasta, nivel, aoMudar }: { pasta: PastaNode; nivel: number
   async function excluir(e: React.MouseEvent) {
     e.stopPropagation()
     if (!repo) return
-    if (!(await ask(`Excluir a pasta "${pasta.nome}" e tudo dentro dela?`, { title: 'Grimório', kind: 'warning' }))) return
+    if (!(await ask(`Mover a pasta "${pasta.nome}" e tudo dentro dela para a lixeira?`, { title: 'Grimório', kind: 'warning' }))) return
     await comAviso(async () => {
-      await repo.excluirItem(pasta.caminho)
-      // sem isto o vínculo de campanha da pasta viraria órfão em vinculos.json
-      if (pasta.id) useApp.getState().removerVinculosDe(pasta.id)
+      // pasta legada sem id: nasce agora, pra a entrada da lixeira saber qual vínculo limpar
+      // se um dia for esvaziada (mover NUNCA mexe em vinculos.json — ver moverParaLixeira)
+      const id = pasta.id ?? (await repo.garantirIdDePasta(pasta.caminho))
+      await repo.moverPastaParaLixeira(pasta.caminho, pasta.nome, id)
       await aoMudar()
     })
   }
@@ -232,8 +233,8 @@ function PersonagemLinha({ item, nivel, aoMudar, resultado }: {
   async function excluir(e: React.MouseEvent) {
     e.stopPropagation()
     if (!repo) return
-    if (!(await ask(`Excluir "${item.nome}"?`, { title: 'Grimório', kind: 'warning' }))) return
-    await comAviso(async () => { await repo.excluirItem(item.caminho); await aoMudar() })
+    if (!(await ask(`Mover "${item.nome}" para a lixeira?`, { title: 'Grimório', kind: 'warning' }))) return
+    await comAviso(async () => { await repo.moverParaLixeira('personagem', item.caminho, item.nome, id); await aoMudar() })
   }
 
   return (

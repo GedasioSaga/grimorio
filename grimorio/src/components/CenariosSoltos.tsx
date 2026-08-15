@@ -178,11 +178,12 @@ function PastaCenarioLinha({ pasta, nivel, aoMudar }: { pasta: PastaCenarioNode;
   async function excluir(e: React.MouseEvent) {
     e.stopPropagation()
     if (!repo) return
-    if (!(await ask(`Excluir a pasta "${pasta.nome}" e tudo dentro dela?`, { title: 'Grimório', kind: 'warning' }))) return
+    if (!(await ask(`Mover a pasta "${pasta.nome}" e tudo dentro dela para a lixeira?`, { title: 'Grimório', kind: 'warning' }))) return
     await comAviso(async () => {
-      await repo.excluirItem(pasta.caminho)
-      // sem isto o vínculo de campanha da pasta viraria órfão em vinculos.json
-      if (pasta.id) useApp.getState().removerVinculosDe(pasta.id)
+      // pasta legada sem id: nasce agora, pra a entrada da lixeira saber qual vínculo limpar
+      // se um dia for esvaziada (mover NUNCA mexe em vinculos.json — ver moverParaLixeira)
+      const id = pasta.id ?? (await repo.garantirIdDePasta(pasta.caminho))
+      await repo.moverPastaParaLixeira(pasta.caminho, pasta.nome, id)
       await aoMudar()
     })
   }
@@ -268,8 +269,11 @@ function CenarioLinha({ node, nivel, aoMudar, resultado }: {
     if (!repo) return
     const qtd = contarDescendentes(node)
     const aviso = qtd > 0 ? ` e ${qtd} sub-cenário(s) dentro dele` : ''
-    if (!(await ask(`Excluir "${node.nome}"${aviso}?`, { title: 'Grimório', kind: 'warning' }))) return
-    await comAviso(async () => { await repo.excluirCenario(node.caminho); await aoMudar() })
+    if (!(await ask(`Mover "${node.nome}"${aviso} para a lixeira?`, { title: 'Grimório', kind: 'warning' }))) return
+    await comAviso(async () => {
+      await repo.moverCenarioParaLixeira(node.caminho, node.nome, node.id || undefined)
+      await aoMudar()
+    })
   }
 
   return (
