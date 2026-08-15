@@ -11,6 +11,7 @@ import {
 } from 'tldraw'
 import { DEGRAUS_ESCADA, ELEMENTOS_PALETA, type ElementoPaleta } from '../lib/paletaMapa'
 import { GavetaPecas } from './GavetaPecas'
+import { ComandosMapa } from './ComandosMapa'
 import { PORTA_ESPESSURA_PADRAO, PORTA_LARGURA_PADRAO } from './PortaShape'
 import { proximoNumero } from '../lib/portaMapa'
 import { definicaoDoSimbolo, type SimboloId } from '../lib/simbolosMapa'
@@ -18,6 +19,8 @@ import { tamanhoDoSimbolo } from './SimboloMapaShape'
 
 /** Style props do tldraw indexados pelo mesmo nome usado em `ElementoPaleta.estilos`. */
 const STYLE_PROPS_POR_NOME: Record<string, StyleProp<string>> = {
+  // `geo` entra aqui para o "Converter em" poder trocar a forma junto com a pintura
+  geo: GeoShapeGeoStyle,
   color: DefaultColorStyle,
   fill: DefaultFillStyle,
   dash: DefaultDashStyle,
@@ -353,6 +356,8 @@ export function MapaToolbar() {
         </button>
         <div className="mapa-toolbar-divisor" aria-hidden="true" />
         <GavetaPecas pecaAtivaId={elementoPaletaAtivo?.id} aoEscolher={aplicarElementoPaleta} />
+        <div className="mapa-toolbar-divisor" aria-hidden="true" />
+        <ComandosMapa stylePropsPorNome={STYLE_PROPS_POR_NOME} />
       </div>
     </div>
   )
