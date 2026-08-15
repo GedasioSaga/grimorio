@@ -305,6 +305,11 @@ button:hover { border-color: var(--dourado); color: var(--dourado-claro); }
    estão visíveis. Topo central é da `.canvas-toolbar` e o rodapé é da MapaToolbar. */
 .painel-propriedades {
   position: absolute; top: 96px; left: 28px; z-index: 300;
+  /* mesmo motivo do `bottom` do painel de camadas: com nome + estado + cor + X/Y/L/A o
+     painel cresce e alcançaria o rodapé, cobrindo a toolbar. Aqui o limite é a altura
+     máxima, com rolagem interna, porque este painel encolhe conforme o que está
+     selecionado e não deve reservar espaço que não usa. */
+  max-height: calc(100% - 200px); overflow-y: auto;
   width: 200px; display: flex; flex-direction: column;
   background: var(--fundo-painel); border: 1px solid var(--borda); border-radius: 6px;
   padding: 8px; gap: 8px;
@@ -362,9 +367,16 @@ button:hover { border-color: var(--dourado); color: var(--dourado-claro); }
   padding: 6px 8px; font-size: 15px;
 }
 
-/* painel de camadas: mesma coluna esquerda do painel de propriedades (ver acima) */
+/* painel de camadas: mesma coluna esquerda do painel de propriedades (ver acima).
+
+   O `bottom` PRECISA folgar a faixa do rodapé: a toolbar do mapa é centralizada e cresce
+   para os lados, então em janela estreita ela alcança a coluna esquerda — e o painel,
+   sendo z-index 300 e posterior no DOM, cobria a toolbar inteira. Foi assim que a barra
+   de ferramentas "sumiu" para o usuário: ela estava lá, atrás do painel. 104px cobrem a
+   toolbar (~44px + margem) e ainda a barra contextual de alinhar, que aparece acima dela
+   quando há 2+ formas selecionadas. */
 .painel-camadas {
-  position: absolute; top: 96px; left: 28px; bottom: 8px; z-index: 300;
+  position: absolute; top: 96px; left: 28px; bottom: 104px; z-index: 300;
   width: 200px; display: flex; flex-direction: column;
   background: var(--fundo-painel); border: 1px solid var(--borda); border-radius: 6px;
   padding: 8px; gap: 6px; overflow: hidden;
