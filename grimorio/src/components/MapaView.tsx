@@ -334,8 +334,22 @@ export function MapaView({ caminho, nome }: { caminho: string; nome: string }) {
           registrarEditor(editor)
           editorRef.current = editor
           editor.user.updateUserPreferences({ colorScheme: 'dark' })
-          // grade ligada por padrão: é a régua do mapa (1 quadrado = QUADRADO_PX)
-          editor.updateInstanceState({ isGridMode: true })
+          /**
+           * Grade DESLIGADA ao abrir o mapa (o ⊞ da toolbar liga quando o usuário
+           * quiser). Ligada, ela não é só um fundo pontilhado: o tldraw obriga toda
+           * forma a cair em múltiplo de `gridSize` ao mover e ao redimensionar
+           * (node_modules/tldraw/src/lib/tools/SelectTool/childStates/Translating.ts:546
+           * `averageSnappedPoint.snapToGrid(gridSize)` e Resizing.ts:279), o que
+           * impede posicionar qualquer coisa ENTRE dois pontos — reclamação direta do
+           * usuário. Não dá para separar as duas coisas sem reescrever o SelectTool:
+           * desenho da grade e encaixe na grade são a mesma flag no core do tldraw.
+           *
+           * O `false` é explícito, e não apenas a ausência do `true`, porque
+           * `isGridMode` viaja no snapshot de sessão gravado no arquivo do mapa
+           * (@tldraw/editor/src/lib/config/TLSessionStateSnapshot.ts:105): mapas
+           * criados antes desta mudança já têm `true` salvo e continuariam travados.
+           */
+          editor.updateInstanceState({ isGridMode: false })
           editor.updateDocumentSettings({ gridSize: QUADRADO_PX })
           const cancelarAtalhos = registrarAtalhos(editor, {
             aoCopiar() {
