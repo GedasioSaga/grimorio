@@ -32,6 +32,17 @@ export const LINHA_COMPRIMENTO_PADRAO = 128
 const ESPESSURA = 1.2
 
 /**
+ * LEGADO — não está mais na paleta, e nada cria shapes deste tipo.
+ *
+ * Continua REGISTRADO nas duas telas de propósito: mapas salvos enquanto esta peça
+ * existiu têm shapes `linha-mapa`, e tldraw recusa o documento inteiro se encontrar um
+ * tipo que não conhece. Apagar este arquivo quebraria esses arquivos.
+ *
+ * A divisória virou a ferramenta de linha nativa do tldraw: esta versão imitava uma linha
+ * sem ter o comportamento dela, e esticar saía imprevisível. Em vez de reimplementar
+ * alças, pontos e edição, o contorno da SALA passou a usar a cor e a espessura que a
+ * ferramenta nativa produz (ver CONTORNO_SALA em lib/salaMapa.ts).
+ *
  * Divisória do mapa: uma linha reta com EXATAMENTE o traço do contorno da sala.
  *
  * Por que não a ferramenta `line` do tldraw pré-estilada, que era a versão anterior: a

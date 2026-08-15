@@ -26,10 +26,21 @@ export interface AparenciaSala {
 }
 
 /**
- * Contorno da sala. Exportado porque a Divisória desenha a mesma linha: se a cor fosse
- * repetida à mão lá, um ajuste de tom aqui faria as duas pararem de combinar em silêncio.
+ * Contorno da sala — deliberadamente IGUAL ao traço que a ferramenta de linha do tldraw
+ * produz com `color: grey, size: s` no tema escuro: `#9fa8b2` e 2px de espessura
+ * (conferido em node_modules/@tldraw/tlschema/src/styles/TLColorStyle.ts, bloco
+ * `darkMode`, e em node_modules/tldraw/src/lib/shapes/shared/default-shape-constants.ts:13-18).
+ *
+ * A divisória interna precisa ser indistinguível do contorno da sala. A primeira
+ * tentativa foi o caminho inverso — um shape de linha nosso com a cor exata da sala — e
+ * saiu ruim de usar: sem o comportamento de linha do tldraw, esticar era imprevisível
+ * ("do nada ela estica muito"). Casar a NOSSA cor com a da ferramenta nativa dá o mesmo
+ * resultado visual e devolve ao usuário uma linha de verdade, com alças e pontos que já
+ * funcionam.
  */
-export const CONTORNO_SALA = '#b9c4c9'
+export const CONTORNO_SALA = '#9fa8b2'
+/** Espessura do contorno, igual ao `size: s` do tldraw. */
+export const ESPESSURA_CONTORNO_SALA = 2
 const CONTORNO = CONTORNO_SALA
 
 const APARENCIAS: Record<EstadoSala, Omit<AparenciaSala, 'estado'>> = {

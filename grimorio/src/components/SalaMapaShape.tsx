@@ -1,5 +1,5 @@
 import { BaseBoxShapeUtil, SVGContainer, T, type RecordProps, type TLShape } from 'tldraw'
-import { aparenciaDaSala, quebrarRotulo } from '../lib/salaMapa'
+import { ESPESSURA_CONTORNO_SALA, aparenciaDaSala, quebrarRotulo } from '../lib/salaMapa'
 
 declare module '@tldraw/tlschema' {
   interface TLGlobalShapePropsMap {
@@ -69,7 +69,7 @@ export class SalaMapaShapeUtil extends BaseBoxShapeUtil<SalaMapaShapeType> {
           height={h}
           fill={aparencia.preenchimento}
           stroke={aparencia.contorno}
-          strokeWidth={1.2}
+          strokeWidth={ESPESSURA_CONTORNO_SALA}
         />
         {linhas.map((linha, i) => (
           <text

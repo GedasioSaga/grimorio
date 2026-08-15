@@ -95,15 +95,16 @@ export const ELEMENTOS_PALETA: ElementoPaleta[] = [
   },
   {
     /**
-     * Divisória: shape próprio (`LinhaMapaShape`) com EXATAMENTE o traço do contorno da
-     * sala. A ferramenta `line` do tldraw pré-estilada chegava perto, mas a paleta dele é
-     * fechada e a cor mais próxima ainda destoava lado a lado.
+     * Divisória: a ferramenta de linha do tldraw, pré-estilada. O contorno da sala é que
+     * foi ajustado para esta cor e espessura (ver CONTORNO_SALA em salaMapa.ts), e não o
+     * contrário — assim o usuário desenha com uma linha de verdade, com alças e pontos,
+     * em vez de um shape nosso que só imitava uma.
      */
     id: 'divisoria',
     rotulo: 'Divisória',
     glifo: '─',
-    tipo: 'acao',
-    estilos: {},
+    tipo: 'linha',
+    estilos: { color: 'grey', dash: 'solid', size: 's' },
   },
   {
     id: 'janela',
@@ -241,7 +242,6 @@ export function pecaDaFormaCriada(
   // shapes próprios: o tipo já diz o que a peça é, sem comparar estilo
   if (forma.type === 'porta-mapa') return 'porta'
   if (forma.type === 'sala-mapa') return 'sala'
-  if (forma.type === 'linha-mapa') return 'divisoria'
 
   // símbolos desenhados carregam o próprio nome na prop `simbolo`
   if (forma.type === 'simbolo-mapa') {
