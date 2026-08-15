@@ -30,6 +30,11 @@ describe('componentes do Mapa carregam e exportam função', () => {
     expect(typeof ComandosMapa).toBe('function')
   })
 
+  it('AcoesMapaIA', async () => {
+    const { AcoesMapaIA } = await import('../components/AcoesMapaIA')
+    expect(typeof AcoesMapaIA).toBe('function')
+  })
+
   it('ControleZoom', async () => {
     const { ControleZoom } = await import('../components/ControleZoom')
     expect(typeof ControleZoom).toBe('function')

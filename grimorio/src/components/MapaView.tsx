@@ -40,6 +40,7 @@ import { SimboloMapaShapeUtil } from './SimboloMapaShape'
 import { SalaMapaShapeUtil } from './SalaMapaShape'
 import { LinhaMapaShapeUtil } from './LinhaMapaShape'
 import { pecaDaFormaCriada } from '../lib/paletaMapa'
+import { retirarPlantaPendente } from '../lib/mapaIAPendente'
 
 // mesmos card-shapes do canvas: mapa aceita drop de personagem/cenário/item
 const shapeUtilsCustom = [CharacterCardShapeUtil, CenarioCardShapeUtil, ItemCardShapeUtil, PortaShapeUtil, SimboloMapaShapeUtil, SalaMapaShapeUtil, LinhaMapaShapeUtil]
@@ -425,6 +426,20 @@ export function MapaView({ caminho, nome }: { caminho: string; nome: string }) {
               isLocked: travadaPelaCamada ? true : shape.isLocked,
             }
           })
+          /**
+           * Planta de IA pendente (mapa criado pela "IA monta o mapa" — ver
+           * `AcoesMapaIA.tsx` e `lib/mapaIAPendente.ts`): o mapa nasceu vazio nesta mesma
+           * navegação, então não há nada pra sobrepor — insere direto, sem procurar área
+           * livre, e seleciona tudo pelo mesmo motivo de qualquer criação em lote.
+           */
+          const pendente = retirarPlantaPendente(caminho)
+          if (pendente && pendente.length > 0) {
+            editor.run(() => {
+              editor.createShapes(pendente)
+              editor.setSelectedShapes(pendente.map((f) => f.id!))
+            })
+          }
+
           return () => {
             desregistrarEditor(editor)
             cancelarAtalhos()

@@ -3,7 +3,7 @@ import { useEditor, useValue, type TLShapeId } from 'tldraw'
 import { QUADRADO_PX, emQuadrados, parseQuadrados } from '../lib/quadrados'
 import { CORES_SALA, ESTADOS_SALA, aparenciaDaSala } from '../lib/salaMapa'
 import { definicaoDoSimbolo } from '../lib/simbolosMapa'
-import { ESTADOS_PORTA, aparenciaDaPorta } from './PortaShape'
+import { ESTADOS_PORTA, aparenciaDaPorta } from '../lib/portaMapa'
 
 /** Snapshot reativo da seleção que o painel precisa para se desenhar. */
 export type SelecaoPropriedades =

@@ -1291,3 +1291,37 @@ button:hover { border-color: var(--dourado); color: var(--dourado-claro); }
   flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   color: var(--texto-fraco); font-size: 11px; max-width: 30%;
 }
+/* arquivo corrompido: mesmo tom de erro da sidebar (.item-erro), pra quem digitou o nome
+   entender por que Enter não abriu nada em vez de achar que a busca quebrou */
+.busca-global-item.quebrado { color: var(--erro); }
+.busca-global-item.quebrado .busca-global-tipo { border-color: var(--erro); color: var(--erro); }
+/* aviso de resultado escondido pelo filtro de campanha — mesmo tom discreto do
+   .filtro-ocultos da sidebar, mas não-clicável: aqui não há "mostrar todos" pra oferecer */
+.busca-global-rodape {
+  padding: 6px 16px; border-top: 1px solid var(--borda);
+  color: var(--texto-fraco); font-size: 11px; text-align: center;
+}
+
+/* "IA monta o mapa" (AcoesMapaIA.tsx) — mesmo vocabulário visual de .dialogo-caixa/.acoes-ia */
+.mapa-ia-caixa { width: 420px; max-width: 90vw; gap: 10px; }
+.mapa-ia-descricao {
+  min-height: 84px; resize: vertical; background: var(--fundo-elevado); color: var(--texto);
+  border: 1px solid var(--borda); border-radius: 6px; padding: 8px 10px; font: inherit;
+}
+.mapa-ia-imagem { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.mapa-ia-imagem-chip {
+  display: inline-flex; align-items: center; gap: 6px; font-size: 12px;
+  color: var(--texto-fraco); border: 1px solid var(--borda); border-radius: 12px; padding: 2px 8px;
+}
+.mapa-ia-imagem-chip button { border: none; background: transparent; color: var(--texto-fraco); padding: 0; cursor: pointer; }
+.mapa-ia-destino { display: flex; gap: 16px; font-size: 13px; }
+.mapa-ia-destino label { display: flex; align-items: center; gap: 6px; cursor: pointer; }
+.mapa-ia-erro { color: var(--erro); font-size: 12px; }
+/* resumo pós-inserção: mesma leitura de "confirmação passageira" do .canvas-copia-ok,
+   mas clicável para dispensar antes do tempo — mensagem pode ter aviso de sobreposição
+   e o mestre quer ler com calma. */
+.mapa-ia-resumo {
+  position: fixed; top: 8px; left: 50%; transform: translateX(-50%); z-index: 250;
+  background: var(--fundo-painel); border: 1px solid var(--dourado); border-radius: 8px;
+  padding: 8px 14px; font-size: 13px; color: var(--texto); cursor: pointer; max-width: 480px;
+}

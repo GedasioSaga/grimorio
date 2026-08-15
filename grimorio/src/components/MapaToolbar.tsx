@@ -12,7 +12,8 @@ import {
 import { DEGRAUS_ESCADA, ELEMENTOS_PALETA, type ElementoPaleta } from '../lib/paletaMapa'
 import { GavetaPecas } from './GavetaPecas'
 import { ComandosMapa } from './ComandosMapa'
-import { PORTA_ESPESSURA_PADRAO, PORTA_LARGURA_PADRAO } from './PortaShape'
+import { AcoesMapaIA } from './AcoesMapaIA'
+import { PORTA_ESPESSURA_PADRAO, PORTA_LARGURA_PADRAO } from '../lib/portaMapa'
 import { SALA_ALTURA_PADRAO, SALA_LARGURA_PADRAO } from './SalaMapaShape'
 import { proximoNumero } from '../lib/portaMapa'
 import { definicaoDoSimbolo, type SimboloId } from '../lib/simbolosMapa'
@@ -382,6 +383,7 @@ export function MapaToolbar() {
         <GavetaPecas pecaAtivaId={elementoPaletaAtivo?.id} aoEscolher={aplicarElementoPaleta} />
         <div className="mapa-toolbar-divisor" aria-hidden="true" />
         <ComandosMapa stylePropsPorNome={STYLE_PROPS_POR_NOME} />
+        <AcoesMapaIA />
       </div>
     </div>
   )

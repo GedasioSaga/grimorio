@@ -1,33 +1,6 @@
 import { BaseBoxShapeUtil, SVGContainer, T, type RecordProps, type TLShape } from 'tldraw'
-
-/** Vão padrão: uma barra curta e fina, atravessada na parede. */
-export const PORTA_LARGURA_PADRAO = 28
-export const PORTA_ESPESSURA_PADRAO = 8
-
-export type EstadoPorta = 'livre' | 'trancada' | 'atencao'
-
-interface AparenciaPorta {
-  rotulo: string
-  cor: string
-}
-
-/**
- * Cores tiradas das referências do usuário (mapas do Resident Evil 2): azul é passagem
- * livre, vermelho é trancada. O terceiro estado cobre a porta que precisa de item ou
- * ação — nas referências ela aparece destacada em tom quente.
- */
-const APARENCIAS: Record<EstadoPorta, AparenciaPorta> = {
-  livre: { rotulo: 'Livre', cor: '#3a6ea5' },
-  trancada: { rotulo: 'Trancada', cor: '#b03a3a' },
-  atencao: { rotulo: 'Precisa de algo', cor: '#c9922e' },
-}
-
-export const ESTADOS_PORTA: EstadoPorta[] = ['livre', 'trancada', 'atencao']
-
-export function aparenciaDaPorta(estado: string): AparenciaPorta & { estado: EstadoPorta } {
-  const chave = (ESTADOS_PORTA as string[]).includes(estado) ? (estado as EstadoPorta) : 'livre'
-  return { estado: chave, ...APARENCIAS[chave] }
-}
+// estado e cor da porta vivem na lib pura, como os da sala — ver o cabeçalho de portaMapa.ts
+import { PORTA_ESPESSURA_PADRAO, PORTA_LARGURA_PADRAO, aparenciaDaPorta } from '../lib/portaMapa'
 
 declare module '@tldraw/tlschema' {
   interface TLGlobalShapePropsMap {
