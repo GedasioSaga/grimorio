@@ -9,10 +9,18 @@ import { markdownParaHtml } from '../lib/markdownHtml'
 
 export interface AcaoIA {
   rotulo: string
-  prompt: string
+  /**
+   * Texto fixo, ou função que recebe se há imagem anexada. A forma de função existe para as
+   * descrições de entidade: a instrução muda de verdade entre ter e não ter retrato — com
+   * imagem, deduzir é erro; sem imagem, deduzir é o trabalho (ver `promptsIA.ts`).
+   */
+  prompt: string | ((temImagem: boolean) => string)
   abaDestino: string
   rotuloDestino?: string
+  /** Anexa retrato + galeria e FALHA se a entidade não tiver imagem. */
   comImagem?: boolean
+  /** Anexa retrato + galeria quando existirem, mas roda igual sem nenhuma imagem. */
+  imagemPreferida?: boolean
 }
 
 export type ModoInserir = 'substituir' | 'adicionar'
@@ -92,8 +100,9 @@ export function AcoesIA({
     rotulo: string
     destino: string
     rotuloDestino: string
-    prompt: string
+    prompt: string | ((temImagem: boolean) => string)
     comImagem?: boolean
+    imagemPreferida?: boolean
     anexarImagem?: boolean
   }) {
     setMenuAberto(false)
@@ -104,11 +113,16 @@ export function AcoesIA({
       const dados =
         dadosBase + (abaEhTexto && textoAtual ? `\nTexto atual da seção "${rotuloAbaAtual}":\n${textoAtual}` : '')
       const systemFull = contexto ? `${system}\n\n# Contexto da campanha\n${contexto}` : system
-      // comImagem (ação dedicada) = retrato + galeria e exige imagem; anexarImagem (campo livre) = só retrato, opcional
-      const querImagem = opts.comImagem || opts.anexarImagem
-      const imagens = querImagem && imagensParaIA ? await imagensParaIA(!!opts.comImagem) : []
+      // comImagem = retrato + galeria e EXIGE imagem; imagemPreferida = retrato + galeria se
+      // houver, roda igual sem; anexarImagem (campo livre) = só retrato, opcional
+      const comGaleria = !!(opts.comImagem || opts.imagemPreferida)
+      const querImagem = comGaleria || opts.anexarImagem
+      const imagens = querImagem && imagensParaIA ? await imagensParaIA(comGaleria) : []
       if (opts.comImagem && imagens.length === 0) throw new Error('Esta entidade não tem imagem.')
-      const instrucao = sufixoPrompt ? `${opts.prompt}\n\n${sufixoPrompt}` : opts.prompt
+      // o prompt só é resolvido aqui porque as descrições mudam de instrução conforme a
+      // imagem existir ou não — decidir antes daria a instrução errada metade das vezes
+      const textoPrompt = typeof opts.prompt === 'function' ? opts.prompt(imagens.length > 0) : opts.prompt
+      const instrucao = sufixoPrompt ? `${textoPrompt}\n\n${sufixoPrompt}` : textoPrompt
 
       const texto = await gerarConteudo({
         system: systemFull,
@@ -168,7 +182,7 @@ export function AcoesIA({
             <button
               key={a.rotulo}
               onClick={() =>
-                void executar({ rotulo: a.rotulo, destino: a.abaDestino, rotuloDestino: a.rotuloDestino ?? a.abaDestino, prompt: a.prompt, comImagem: a.comImagem })
+                void executar({ rotulo: a.rotulo, destino: a.abaDestino, rotuloDestino: a.rotuloDestino ?? a.abaDestino, prompt: a.prompt, comImagem: a.comImagem, imagemPreferida: a.imagemPreferida })
               }
             >
               {a.rotulo}

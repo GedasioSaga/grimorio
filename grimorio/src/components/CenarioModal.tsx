@@ -14,7 +14,7 @@ import { contextoDeEntidade } from '../lib/contextoIA'
 import { htmlParaTexto } from '../lib/htmlTexto'
 import { htmlParaMarkdown, markdownParaHtml } from '../lib/markdownHtml'
 import { carregarImagensIA } from '../lib/imagensIA'
-import { promptDescreverImagemTopicos, SYSTEM_ESCRITOR } from '../lib/promptsIA'
+import { promptDescreverCenarioCorrido, promptDescreverCenarioTopicos, SYSTEM_ESCRITOR } from '../lib/promptsIA'
 import { BarraVersoes } from './BarraVersoes'
 import { EnquadrarRetrato } from './EnquadrarRetrato'
 import { posicaoCss } from '../lib/focoRetrato'
@@ -52,11 +52,18 @@ const ACOES_IA_CENARIO: AcaoIA[] = [
     comImagem: true,
   },
   {
-    rotulo: 'Descrever imagem em tópicos',
-    prompt: promptDescreverImagemTopicos(),
+    rotulo: 'Descrever cenário em tópicos',
+    prompt: (temImagem) => promptDescreverCenarioTopicos(temImagem ? 'imagem' : 'ficha'),
     abaDestino: 'descricao',
     rotuloDestino: 'Descrição',
-    comImagem: true,
+    imagemPreferida: true,
+  },
+  {
+    rotulo: 'Descrever cenário corrido',
+    prompt: (temImagem) => promptDescreverCenarioCorrido(temImagem ? 'imagem' : 'ficha'),
+    abaDestino: 'descricao',
+    rotuloDestino: 'Descrição',
+    imagemPreferida: true,
   },
 ]
 

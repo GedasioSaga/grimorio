@@ -11,7 +11,7 @@ import { contextoDeEntidade } from '../lib/contextoIA'
 import { htmlParaTexto } from '../lib/htmlTexto'
 import { htmlParaMarkdown, markdownParaHtml } from '../lib/markdownHtml'
 import { carregarImagensIA } from '../lib/imagensIA'
-import { promptDescreverImagemTopicos, SYSTEM_ESCRITOR } from '../lib/promptsIA'
+import { promptDescreverItem, SYSTEM_ESCRITOR } from '../lib/promptsIA'
 import { EnquadrarRetrato } from './EnquadrarRetrato'
 import { posicaoCss } from '../lib/focoRetrato'
 
@@ -45,11 +45,11 @@ const ACOES_IA_ITEM: AcaoIA[] = [
     rotuloDestino: 'Descrição',
   },
   {
-    rotulo: 'Descrever imagem em tópicos',
-    prompt: promptDescreverImagemTopicos(),
+    rotulo: 'Descrever item',
+    prompt: (temImagem) => promptDescreverItem(temImagem ? 'imagem' : 'ficha'),
     abaDestino: 'descricao',
     rotuloDestino: 'Descrição',
-    comImagem: true,
+    imagemPreferida: true,
   },
 ]
 
