@@ -20,6 +20,7 @@
 
 export type SimboloId =
   | 'janela' | 'secreta' | 'armadilha' | 'marcador' | 'mesa' | 'cama' | 'bau' | 'andar'
+  | 'divisoria'
   // itens largados pelo mapa, como as referências fazem: o mestre bate o olho e sabe o
   // que tem naquela sala sem abrir anotação nenhuma
   | 'pocao' | 'erva' | 'chave' | 'documento' | 'moeda'
@@ -56,6 +57,9 @@ export const SIMBOLOS_MAPA: DefinicaoSimbolo[] = [
   { id: 'mesa', rotulo: 'Mesa', glifo: '▬', largura: 48, altura: 28 },
   { id: 'cama', rotulo: 'Cama', glifo: '▯', largura: 40, altura: 56 },
   { id: 'bau', rotulo: 'Baú', glifo: '▭', largura: 32, altura: 24 },
+  // divisória interna: o mesmo traço fino do contorno da sala, para subdividir um cômodo
+  // sem que a linha destoe. Caixa mais alta que o traço, para dar o que clicar.
+  { id: 'divisoria', rotulo: 'Divisória', glifo: '─', largura: 128, altura: 8 },
   // rótulo do andar: nas referências é um texto branco grande ao lado do bloco de salas
   // ("1F", "2F", "Upper"), sem moldura. Quem separa os andares de verdade são as camadas.
   { id: 'andar', rotulo: 'Rótulo de andar', glifo: 'ⁿF', largura: 96, altura: 44, textoLivre: true },

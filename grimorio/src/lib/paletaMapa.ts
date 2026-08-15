@@ -41,7 +41,7 @@ import { ITENS_MAPA, type SimboloId } from './simbolosMapa'
 export type PecaId =
   | 'sala' | 'parede' | 'porta' | 'janela' | 'escada'
   | 'secreta' | 'armadilha' | 'marcador' | 'rotulo'
-  | 'mesa' | 'cama' | 'bau' | 'andar'
+  | 'mesa' | 'cama' | 'bau' | 'andar' | 'divisoria'
   // itens: o id da peça é o mesmo do símbolo, porque um item É o seu desenho
   | 'pocao' | 'erva' | 'chave' | 'documento' | 'moeda'
   | 'espada' | 'municao' | 'livro' | 'tocha' | 'comida'
@@ -90,6 +90,14 @@ export const ELEMENTOS_PALETA: ElementoPaleta[] = [
     rotulo: 'Porta',
     glifo: '🚪',
     tipo: 'acao',
+    estilos: {},
+  },
+  {
+    id: 'divisoria',
+    rotulo: 'Divisória',
+    glifo: '─',
+    tipo: 'acao',
+    simbolo: 'divisoria',
     estilos: {},
   },
   {

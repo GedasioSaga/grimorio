@@ -25,7 +25,12 @@ export interface AparenciaSala {
   texto: string
 }
 
-const CONTORNO = '#b9c4c9'
+/**
+ * Contorno da sala. Exportado porque a Divisória desenha a mesma linha: se a cor fosse
+ * repetida à mão lá, um ajuste de tom aqui faria as duas pararem de combinar em silêncio.
+ */
+export const CONTORNO_SALA = '#b9c4c9'
+const CONTORNO = CONTORNO_SALA
 
 const APARENCIAS: Record<EstadoSala, Omit<AparenciaSala, 'estado'>> = {
   pendente: { rotulo: 'Ainda tem coisa', preenchimento: '#7d3b3b', contorno: CONTORNO, texto: '#ffffff' },
