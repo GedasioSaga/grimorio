@@ -23,6 +23,8 @@ import { ESCADA_LARGURA_PADRAO, ESCADA_ALTURA_PADRAO } from '../lib/escadaMapa'
 import { desenharMuralha } from '../lib/desenhoMuralha'
 import { desenharTorre } from '../lib/desenhoTorre'
 import { TORRE_DIAMETRO_PADRAO } from '../lib/torreMapa'
+import { parsearPlantaIA, plantaParaEspecificacoes, type EspecificacaoFormaIA } from '../lib/plantaMapaIA'
+import { QUADRADO_PX, quadradosParaPx } from '../lib/quadrados'
 
 /**
  * Gera `.amostra/mapa.html`: catálogo de peças + um mapa de exemplo, para fotografar com
@@ -439,9 +441,179 @@ function gerarMapaExemplo(): string {
   return `<div class="mapa-exemplo" style="width:${larguraContainer}px;height:${alturaContainer}px;">${muros.join('\n')}\n${conteudo}</div>`
 }
 
+/**
+ * Resposta que uma IA BOA devolveria para "castelo com muralha, pátio, salão principal,
+ * cozinha, masmorra e torre" — escrita à mão (sem chave de Gemini disponível neste
+ * ambiente, ver relatório final) para julgar se o FORMATO consegue expressar um mapa
+ * decente. Passa pelo MESMO `parsearPlantaIA` que a resposta de verdade passaria.
+ *
+ * Massa contínua de propósito: Salão/Cozinha compartilham a parede x=8, Salão/Pátio
+ * compartilham y=6, Cozinha/Capela compartilham x=12 — nenhuma borda com vão. A Masmorra
+ * fica um bloco à parte (não encosta no Pátio) e é ligada por um corredor com escada —
+ * o caso que a queixa original ("não tem nada para representar... um caminho") cobrava.
+ */
+const PLANTA_BOA_IA_JSON = JSON.stringify({
+  salas: [
+    { x: 0, y: 0, w: 8, h: 6, rotulo: 'Salão Principal', estado: 'sem-info' },
+    { x: 8, y: 0, w: 4, h: 6, rotulo: 'Cozinha', estado: 'sem-info' },
+    { x: 0, y: 6, w: 12, h: 5, rotulo: 'Pátio', estado: 'sem-info' },
+    // masmorra é a única sala com estado marcado — o pedido diz que tem algo guardando lá
+    { x: 3, y: 14, w: 6, h: 4, rotulo: 'Masmorra', estado: 'pendente' },
+  ],
+  salasPoligono: [
+    // capela em L, encostada na cozinha (parede x=12) — mostra a peça também fora do
+    // catálogo isolado, como cômodo de verdade dentro de uma planta maior
+    {
+      pontos: [{ x: 12, y: 0 }, { x: 16, y: 0 }, { x: 16, y: 4 }, { x: 14, y: 4 }, { x: 14, y: 6 }, { x: 12, y: 6 }],
+      rotulo: 'Capela',
+      estado: 'limpa',
+    },
+  ],
+  corredores: [
+    // liga a borda debaixo do Pátio (y=11) à borda de cima da Masmorra (y=14) — sem isso
+    // o vão de 3 quadrados entre os dois blocos ficaria preto
+    { x: 4, y: 11, w: 2, h: 3 },
+  ],
+  muralhas: [{ x: -3, y: -3, w: 22, h: 24 }],
+  torres: [
+    // uma em cada canto da muralha, centrada no vértice (x/y do canto menos metade do lado)
+    { x: -4, y: -4, tamanho: 2 },
+    { x: 18, y: -4, tamanho: 2 },
+    { x: -4, y: 20, tamanho: 2 },
+    { x: 18, y: 20, tamanho: 2 },
+  ],
+  escadas: [{ x: 4, y: 12, w: 2, h: 2 }],
+  portas: [
+    { x: 8, y: 3, orientacao: 'vertical', estado: 'livre' },
+    { x: 4, y: 6, orientacao: 'horizontal', estado: 'livre' },
+    { x: 12, y: 3, orientacao: 'vertical', estado: 'trancada' },
+    { x: 5, y: 14, orientacao: 'horizontal', estado: 'atencao' },
+  ],
+  simbolos: [
+    { x: 4, y: 15, simbolo: 'marcador' },
+    { x: 9, y: 1, simbolo: 'bau' },
+    { x: 1, y: 7, simbolo: 'tocha' },
+    { x: -4, y: -6, simbolo: 'andar', rotulo: '1F' },
+  ],
+})
+
+/** Resposta RUIM mas ainda VÁLIDA (o tipo que um modelo barato devolveria): tudo
+ * "pendente" (a queixa original — "tudo vermelho"), e caixas soltas com vão preto entre
+ * elas (sala A termina em x=3, sala B começa em x=6, não em x=3 — vão de 3 quadrados sem
+ * corredor nenhum). Passa na validação (nenhum campo é tecnicamente inválido) — o
+ * problema é de LAYOUT, que o formato não pode recusar sozinho; só mostra o app não
+ * quebra com uma planta feia. */
+const PLANTA_RUIM_VALIDA_JSON = JSON.stringify({
+  salas: [
+    { x: 0, y: 0, w: 3, h: 3, rotulo: 'Sala A', estado: 'pendente' },
+    { x: 6, y: 0, w: 3, h: 3, rotulo: 'Sala B', estado: 'pendente' },
+    { x: 0, y: 6, w: 3, h: 3, rotulo: 'Sala C', estado: 'pendente' },
+  ],
+})
+
+/** Resposta RUIM e INVÁLIDA: coordenada fora da grade (acima de MAX_QUADRADOS). O parse
+ * tem de recusar com mensagem em português, tudo-ou-nada — não travar, não inserir metade. */
+const PLANTA_RUIM_INVALIDA_JSON = JSON.stringify({
+  salas: [{ x: 0, y: 99999999, w: 3, h: 3, rotulo: 'Fora da grade', estado: 'pendente' }],
+})
+
+/** Símbolo → {w,h} em px, mesma tabela que `gerarCatalogo` usa (SIMBOLOS_MAPA é puro, sem
+ * tldraw — por isso a amostra usa ele em vez de `tamanhoDoSimbolo`, que vive num shape). */
+function tamanhoDoSimboloNaAmostra(id: string): { w: number; h: number } {
+  const def = SIMBOLOS_MAPA.find((d) => d.id === id)
+  return { w: def?.largura ?? 40, h: def?.altura ?? 40 }
+}
+
+/**
+ * Especificação (em QUADRADOS) → `<div>` posicionado com o SVG da peça dentro — mesma
+ * conversão quadrado→px que `especificacaoParaCriarShape` faz em `gerarMapaIA.ts`, só que
+ * chamando as funções `desenho*` direto em vez de `editor.createShape` (esta amostra não
+ * monta tldraw — ver cabeçalho do arquivo). Devolve também a caixa em px, para o cálculo
+ * da muralha/torres do container que embrulha tudo.
+ */
+function pecaDeEspecificacao(spec: EspecificacaoFormaIA): { x: number; y: number; w: number; h: number; html: string } {
+  const px = (q: number) => quadradosParaPx(q, QUADRADO_PX)
+  const vinculoNenhum = { estado: 'sem-vinculo' as const, nomeCenario: null }
+
+  if (spec.tipo === 'sala') {
+    const w = px(spec.wQuad)
+    const h = px(spec.hQuad)
+    const svg = svgDaPeca(w, h, desenharCorpoSala({ w, h, ...spec.props, vinculo: vinculoNenhum }))
+    return { x: px(spec.xQuad), y: px(spec.yQuad), w, h, html: `<div class="mapa-peca" style="left:${px(spec.xQuad)}px;top:${px(spec.yQuad)}px;width:${w}px;height:${h}px;">${svg}</div>` }
+  }
+
+  if (spec.tipo === 'sala-poligono') {
+    const minX = Math.min(...spec.pontosQuad.map((p) => p.x))
+    const minY = Math.min(...spec.pontosQuad.map((p) => p.y))
+    const pontosLocais = spec.pontosQuad.map((p) => ({ x: px(p.x - minX), y: px(p.y - minY) }))
+    const { w, h } = limitesDoPoligono(pontosLocais)
+    const svg = svgDaPeca(w, h, desenharCorpoSalaPoligono({ pontos: pontosLocais, ...spec.props }))
+    return { x: px(minX), y: px(minY), w, h, html: `<div class="mapa-peca" style="left:${px(minX)}px;top:${px(minY)}px;width:${w}px;height:${h}px;">${svg}</div>` }
+  }
+
+  if (spec.tipo === 'corredor' || spec.tipo === 'muralha' || spec.tipo === 'escada') {
+    const w = px(spec.wQuad)
+    const h = px(spec.hQuad)
+    const desenhar = spec.tipo === 'corredor' ? desenharCorredor : spec.tipo === 'muralha' ? desenharMuralha : desenharEscada
+    const svg = svgDaPeca(w, h, desenhar({ w, h }))
+    return { x: px(spec.xQuad), y: px(spec.yQuad), w, h, html: `<div class="mapa-peca" style="left:${px(spec.xQuad)}px;top:${px(spec.yQuad)}px;width:${w}px;height:${h}px;">${svg}</div>` }
+  }
+
+  if (spec.tipo === 'torre') {
+    const lado = px(spec.tamanhoQuad)
+    const svg = svgDaPeca(lado, lado, desenharTorre({ w: lado, h: lado }))
+    return { x: px(spec.xQuad), y: px(spec.yQuad), w: lado, h: lado, html: `<div class="mapa-peca" style="left:${px(spec.xQuad)}px;top:${px(spec.yQuad)}px;width:${lado}px;height:${lado}px;">${svg}</div>` }
+  }
+
+  if (spec.tipo === 'porta') {
+    const w = spec.orientacao === 'horizontal' ? PORTA_LARGURA_PADRAO : PORTA_ESPESSURA_PADRAO
+    const h = spec.orientacao === 'horizontal' ? PORTA_ESPESSURA_PADRAO : PORTA_LARGURA_PADRAO
+    const centroX = px(spec.xQuad) + QUADRADO_PX / 2
+    const centroY = px(spec.yQuad) + QUADRADO_PX / 2
+    const x = centroX - w / 2
+    const y = centroY - h / 2
+    const svg = svgDaPeca(w, h, desenharPorta({ w, h, ...spec.props }))
+    return { x, y, w, h, html: `<div class="mapa-peca" style="left:${x}px;top:${y}px;width:${w}px;height:${h}px;">${svg}</div>` }
+  }
+
+  const { w, h } = tamanhoDoSimboloNaAmostra(spec.simbolo)
+  const centroX = px(spec.xQuad) + QUADRADO_PX / 2
+  const centroY = px(spec.yQuad) + QUADRADO_PX / 2
+  const x = centroX - w / 2
+  const y = centroY - h / 2
+  const svg = svgDaPeca(w, h, desenharSimbolo(spec.simbolo, w, h, spec.props.rotulo))
+  return { x, y, w, h, html: `<div class="mapa-peca" style="left:${x}px;top:${y}px;width:${w}px;height:${h}px;">${svg}</div>` }
+}
+
+/**
+ * Renderiza a PLANTA_BOA_IA_JSON de ponta a ponta pelo pipeline real: `parsearPlantaIA` →
+ * `plantaParaEspecificacoes` → desenho. Se o parse falhar aqui, o teste falha alto —
+ * significa que a planta escrita à mão não é nem válida no próprio formato.
+ */
+function gerarPlantaViaIA(): string {
+  const parse = parsearPlantaIA(PLANTA_BOA_IA_JSON)
+  if (!parse.ok) throw new Error(`PLANTA_BOA_IA_JSON não passou no parse: ${parse.erro}`)
+
+  const specs = plantaParaEspecificacoes(parse.planta, { xQuad: 0, yQuad: 0 })
+  const pecas = specs.map(pecaDeEspecificacao)
+
+  const margem = 40
+  const minX = Math.min(...pecas.map((p) => p.x)) - margem
+  const minY = Math.min(...pecas.map((p) => p.y)) - margem
+  const maxX = Math.max(...pecas.map((p) => p.x + p.w)) + margem
+  const maxY = Math.max(...pecas.map((p) => p.y + p.h)) + margem
+
+  const conteudo = pecas
+    .map((p) => p.html.replace(`left:${p.x}px;top:${p.y}px;`, `left:${p.x - minX}px;top:${p.y - minY}px;`))
+    .join('\n')
+
+  return `<div class="mapa-exemplo" style="width:${maxX - minX}px;height:${maxY - minY}px;">${conteudo}</div>`
+}
+
 function gerarHtml(): string {
   const catalogo = gerarCatalogo()
   const mapa = gerarMapaExemplo()
+  const plantaIA = gerarPlantaViaIA()
 
   return `<!doctype html>
 <html lang="pt-BR">
@@ -507,6 +679,10 @@ ${catalogo}
   <h2>Mapa de exemplo</h2>
   <p class="legenda">Planta de castelo — salas encostadas de tamanhos variados, muralha cercando o conjunto com torre em cada canto, escada de verdade dentro de um corredor, sala em polígono em dois papéis (L da Cripta, canto chanfrado da Guarita) — para julgar o conjunto como massa contínua.</p>
 ${mapa}
+
+  <h2>Planta vinda da IA</h2>
+  <p class="legenda">"Castelo com muralha, pátio, salão principal, cozinha, masmorra e torre" — resposta escrita à mão (sem chave de Gemini disponível, ver relatório) simulando o que um modelo BOM devolveria, passada pelo parse/conversão REAIS (parsearPlantaIA → plantaParaEspecificacoes) e desenhada com as mesmas funções desenho* de cima. Julgar ao lado de 4.png.</p>
+${plantaIA}
 </body>
 </html>
 `
@@ -549,5 +725,56 @@ describe('amostra visual do mapa', () => {
     expect(gravado).not.toContain('<script')
     expect(gravado).not.toContain('<link')
     expect(gravado).not.toMatch(/https?:\/\/(?!www\.w3\.org)/)
+
+    // A planta escrita à mão passa no parse REAL e usa TODAS as peças novas desta leva —
+    // se um dia o formato parar de expressar alguma delas, este teste denuncia.
+    expect(gravado).toContain('Salão Principal')
+    expect(gravado).toContain('Capela') // sala em polígono
+    expect(gravado).toContain('Masmorra')
+  })
+})
+
+/**
+ * Não há chave de Gemini disponível neste ambiente (ver relatório final) — o que dá para
+ * verificar sem chamar a IA de verdade é que o FORMATO aceita uma resposta boa e que o
+ * app NÃO QUEBRA com uma resposta ruim, seja ela válida-mas-feia ou de fato inválida.
+ */
+describe('planta vinda da IA — respostas boa e ruim', () => {
+  it('resposta BOA: passa no parse e usa sala/salaPoligono/corredor/muralha/torre/escada/porta/símbolo', () => {
+    const parse = parsearPlantaIA(PLANTA_BOA_IA_JSON)
+    expect(parse.ok).toBe(true)
+    if (!parse.ok) return
+    expect(parse.planta.salas.length).toBeGreaterThan(0)
+    expect(parse.planta.salasPoligono.length).toBeGreaterThan(0)
+    expect(parse.planta.corredores.length).toBeGreaterThan(0)
+    expect(parse.planta.muralhas.length).toBeGreaterThan(0)
+    expect(parse.planta.torres.length).toBeGreaterThan(0)
+    expect(parse.planta.escadas.length).toBeGreaterThan(0)
+    expect(parse.planta.portas.length).toBeGreaterThan(0)
+    expect(parse.planta.simbolos.length).toBeGreaterThan(0)
+    // só a Masmorra tem estado marcado — o resto nasce "sem-info" (regra 2: nunca pendente
+    // por padrão). Confirma que a planta escrita à mão segue a própria regra que o prompt exige.
+    const naoMasmorra = parse.planta.salas.filter((s) => s.rotulo !== 'Masmorra')
+    expect(naoMasmorra.every((s) => s.estado === 'sem-info')).toBe(true)
+    // não deve lançar ao converter em especificações de shape
+    expect(() => plantaParaEspecificacoes(parse.planta, { xQuad: 0, yQuad: 0 })).not.toThrow()
+  })
+
+  it('resposta RUIM mas válida (tudo pendente, caixas com vão): passa no parse, não trava a conversão', () => {
+    const parse = parsearPlantaIA(PLANTA_RUIM_VALIDA_JSON)
+    expect(parse.ok).toBe(true)
+    if (!parse.ok) return
+    expect(parse.planta.salas.every((s) => s.estado === 'pendente')).toBe(true)
+    // o formato não recusa layout ruim — só o tipo/tamanho de cada campo. O aviso de
+    // sobreposição (que este caso NÃO tem, é vão e não sobra) é outra checagem, feita à
+    // parte em `contarSalasSobrepostas`. Aqui o que importa é: não lança.
+    expect(() => plantaParaEspecificacoes(parse.planta, { xQuad: 0, yQuad: 0 })).not.toThrow()
+  })
+
+  it('resposta RUIM e inválida (coordenada fora da grade): recusada com mensagem clara, sem lançar', () => {
+    expect(() => parsearPlantaIA(PLANTA_RUIM_INVALIDA_JSON)).not.toThrow()
+    const parse = parsearPlantaIA(PLANTA_RUIM_INVALIDA_JSON)
+    expect(parse.ok).toBe(false)
+    if (!parse.ok) expect(parse.erro).toMatch(/absurda/)
   })
 })

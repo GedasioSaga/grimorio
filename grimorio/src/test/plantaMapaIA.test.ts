@@ -11,6 +11,10 @@ import {
 
 const salaValida = { x: 0, y: 0, w: 4, h: 3, rotulo: 'Salão', estado: 'pendente' as const }
 
+/** Peças novas desta leva (sala em polígono, corredor, muralha, torre, escada), vazias —
+ * spread nos literais de `PlantaIA` dos testes que já existiam e não testam elas. */
+const SEM_PECAS_NOVAS = { salasPoligono: [], corredores: [], muralhas: [], torres: [], escadas: [] }
+
 describe('parsearPlantaIA', () => {
   it('rejeita JSON inválido', () => {
     const r = parsearPlantaIA('{ isso não é json')
@@ -147,6 +151,7 @@ describe('contarSalasSobrepostas', () => {
 describe('bboxDaPlantaEmQuadrados', () => {
   it('envolve salas, portas e símbolos', () => {
     const planta: PlantaIA = {
+      ...SEM_PECAS_NOVAS,
       salas: [{ ...salaValida, x: 0, y: 0, w: 4, h: 3, estado: 'pendente' }],
       portas: [{ x: 10, y: 10, orientacao: 'horizontal', estado: 'livre' }],
       simbolos: [{ x: -1, y: -1, simbolo: 'armadilha', rotulo: '' }] as never, // x negativo só pra testar o min
@@ -179,6 +184,7 @@ describe('proximaAreaLivre', () => {
 describe('plantaParaEspecificacoes', () => {
   it('desloca a planta inteira para nascer na origem pedida', () => {
     const planta: PlantaIA = {
+      ...SEM_PECAS_NOVAS,
       salas: [{ x: 5, y: 5, w: 2, h: 2, rotulo: 'A', estado: 'pendente' }],
       portas: [],
       simbolos: [],
@@ -190,6 +196,7 @@ describe('plantaParaEspecificacoes', () => {
 
   it('marcador sem rotulo é numerado a partir do próximo número, na ordem da planta', () => {
     const planta: PlantaIA = {
+      ...SEM_PECAS_NOVAS,
       salas: [],
       portas: [],
       simbolos: [
@@ -203,6 +210,7 @@ describe('plantaParaEspecificacoes', () => {
 
   it('marcador com rotulo explícito não é renumerado', () => {
     const planta: PlantaIA = {
+      ...SEM_PECAS_NOVAS,
       salas: [],
       portas: [],
       simbolos: [{ x: 0, y: 0, simbolo: 'marcador', rotulo: '9' }],
@@ -213,6 +221,7 @@ describe('plantaParaEspecificacoes', () => {
 
   it('porta preserva orientação e estado', () => {
     const planta: PlantaIA = {
+      ...SEM_PECAS_NOVAS,
       salas: [],
       portas: [{ x: 3, y: 3, orientacao: 'vertical', estado: 'trancada' }],
       simbolos: [],
@@ -289,12 +298,13 @@ describe('parsearPlantaIA — resposta suja de modelo barato', () => {
 
 describe('formatarResumoInsercao', () => {
   it('caminho feliz sem sobreposição', () => {
-    const planta: PlantaIA = { salas: [salaValida as never], portas: [], simbolos: [] }
+    const planta: PlantaIA = { ...SEM_PECAS_NOVAS, salas: [salaValida as never], portas: [], simbolos: [] }
     expect(formatarResumoInsercao(planta, 0)).toBe('Inserido: 1 sala.')
   })
 
   it('avisa quando há sobreposição', () => {
     const planta: PlantaIA = {
+      ...SEM_PECAS_NOVAS,
       salas: [salaValida as never, salaValida as never],
       portas: [{ x: 0, y: 0, orientacao: 'horizontal', estado: 'livre' }],
       simbolos: [],
@@ -302,5 +312,169 @@ describe('formatarResumoInsercao', () => {
     const resumo = formatarResumoInsercao(planta, 2)
     expect(resumo).toMatch(/2 salas, 1 porta/)
     expect(resumo).toMatch(/2 sala\(s\) ficaram sobrepostas/)
+  })
+})
+
+/**
+ * Peças novas desta leva (sala em polígono, corredor, muralha, torre, escada) — o mesmo
+ * vocabulário que faltava, nas palavras do usuário: "não tem nada para representar uma
+ * muralha ou caminho". Cobre parse, teto de vértices e conversão em especificação.
+ */
+describe('parsearPlantaIA — peças novas (polígono, corredor, muralha, torre, escada)', () => {
+  const salaPoligonoValida = {
+    pontos: [{ x: 0, y: 0 }, { x: 4, y: 0 }, { x: 4, y: 2 }, { x: 2, y: 2 }, { x: 2, y: 4 }, { x: 0, y: 4 }],
+    rotulo: 'Cripta',
+    estado: 'sem-info',
+  }
+
+  it('caminho feliz: aceita as 5 peças novas juntas', () => {
+    const r = parsearPlantaIA(
+      JSON.stringify({
+        salasPoligono: [salaPoligonoValida],
+        corredores: [{ x: 4, y: 0, w: 1, h: 2 }],
+        muralhas: [{ x: -1, y: -1, w: 10, h: 10 }],
+        torres: [{ x: -2, y: -2, tamanho: 2 }],
+        escadas: [{ x: 4, y: 0, w: 1, h: 2 }],
+      }),
+    )
+    expect(r.ok).toBe(true)
+    if (r.ok) {
+      expect(r.planta.salasPoligono).toHaveLength(1)
+      expect(r.planta.corredores).toHaveLength(1)
+      expect(r.planta.muralhas).toHaveLength(1)
+      expect(r.planta.torres).toHaveLength(1)
+      expect(r.planta.escadas).toHaveLength(1)
+    }
+  })
+
+  it('campo ausente vira lista vazia (não obriga a IA a listar as 8 chaves)', () => {
+    const r = parsearPlantaIA(JSON.stringify({ salas: [salaValida] }))
+    expect(r.ok).toBe(true)
+    if (r.ok) {
+      expect(r.planta.salasPoligono).toEqual([])
+      expect(r.planta.corredores).toEqual([])
+      expect(r.planta.muralhas).toEqual([])
+      expect(r.planta.torres).toEqual([])
+      expect(r.planta.escadas).toEqual([])
+    }
+  })
+
+  it('rejeita sala em polígono com menos de 3 vértices', () => {
+    const r = parsearPlantaIA(JSON.stringify({ salasPoligono: [{ ...salaPoligonoValida, pontos: [{ x: 0, y: 0 }, { x: 1, y: 0 }] }] }))
+    expect(r.ok).toBe(false)
+    if (!r.ok) expect(r.erro).toMatch(/3 vértices/)
+  })
+
+  it('rejeita sala em polígono com vértices demais (teto de volume)', () => {
+    const pontos = Array.from({ length: 21 }, (_, i) => ({ x: i, y: i % 2 }))
+    const r = parsearPlantaIA(JSON.stringify({ salasPoligono: [{ ...salaPoligonoValida, pontos }] }))
+    expect(r.ok).toBe(false)
+    if (!r.ok) expect(r.erro).toMatch(/vértices/)
+  })
+
+  it('uma sala em polígono no teto de vértices continua passando', () => {
+    const pontos = Array.from({ length: 20 }, (_, i) => ({ x: i, y: i % 2 }))
+    const r = parsearPlantaIA(JSON.stringify({ salasPoligono: [{ ...salaPoligonoValida, pontos }] }))
+    expect(r.ok).toBe(true)
+  })
+
+  it('rejeita vértice com coordenada não inteira', () => {
+    const r = parsearPlantaIA(
+      JSON.stringify({ salasPoligono: [{ ...salaPoligonoValida, pontos: [{ x: 0.5, y: 0 }, { x: 1, y: 0 }, { x: 1, y: 1 }] }] }),
+    )
+    expect(r.ok).toBe(false)
+  })
+
+  it('rejeita corredor com w/h zero', () => {
+    const r = parsearPlantaIA(JSON.stringify({ corredores: [{ x: 0, y: 0, w: 0, h: 1 }] }))
+    expect(r.ok).toBe(false)
+    if (!r.ok) expect(r.erro).toMatch(/Corredor 1/)
+  })
+
+  it('rejeita muralha sem campo obrigatório', () => {
+    const r = parsearPlantaIA(JSON.stringify({ muralhas: [{ x: 0, y: 0, w: 10 }] }))
+    expect(r.ok).toBe(false)
+    if (!r.ok) expect(r.erro).toMatch(/Muralha 1/)
+  })
+
+  it('rejeita escada com h negativo', () => {
+    const r = parsearPlantaIA(JSON.stringify({ escadas: [{ x: 0, y: 0, w: 1, h: -2 }] }))
+    expect(r.ok).toBe(false)
+    if (!r.ok) expect(r.erro).toMatch(/Escada 1/)
+  })
+
+  it('rejeita torre sem "tamanho"', () => {
+    const r = parsearPlantaIA(JSON.stringify({ torres: [{ x: 0, y: 0 }] }))
+    expect(r.ok).toBe(false)
+    if (!r.ok) expect(r.erro).toMatch(/Torre 1/)
+  })
+
+  it('contam para o teto de peças (MAX_PECAS)', () => {
+    const muitas = Array.from({ length: 400 }, (_, i) => ({ x: i, y: 0, w: 1, h: 1 }))
+    const r = parsearPlantaIA(JSON.stringify({ corredores: muitas }))
+    expect(r.ok).toBe(false)
+    if (!r.ok) expect(r.erro).toMatch(/peças/)
+  })
+})
+
+describe('bboxDaPlantaEmQuadrados — peças novas', () => {
+  it('envolve sala em polígono, corredor, muralha, torre e escada', () => {
+    const planta: PlantaIA = {
+      salas: [],
+      salasPoligono: [{ pontos: [{ x: 10, y: 10 }, { x: 12, y: 10 }, { x: 12, y: 12 }], rotulo: '', estado: 'sem-info' }],
+      corredores: [{ x: 20, y: 20, w: 2, h: 2 }],
+      muralhas: [{ x: -5, y: -5, w: 3, h: 3 }],
+      torres: [{ x: 30, y: 30, tamanho: 2 }],
+      escadas: [{ x: 15, y: 15, w: 1, h: 1 }],
+      portas: [],
+      simbolos: [],
+    }
+    const bbox = bboxDaPlantaEmQuadrados(planta)
+    expect(bbox.x).toBeLessThanOrEqual(-5)
+    expect(bbox.w).toBeGreaterThanOrEqual(37) // de x=-5 até x=32 (torre 30+tamanho 2)
+  })
+})
+
+describe('plantaParaEspecificacoes — peças novas', () => {
+  it('sala em polígono: pontos deslocados para a origem pedida', () => {
+    const planta: PlantaIA = {
+      ...SEM_PECAS_NOVAS,
+      salas: [],
+      salasPoligono: [{ pontos: [{ x: 5, y: 5 }, { x: 7, y: 5 }, { x: 7, y: 7 }], rotulo: 'L', estado: 'pendente' }],
+      portas: [],
+      simbolos: [],
+    }
+    const specs = plantaParaEspecificacoes(planta, { xQuad: 0, yQuad: 0 })
+    expect(specs).toHaveLength(1)
+    expect(specs[0]).toMatchObject({
+      tipo: 'sala-poligono',
+      pontosQuad: [{ x: 0, y: 0 }, { x: 2, y: 0 }, { x: 2, y: 2 }],
+      props: { estado: 'pendente', rotulo: 'L' },
+    })
+  })
+
+  it('corredor/muralha/escada preservam w/h e são deslocados', () => {
+    const planta: PlantaIA = {
+      ...SEM_PECAS_NOVAS,
+      salas: [],
+      corredores: [{ x: 5, y: 5, w: 2, h: 1 }],
+      muralhas: [{ x: 5, y: 5, w: 3, h: 3 }],
+      escadas: [{ x: 5, y: 5, w: 1, h: 2 }],
+      portas: [],
+      simbolos: [],
+    }
+    const specs = plantaParaEspecificacoes(planta, { xQuad: 0, yQuad: 0 })
+    const corredor = specs.find((s) => s.tipo === 'corredor')
+    const muralha = specs.find((s) => s.tipo === 'muralha')
+    const escada = specs.find((s) => s.tipo === 'escada')
+    expect(corredor).toMatchObject({ xQuad: 0, yQuad: 0, wQuad: 2, hQuad: 1 })
+    expect(muralha).toMatchObject({ xQuad: 0, yQuad: 0, wQuad: 3, hQuad: 3 })
+    expect(escada).toMatchObject({ xQuad: 0, yQuad: 0, wQuad: 1, hQuad: 2 })
+  })
+
+  it('torre preserva "tamanho" como tamanhoQuad', () => {
+    const planta: PlantaIA = { ...SEM_PECAS_NOVAS, salas: [], torres: [{ x: 5, y: 5, tamanho: 2 }], portas: [], simbolos: [] }
+    const specs = plantaParaEspecificacoes(planta, { xQuad: 0, yQuad: 0 })
+    expect(specs[0]).toMatchObject({ tipo: 'torre', xQuad: 0, yQuad: 0, tamanhoQuad: 2 })
   })
 })

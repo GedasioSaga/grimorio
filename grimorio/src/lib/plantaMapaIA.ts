@@ -19,6 +19,7 @@ import { ESTADOS_SALA, type EstadoSala } from './salaMapa'
 import { ESTADOS_PORTA, type EstadoPorta } from './portaMapa'
 import { ehSimboloConhecido, type SimboloId } from './simbolosMapa'
 import type { Caixa } from './quadrados'
+import type { PontoPoligono } from './salaPoligonoMapa'
 
 /**
  * Uma lista só, a de verdade. Uma versão anterior copiava estes três valores para cá porque
@@ -48,6 +49,14 @@ const MAX_QUADRADOS = 400
 const MAX_ROTULO = 200
 const MAX_PECAS = 300
 
+/**
+ * Teto de vértices por sala em polígono. Mesma lógica de `MAX_PECAS`: um polígono de
+ * 5.000 vértices desenha um `<polygon>` gigante e ainda arrasta `getHandles` (um handle
+ * arrastável POR vértice) — trava o editor mesmo sendo, tecnicamente, "uma peça só". 20
+ * cobre qualquer L/T/U/chanfro plausível de planta de RPG com folga de sobra.
+ */
+const MAX_VERTICES_POLIGONO = 20
+
 export interface SalaPlantaIA {
   x: number
   y: number
@@ -72,8 +81,55 @@ export interface SimboloPlantaIA {
   rotulo: string
 }
 
+/** Sala em polígono: mesmo vocabulário de estado/rótulo da sala retangular, vértices em
+ * QUADRADOS de grade (inteiros), absolutos como x/y de sala — não px, não locais ao shape;
+ * o deslocamento pra origem local acontece em `plantaParaEspecificacoes`, igual às salas. */
+export interface SalaPoligonoPlantaIA {
+  pontos: PontoPoligono[]
+  rotulo: string
+  estado: EstadoSala
+}
+
+/** Corredor: caixa sem estado nem rótulo — ver lib/corredorMapa.ts. É a peça que liga dois
+ * blocos de sala separados, ou preenche o vão entre cômodos que não encostam de propósito. */
+export interface CorredorPlantaIA {
+  x: number
+  y: number
+  w: number
+  h: number
+}
+
+/** Muralha: caixa (só contorno) que cerca o conjunto — ver lib/muralhaMapa.ts. */
+export interface MuralhaPlantaIA {
+  x: number
+  y: number
+  w: number
+  h: number
+}
+
+/** Torre: quadrado que marca um canto da muralha — ver lib/torreMapa.ts. Lado único (não
+ * w/h independentes) porque a torre nasce sempre redonda/quadrada, nunca oval. */
+export interface TorrePlantaIA {
+  x: number
+  y: number
+  tamanho: number
+}
+
+/** Escada: caixa sem estado nem rótulo, trecho de corredor com degraus — ver lib/escadaMapa.ts. */
+export interface EscadaPlantaIA {
+  x: number
+  y: number
+  w: number
+  h: number
+}
+
 export interface PlantaIA {
   salas: SalaPlantaIA[]
+  salasPoligono: SalaPoligonoPlantaIA[]
+  corredores: CorredorPlantaIA[]
+  muralhas: MuralhaPlantaIA[]
+  torres: TorrePlantaIA[]
+  escadas: EscadaPlantaIA[]
   portas: PortaPlantaIA[]
   simbolos: SimboloPlantaIA[]
 }
@@ -84,9 +140,16 @@ function ehObjeto(v: unknown): v is Record<string, unknown> {
   return typeof v === 'object' && v !== null && !Array.isArray(v)
 }
 
-/** Inteiro dentro de [0, MAX_QUADRADOS] — cobre "campo ausente", "tipo errado" e "coordenada absurda". */
+/**
+ * Inteiro dentro de [-MAX_QUADRADOS, MAX_QUADRADOS] — cobre "campo ausente", "tipo errado"
+ * e "coordenada absurda". Negativo é válido DESDE esta leva: muralha/torre nascem um pouco
+ * antes da primeira sala para sobrar margem ao redor do conjunto (regra 1 do prompt), o que
+ * exige x/y negativos naquele canto — a versão anterior só validava sala/porta/símbolo, que
+ * nunca precisaram de negativo, e o teto virou "só positivo" por acidente de escopo, não por
+ * decisão. `w`/`h`/`tamanho` continuam exigindo positivo estrito — ver `tamanhoValido`.
+ */
 function inteiroValido(v: unknown, max = MAX_QUADRADOS): v is number {
-  return typeof v === 'number' && Number.isInteger(v) && v >= 0 && v <= max
+  return typeof v === 'number' && Number.isInteger(v) && v >= -max && v <= max
 }
 
 /** Tamanho (w/h): inteiro estritamente positivo — cobre "zero" e "negativo". */
@@ -129,15 +192,33 @@ export function parsearPlantaIA(texto: string): ResultadoParsePlanta {
   if (!ehObjeto(bruto)) return { ok: false, erro: 'A resposta da IA não é um objeto JSON.' }
 
   const salasBrutas = bruto.salas ?? []
+  const salasPoligonoBrutas = bruto.salasPoligono ?? []
+  const corredoresBrutos = bruto.corredores ?? []
+  const muralhasBrutas = bruto.muralhas ?? []
+  const torresBrutas = bruto.torres ?? []
+  const escadasBrutas = bruto.escadas ?? []
   const portasBrutas = bruto.portas ?? []
   const simbolosBrutos = bruto.simbolos ?? []
   if (!Array.isArray(salasBrutas)) return { ok: false, erro: 'O campo "salas" precisa ser uma lista.' }
+  if (!Array.isArray(salasPoligonoBrutas)) return { ok: false, erro: 'O campo "salasPoligono" precisa ser uma lista.' }
+  if (!Array.isArray(corredoresBrutos)) return { ok: false, erro: 'O campo "corredores" precisa ser uma lista.' }
+  if (!Array.isArray(muralhasBrutas)) return { ok: false, erro: 'O campo "muralhas" precisa ser uma lista.' }
+  if (!Array.isArray(torresBrutas)) return { ok: false, erro: 'O campo "torres" precisa ser uma lista.' }
+  if (!Array.isArray(escadasBrutas)) return { ok: false, erro: 'O campo "escadas" precisa ser uma lista.' }
   if (!Array.isArray(portasBrutas)) return { ok: false, erro: 'O campo "portas" precisa ser uma lista.' }
   if (!Array.isArray(simbolosBrutos)) return { ok: false, erro: 'O campo "simbolos" precisa ser uma lista.' }
 
   // teto ANTES de percorrer: a checagem de sobreposição adiante é O(n²) e roda síncrona na
   // thread da interface, então uma planta gigante travaria a tela sem nem chegar a desenhar
-  const total = salasBrutas.length + portasBrutas.length + simbolosBrutos.length
+  const total =
+    salasBrutas.length +
+    salasPoligonoBrutas.length +
+    corredoresBrutos.length +
+    muralhasBrutas.length +
+    torresBrutas.length +
+    escadasBrutas.length +
+    portasBrutas.length +
+    simbolosBrutos.length
   if (total > MAX_PECAS) {
     return {
       ok: false,
@@ -165,6 +246,80 @@ export function parsearPlantaIA(texto: string): ResultadoParsePlanta {
       return { ok: false, erro: `Sala ${i + 1}: estado "${String(s.estado)}" desconhecido.` }
     }
     salas.push({ x: s.x, y: s.y, w: s.w, h: s.h, rotulo: s.rotulo, estado: s.estado as EstadoSala })
+  }
+
+  const salasPoligono: SalaPoligonoPlantaIA[] = []
+  for (let i = 0; i < salasPoligonoBrutas.length; i++) {
+    const s = salasPoligonoBrutas[i]
+    if (!ehObjeto(s)) return { ok: false, erro: `Sala em polígono ${i + 1}: item não é um objeto.` }
+    if (!Array.isArray(s.pontos)) return { ok: false, erro: `Sala em polígono ${i + 1}: "pontos" precisa ser uma lista.` }
+    if (s.pontos.length < 3) return { ok: false, erro: `Sala em polígono ${i + 1}: precisa de ao menos 3 vértices.` }
+    if (s.pontos.length > MAX_VERTICES_POLIGONO) {
+      return { ok: false, erro: `Sala em polígono ${i + 1}: mais de ${MAX_VERTICES_POLIGONO} vértices.` }
+    }
+    const pontos: PontoPoligono[] = []
+    for (let j = 0; j < s.pontos.length; j++) {
+      const p = s.pontos[j]
+      if (!ehObjeto(p) || !inteiroValido(p.x) || !inteiroValido(p.y)) {
+        return { ok: false, erro: `Sala em polígono ${i + 1}, vértice ${j + 1}: "x"/"y" ausente, não inteiro, ou coordenada absurda.` }
+      }
+      pontos.push({ x: p.x, y: p.y })
+    }
+    if (typeof s.rotulo !== 'string') return { ok: false, erro: `Sala em polígono ${i + 1}: "rotulo" precisa ser texto.` }
+    if (s.rotulo.length > MAX_ROTULO) {
+      return { ok: false, erro: `Sala em polígono ${i + 1}: nome de cômodo com mais de ${MAX_ROTULO} caracteres.` }
+    }
+    if (!(ESTADOS_SALA as string[]).includes(s.estado as string)) {
+      return { ok: false, erro: `Sala em polígono ${i + 1}: estado "${String(s.estado)}" desconhecido.` }
+    }
+    salasPoligono.push({ pontos, rotulo: s.rotulo, estado: s.estado as EstadoSala })
+  }
+
+  /** Caixa simples (x/y/w/h em quadrados) — corredor, muralha e escada compartilham a
+   * mesma forma de validação, só o rótulo do erro muda. */
+  function lerCaixaBruta(bruta: unknown, nomeItem: string): { x: number; y: number; w: number; h: number } | string {
+    if (!ehObjeto(bruta)) return `${nomeItem}: item não é um objeto.`
+    if (!inteiroValido(bruta.x) || !inteiroValido(bruta.y)) {
+      return `${nomeItem}: "x"/"y" ausente, não inteiro, ou coordenada absurda.`
+    }
+    if (!tamanhoValido(bruta.w) || !tamanhoValido(bruta.h)) {
+      return `${nomeItem}: "w"/"h" precisa ser inteiro maior que zero.`
+    }
+    return { x: bruta.x, y: bruta.y, w: bruta.w, h: bruta.h }
+  }
+
+  const corredores: CorredorPlantaIA[] = []
+  for (let i = 0; i < corredoresBrutos.length; i++) {
+    const r = lerCaixaBruta(corredoresBrutos[i], `Corredor ${i + 1}`)
+    if (typeof r === 'string') return { ok: false, erro: r }
+    corredores.push(r)
+  }
+
+  const muralhas: MuralhaPlantaIA[] = []
+  for (let i = 0; i < muralhasBrutas.length; i++) {
+    const r = lerCaixaBruta(muralhasBrutas[i], `Muralha ${i + 1}`)
+    if (typeof r === 'string') return { ok: false, erro: r }
+    muralhas.push(r)
+  }
+
+  const escadas: EscadaPlantaIA[] = []
+  for (let i = 0; i < escadasBrutas.length; i++) {
+    const r = lerCaixaBruta(escadasBrutas[i], `Escada ${i + 1}`)
+    if (typeof r === 'string') return { ok: false, erro: r }
+    escadas.push(r)
+  }
+
+  const torres: TorrePlantaIA[] = []
+  for (let i = 0; i < torresBrutas.length; i++) {
+    const t = torresBrutas[i]
+    if (!ehObjeto(t)) return { ok: false, erro: `Torre ${i + 1}: item não é um objeto.` }
+    if (!inteiroValido(t.x) || !inteiroValido(t.y)) {
+      return { ok: false, erro: `Torre ${i + 1}: "x"/"y" ausente, não inteiro, ou coordenada absurda.` }
+    }
+    if (!tamanhoValido(t.tamanho)) {
+      return { ok: false, erro: `Torre ${i + 1}: "tamanho" precisa ser inteiro maior que zero.` }
+    }
+    torres.push({ x: t.x, y: t.y, tamanho: t.tamanho })
   }
 
   const portas: PortaPlantaIA[] = []
@@ -202,11 +357,20 @@ export function parsearPlantaIA(texto: string): ResultadoParsePlanta {
     simbolos.push({ x: sb.x, y: sb.y, simbolo: sb.simbolo, rotulo: typeof sb.rotulo === 'string' ? sb.rotulo : '' })
   }
 
-  if (salas.length === 0 && portas.length === 0 && simbolos.length === 0) {
+  if (
+    salas.length === 0 &&
+    salasPoligono.length === 0 &&
+    corredores.length === 0 &&
+    muralhas.length === 0 &&
+    torres.length === 0 &&
+    escadas.length === 0 &&
+    portas.length === 0 &&
+    simbolos.length === 0
+  ) {
     return { ok: false, erro: 'A IA não descreveu nenhuma peça de mapa.' }
   }
 
-  return { ok: true, planta: { salas, portas, simbolos } }
+  return { ok: true, planta: { salas, salasPoligono, corredores, muralhas, torres, escadas, portas, simbolos } }
 }
 
 /** Duas caixas se sobrepõem em ÁREA (encostar pela borda não conta). */
@@ -241,6 +405,17 @@ export function contarSalasSobrepostas(salas: SalaPlantaIA[]): number {
 export function bboxDaPlantaEmQuadrados(planta: PlantaIA): Caixa {
   const caixas: Caixa[] = [
     ...planta.salas.map((s) => ({ x: s.x, y: s.y, w: s.w, h: s.h })),
+    ...planta.salasPoligono.map((s) => {
+      const xs = s.pontos.map((p) => p.x)
+      const ys = s.pontos.map((p) => p.y)
+      const minX = Math.min(...xs)
+      const minY = Math.min(...ys)
+      return { x: minX, y: minY, w: Math.max(...xs) - minX, h: Math.max(...ys) - minY }
+    }),
+    ...planta.corredores.map((c) => ({ x: c.x, y: c.y, w: c.w, h: c.h })),
+    ...planta.muralhas.map((m) => ({ x: m.x, y: m.y, w: m.w, h: m.h })),
+    ...planta.torres.map((t) => ({ x: t.x, y: t.y, w: t.tamanho, h: t.tamanho })),
+    ...planta.escadas.map((e) => ({ x: e.x, y: e.y, w: e.w, h: e.h })),
     ...planta.portas.map((p) => ({ x: p.x, y: p.y, w: 1, h: 1 })),
     ...planta.simbolos.map((s) => ({ x: s.x, y: s.y, w: 1, h: 1 })),
   ]
@@ -284,6 +459,46 @@ export interface EspecificacaoSalaIA {
   props: { estado: EstadoSala; rotulo: string; cor: '' }
 }
 
+export interface EspecificacaoSalaPoligonoIA {
+  tipo: 'sala-poligono'
+  /** vértices absolutos, em quadrados, já deslocados para a origem final — a conversão
+   * pra ponto LOCAL do shape (origem = mínimo dos vértices) é responsabilidade do
+   * módulo de I/O, que é quem monta x/y de página do shape. */
+  pontosQuad: PontoPoligono[]
+  props: { estado: EstadoSala; rotulo: string; cor: '' }
+}
+
+export interface EspecificacaoCorredorIA {
+  tipo: 'corredor'
+  xQuad: number
+  yQuad: number
+  wQuad: number
+  hQuad: number
+}
+
+export interface EspecificacaoMuralhaIA {
+  tipo: 'muralha'
+  xQuad: number
+  yQuad: number
+  wQuad: number
+  hQuad: number
+}
+
+export interface EspecificacaoTorreIA {
+  tipo: 'torre'
+  xQuad: number
+  yQuad: number
+  tamanhoQuad: number
+}
+
+export interface EspecificacaoEscadaIA {
+  tipo: 'escada'
+  xQuad: number
+  yQuad: number
+  wQuad: number
+  hQuad: number
+}
+
 export interface EspecificacaoPortaIA {
   tipo: 'porta'
   /** célula (1×1) onde a porta pousa; o módulo de I/O centraliza a barra dentro dela */
@@ -301,7 +516,15 @@ export interface EspecificacaoSimboloIA {
   props: { rotulo: string }
 }
 
-export type EspecificacaoFormaIA = EspecificacaoSalaIA | EspecificacaoPortaIA | EspecificacaoSimboloIA
+export type EspecificacaoFormaIA =
+  | EspecificacaoSalaIA
+  | EspecificacaoSalaPoligonoIA
+  | EspecificacaoCorredorIA
+  | EspecificacaoMuralhaIA
+  | EspecificacaoTorreIA
+  | EspecificacaoEscadaIA
+  | EspecificacaoPortaIA
+  | EspecificacaoSimboloIA
 
 /**
  * Planta validada → lista de especificações de shape, já deslocadas para nascer em
@@ -335,6 +558,30 @@ export function plantaParaEspecificacoes(
     })
   }
 
+  for (const sp of planta.salasPoligono) {
+    especificacoes.push({
+      tipo: 'sala-poligono',
+      pontosQuad: sp.pontos.map((p) => ({ x: p.x + dx, y: p.y + dy })),
+      props: { estado: sp.estado, rotulo: sp.rotulo, cor: '' },
+    })
+  }
+
+  for (const c of planta.corredores) {
+    especificacoes.push({ tipo: 'corredor', xQuad: c.x + dx, yQuad: c.y + dy, wQuad: c.w, hQuad: c.h })
+  }
+
+  for (const m of planta.muralhas) {
+    especificacoes.push({ tipo: 'muralha', xQuad: m.x + dx, yQuad: m.y + dy, wQuad: m.w, hQuad: m.h })
+  }
+
+  for (const t of planta.torres) {
+    especificacoes.push({ tipo: 'torre', xQuad: t.x + dx, yQuad: t.y + dy, tamanhoQuad: t.tamanho })
+  }
+
+  for (const e of planta.escadas) {
+    especificacoes.push({ tipo: 'escada', xQuad: e.x + dx, yQuad: e.y + dy, wQuad: e.w, hQuad: e.h })
+  }
+
   for (const p of planta.portas) {
     especificacoes.push({
       tipo: 'porta',
@@ -362,8 +609,13 @@ export function plantaParaEspecificacoes(
 
 /** Resumo em português do que foi (ou seria) inserido — mostrado ao usuário após gerar. */
 export function formatarResumoInsercao(planta: PlantaIA, salasSobrepostas: number): string {
+  const totalSalas = planta.salas.length + planta.salasPoligono.length
   const partes: string[] = []
-  if (planta.salas.length) partes.push(`${planta.salas.length} sala${planta.salas.length === 1 ? '' : 's'}`)
+  if (totalSalas) partes.push(`${totalSalas} sala${totalSalas === 1 ? '' : 's'}`)
+  if (planta.corredores.length) partes.push(`${planta.corredores.length} corredor${planta.corredores.length === 1 ? '' : 'es'}`)
+  if (planta.muralhas.length) partes.push(`${planta.muralhas.length} muralha${planta.muralhas.length === 1 ? '' : 's'}`)
+  if (planta.torres.length) partes.push(`${planta.torres.length} torre${planta.torres.length === 1 ? '' : 's'}`)
+  if (planta.escadas.length) partes.push(`${planta.escadas.length} escada${planta.escadas.length === 1 ? '' : 's'}`)
   if (planta.portas.length) partes.push(`${planta.portas.length} porta${planta.portas.length === 1 ? '' : 's'}`)
   if (planta.simbolos.length) partes.push(`${planta.simbolos.length} símbolo${planta.simbolos.length === 1 ? '' : 's'}`)
   const corpo = partes.length ? partes.join(', ') : 'nada'

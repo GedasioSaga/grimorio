@@ -28,6 +28,24 @@ import { tamanhoDoSimbolo } from '../components/SimboloMapaShape'
 /** Margem entre o bloco novo e o que já existe no mapa, em quadrados. */
 const MARGEM_AREA_LIVRE = 1
 
+/**
+ * Modelo FIXO para gerar a planta, independente do modelo escolhido pelo usuário para
+ * texto (`modeloSalvo()`, em `modeloIA.ts`) — decisão do usuário em 15/08/2026.
+ *
+ * O padrão barato do app (`MODELO_PADRAO` = "gemini-3.1-flash-lite") não dá conta do
+ * raciocínio espacial que uma planta exige: cômodo vizinho precisa compartilhar parede,
+ * corredor precisa ligar dois blocos separados, e um modelo lite devolve caixas soltas
+ * com vão entre elas — a queixa original ("isso tá horrível", tudo vermelho, caixas
+ * soltas, ver 5.png/6.png no relatório desta leva). O usuário testou na mão e teve que
+ * trocar de modelo toda vez que ia gerar mapa; aqui a troca vira automática, só para esta
+ * chamada — não mexe em `modeloSalvo()`, que continua valendo para chat/texto.
+ *
+ * `gemini-3-pro` é o mais capaz da tabela conhecida (`MODELOS_CONHECIDOS`, modeloIA.ts) —
+ * a mesma nota "lore densa e coerência em texto longo" se aplica a manter dezenas de
+ * cômodos coerentes entre si numa planta grande.
+ */
+export const MODELO_MAPA_PADRAO = 'gemini-3-pro'
+
 export type ResultadoGeracaoPlanta =
   | { ok: true; planta: PlantaIA; resumo: string }
   | { ok: false; erro: string }
@@ -53,7 +71,7 @@ export async function gerarPlantaIA(opts: {
       historico: [{ papel: 'user', texto: opts.descricao || 'Monte um mapa a partir da imagem anexada.' }],
       imagens: opts.imagem ? [opts.imagem] : [],
       chaves: opts.chaves,
-      modelo: opts.modelo,
+      modelo: opts.modelo ?? MODELO_MAPA_PADRAO,
     })
   } catch (e) {
     return { ok: false, erro: e instanceof Error ? e.message : String(e) }
@@ -79,16 +97,41 @@ function promptSistemaMapa(): string {
     'estrutura em coordenadas de GRADE, e o aplicativo desenha exatamente no estilo dele.\n\n' +
     'Responda com um único objeto JSON, SEM markdown, SEM texto antes ou depois, no formato:\n' +
     '{\n' +
-    '  "salas": [{ "x": 0, "y": 0, "w": 5, "h": 4, "rotulo": "Salão principal", "estado": "pendente" }],\n' +
+    '  "salas": [{ "x": 0, "y": 0, "w": 5, "h": 4, "rotulo": "Salão principal", "estado": "sem-info" }],\n' +
+    '  "salasPoligono": [{ "pontos": [{"x":5,"y":0},{"x":9,"y":0},{"x":9,"y":3},{"x":7,"y":3},{"x":7,"y":4},{"x":5,"y":4}], "rotulo": "Cripta em L", "estado": "sem-info" }],\n' +
+    '  "corredores": [{ "x": 5, "y": 1, "w": 1, "h": 2 }],\n' +
+    '  "muralhas": [{ "x": -1, "y": -1, "w": 12, "h": 7 }],\n' +
+    '  "torres": [{ "x": -2, "y": -2, "tamanho": 2 }],\n' +
+    '  "escadas": [{ "x": 5, "y": 1, "w": 1, "h": 2 }],\n' +
     '  "portas": [{ "x": 5, "y": 2, "orientacao": "vertical", "estado": "livre" }],\n' +
     '  "simbolos": [{ "x": 6, "y": 2, "simbolo": "armadilha" }]\n' +
     '}\n\n' +
+    'Peças disponíveis — use TODAS que fizerem sentido para o pedido, não só "salas":\n' +
+    '- "salas": cômodo RETANGULAR. Use para qualquer sala simples.\n' +
+    '- "salasPoligono": cômodo de forma IRREGULAR (L, T, chanfro) — "pontos" é a lista de ' +
+    'vértices, em ordem ao redor do contorno (sentido horário ou anti-horário, tanto faz), ' +
+    'mínimo 3. Use só quando o cômodo NÃO for um retângulo simples.\n' +
+    '- "corredores": trecho de PASSAGEM entre dois blocos de sala que não encostam — sem ' +
+    'corredor, o vão entre eles fica PRETO (vazio) no mapa, o que é um erro grave. É a peça ' +
+    'que faz o mapa ler como prédio contínuo, não como caixas soltas no nada.\n' +
+    '- "muralhas": contorno externo que cerca o conjunto inteiro (só a linha, sem preencher ' +
+    'por dentro) — use quando o pedido envolver "castelo", "fortaleza", "muro", "cercado", ou ' +
+    'qualquer construção com um perímetro claro. "x"/"y" pode ser NEGATIVO (a muralha nasce um ' +
+    'pouco antes da primeira sala, para sobrar folga ao redor de tudo).\n' +
+    '- "torres": marcador redondo no CANTO da muralha (torre de vigia, torreão). Um por canto ' +
+    'é o padrão em castelo; "tamanho" é o lado do quadrado que a contém.\n' +
+    '- "escadas": trecho de degraus, sempre DENTRO de um corredor (ou de uma sala) que já ' +
+    'existe ali — não cria caminho novo sozinha, marca onde o caminho já desenhado sobe/desce.\n\n' +
     'Regras:\n' +
-    '1. Todo x/y/w/h é um INTEIRO em QUADRADOS da grade (não em pixel). x/y é o canto ' +
-    'superior-esquerdo da sala. w/h é a largura/altura em quadrados, sempre maior que zero.\n' +
-    '2. "estado" da sala é um destes três: "pendente" (ainda tem algo, vira vermelho), ' +
-    '"limpa" (já foi resolvida, vira azul), "sem-info" (o mestre ainda não decidiu, vira escuro). ' +
-    'Comece tudo como "pendente" a menos que o pedido diga o contrário.\n' +
+    '1. Todo x/y/w/h/tamanho é um INTEIRO em QUADRADOS da grade (não em pixel, pode ser ' +
+    'negativo). x/y é o canto superior-esquerdo da peça (ou, em "salasPoligono", a origem dos ' +
+    'vértices). w/h é a largura/altura em quadrados, sempre maior que zero.\n' +
+    '2. "estado" da sala (retangular ou polígono) é um destes três: "sem-info" (o mestre ainda ' +
+    'não decidiu o que tem ali, vira cinza-escuro — ESTE é o padrão, comece toda sala aqui), ' +
+    '"pendente" (o texto do usuário diz explicitamente que ainda tem algo lá — monstro, tesouro, ' +
+    'perigo —, vira vermelho), "limpa" (o texto diz que já foi resolvida, vira azul). NUNCA marque ' +
+    '"pendente" por padrão: metade das salas de um pedido genérico não tem informação nenhuma, ' +
+    'e pintar tudo de vermelho é o erro mais grave que esta planta pode cometer.\n' +
     '3. "rotulo" da sala é o nome do cômodo ("Salão principal", "Masmorra"), pode ser "" se não houver nome.\n' +
     '4. Porta: "x"/"y" é a CÉLULA da grade onde ela fica (normalmente na borda entre duas ' +
     'salas vizinhas); "orientacao" é "horizontal" (atravessa uma parede horizontal, a porta ' +
@@ -99,11 +142,26 @@ function promptSistemaMapa(): string {
     '"cama", "bau", "andar" (rótulo do andar — "rotulo" tipo "1F"), "pocao", "erva", "chave", ' +
     '"documento", "moeda", "espada", "municao", "livro", "tocha", "comida". "x"/"y" é a célula ' +
     'da grade; o app centraliza o desenho nela.\n' +
-    '6. Salas NÃO devem se sobrepor propositalmente — encoste as bordas (a sala B começa onde ' +
-    'a sala A termina) em vez de empilhar uma em cima da outra.\n' +
-    '7. Distribua as salas em torno de (0,0), crescendo para a direita/baixo (x/y positivos).\n' +
-    '8. Nunca invente campo fora deste formato, e nunca omita "salas"/"portas"/"simbolos" — use ' +
-    'lista vazia [] quando não houver.'
+    '6. MASSA CONTÍNUA, NUNCA caixas soltas com vão preto entre elas — esta é a regra mais ' +
+    'importante. Duas salas vizinhas DEVEM compartilhar a parede: a borda direita de uma é ' +
+    'EXATAMENTE a borda esquerda da outra (mesma coordenada, sem gap). Exemplo CORRETO — sala A ' +
+    '"x":0,"w":5" encostada em sala B: a sala B começa em "x":5 (não em "x":6, não em "x":7). Se ' +
+    'duas salas não podem encostar (estão em partes separadas do prédio), ligue-as com um ' +
+    '"corredores" preenchendo o vão inteiro entre as duas bordas — nunca deixe o vão sem peça ' +
+    'nenhuma. Isso vale para TODAS as peças de sala/corredor/escada juntas: o conjunto inteiro ' +
+    'tem de formar um bloco sem buraco preto no meio, só o exterior (fora da muralha, se houver) ' +
+    'fica vazio.\n' +
+    '7. Distribua as salas em torno de (0,0), crescendo para a direita/baixo (x/y positivos); ' +
+    'muralha/torre podem usar coordenada negativa para sobrar margem ao redor do conjunto (ver ' +
+    'regra 1).\n' +
+    '8. Nunca invente campo fora deste formato, e nunca omita nenhuma das 8 listas — use lista ' +
+    'vazia [] quando não houver peça daquele tipo. Um pedido só de "uma sala" ainda precisa de ' +
+    'todas as 8 chaves no JSON, as demais vazias.\n' +
+    '9. Se vier uma IMAGEM de referência: ela é uma PLANTA a LER, não uma foto a descrever. ' +
+    'Identifique cada cômodo, corredor, muralha, torre, escada, porta e símbolo que aparece nela ' +
+    'e TRADUZA cada um numa peça deste formato, na mesma disposição relativa (que sala fica ao ' +
+    'lado de qual, onde ficam as portas) — não escreva um resumo em prosa do que a imagem mostra, ' +
+    'e não invente peça que não está nela.'
   )
 }
 
@@ -142,6 +200,51 @@ function especificacaoParaCriarShape(
       x: quadradosParaPx(spec.xQuad, QUADRADO_PX),
       y: quadradosParaPx(spec.yQuad, QUADRADO_PX),
       props: { w: quadradosParaPx(spec.wQuad, QUADRADO_PX), h: quadradosParaPx(spec.hQuad, QUADRADO_PX), ...spec.props },
+    }
+  }
+
+  // sala em polígono: os vértices do shape são LOCAIS (relativos ao x/y de página do
+  // próprio shape), diferente da sala retangular — a origem é o mínimo dos vértices, e
+  // cada ponto vira o deslocamento até ela, já em px.
+  if (spec.tipo === 'sala-poligono') {
+    const minXQuad = Math.min(...spec.pontosQuad.map((p) => p.x))
+    const minYQuad = Math.min(...spec.pontosQuad.map((p) => p.y))
+    return {
+      id,
+      type: 'sala-poligono-mapa',
+      x: quadradosParaPx(minXQuad, QUADRADO_PX),
+      y: quadradosParaPx(minYQuad, QUADRADO_PX),
+      props: {
+        pontos: spec.pontosQuad.map((p) => ({
+          x: quadradosParaPx(p.x - minXQuad, QUADRADO_PX),
+          y: quadradosParaPx(p.y - minYQuad, QUADRADO_PX),
+        })),
+        ...spec.props,
+      },
+    }
+  }
+
+  // corredor, muralha e escada são a mesma família de caixa simples (w/h, sem estado nem
+  // rótulo) que a sala — só muda o `type` do shape.
+  if (spec.tipo === 'corredor' || spec.tipo === 'muralha' || spec.tipo === 'escada') {
+    const type = spec.tipo === 'corredor' ? 'corredor-mapa' : spec.tipo === 'muralha' ? 'muralha-mapa' : 'escada-mapa'
+    return {
+      id,
+      type,
+      x: quadradosParaPx(spec.xQuad, QUADRADO_PX),
+      y: quadradosParaPx(spec.yQuad, QUADRADO_PX),
+      props: { w: quadradosParaPx(spec.wQuad, QUADRADO_PX), h: quadradosParaPx(spec.hQuad, QUADRADO_PX) },
+    }
+  }
+
+  if (spec.tipo === 'torre') {
+    const ladoPx = quadradosParaPx(spec.tamanhoQuad, QUADRADO_PX)
+    return {
+      id,
+      type: 'torre-mapa',
+      x: quadradosParaPx(spec.xQuad, QUADRADO_PX),
+      y: quadradosParaPx(spec.yQuad, QUADRADO_PX),
+      props: { w: ladoPx, h: ladoPx },
     }
   }
 

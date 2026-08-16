@@ -3,7 +3,6 @@ import { open, message } from '@tauri-apps/plugin-dialog'
 import { useEditor } from 'tldraw'
 import { useApp } from '../state/store'
 import { garantirChaves } from '../lib/chavesIA'
-import { modeloSalvo } from '../lib/modeloIA'
 import { pedirTexto } from './dialogos'
 import { associarNaCriacao } from './dialogoCampanhas'
 import {
@@ -105,7 +104,9 @@ export function AcoesMapaIA() {
           return
         }
       }
-      const resultado = await gerarPlantaIA({ descricao: texto, imagem, chaves, modelo: modeloSalvo() })
+      // sem `modelo`: `gerarPlantaIA` usa o padrão FORTE fixo para mapa (`MODELO_MAPA_PADRAO`
+      // em gerarMapaIA.ts), independente do modelo escolhido para texto — ver o porquê lá.
+      const resultado = await gerarPlantaIA({ descricao: texto, imagem, chaves })
       if (!resultado.ok) {
         await avisar(resultado.erro, true)
         return
