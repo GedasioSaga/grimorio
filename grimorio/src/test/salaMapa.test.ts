@@ -3,8 +3,8 @@ import { CORES_SALA, aparenciaDaSala, quebrarRotulo, ESTADOS_SALA } from '../lib
 
 describe('aparenciaDaSala', () => {
   it('pendente é vermelha e limpa é azul — a cor É a informação', () => {
-    expect(aparenciaDaSala('pendente').preenchimento).toBe('#9c4f4a')
-    expect(aparenciaDaSala('limpa').preenchimento).toBe('#43698c')
+    expect(aparenciaDaSala('pendente').preenchimento).toBe('#6e433f')
+    expect(aparenciaDaSala('limpa').preenchimento).toBe('#3f5568')
   })
 
   it('todos os estados têm contorno e cor de texto', () => {
@@ -62,8 +62,8 @@ describe('cor escolhida à mão', () => {
   })
 
   it('sem cor escolhida, manda o estado', () => {
-    expect(aparenciaDaSala('limpa', undefined).preenchimento).toBe('#43698c')
-    expect(aparenciaDaSala('limpa', '').preenchimento).toBe('#43698c')
+    expect(aparenciaDaSala('limpa', undefined).preenchimento).toBe('#3f5568')
+    expect(aparenciaDaSala('limpa', '').preenchimento).toBe('#3f5568')
   })
 
   it('o estado continua sendo o estado, mesmo com cor trocada', () => {

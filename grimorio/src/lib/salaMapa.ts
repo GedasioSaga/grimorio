@@ -62,21 +62,46 @@ export const ESPESSURA_CONTORNO_SALA = 2
 const CONTORNO = CONTORNO_SALA
 
 /**
+ * Distância do topo da sala até a primeira linha do rótulo (`desenhoSala.tsx` e
+ * `desenhoSalaPoligono.tsx`).
+ *
+ * O rótulo é ancorado no TOPO, não centralizado na sala — mudança desta leva. A revisão
+ * cega achou colisão real: "Torre de Vigia" caindo em cima do ícone da escada, "Depósito
+ * Seguro" cortado pelo baú, porque o nome do cômodo (centralizado) e o ícone da peça
+ * largada dentro da sala (também tendendo ao centro) disputavam o mesmo ponto. Nas
+ * referências o nome é sempre uma faixa no topo do cômodo — o miolo fica livre para
+ * qualquer ícone que o mestre arraste para lá, sem precisar saber de antemão o que vai
+ * ser largado dentro. Ancorar no topo resolve a colisão para QUALQUER peça futura, sem
+ * detecção de colisão em tempo real (as duas formas são shapes independentes no
+ * tldraw — a sala não sabe o que está por cima dela).
+ */
+export const MARGEM_TOPO_ROTULO = 10
+
+/**
  * Preenchimento de cada estado — tom MÉDIO, não escuro-muddy.
  *
- * `#7d3b3b`/`#40596b` (versão anterior) ficavam próximos demais do preto: o resultado era
- * a "sala feia" que o usuário reclamou. As referências (RE2 cinza, mapas verdes) usam tom
- * mais claro e saturado, que se destaca do fundo do canvas (`#2e2e2e`, ver `theme.css`)
- * sem virar neon. `sem-info` sobe de `#1c1c1c` pra `#3d3d3d`: perto do preto puro a sala
- * some contra o fundo escuro do editor; um cinza levemente mais claro que o fundo do
- * canvas ainda lê como "sala sem cor", só que sem sumir.
+ * `#7d3b3b`/`#40596b` (duas versões atrás) ficavam próximos demais do preto: o resultado
+ * era a "sala feia" que o usuário reclamou. A versão seguinte (`#9c4f4a`/`#43698c`)
+ * corrigiu isso subindo brilho e saturação — e foi longe demais na outra direção: a
+ * revisão cega leu o mapa como "planilha colorida por categoria" em vez de chão de um
+ * mesmo edifício, porque cada estado virou um bloco de cor quase pura brigando com os
+ * vizinhos. `sem-info` sobe de `#1c1c1c` pra `#3d3d3d`: perto do preto puro a sala some
+ * contra o fundo escuro do editor; um cinza levemente mais claro que o fundo do canvas
+ * ainda lê como "sala sem cor", só que sem sumir.
+ *
+ * Esta leva reduz saturação e brilho de `pendente`/`limpa`, aproximando as duas do tom
+ * neutro de `sem-info` (que já era o "piso" do prédio) — o estado continua lendo pela
+ * MATIZ (vermelho-acastanhado vs. azul-acinzentado), não pela intensidade da cor. O
+ * usuário decidiu explicitamente MANTER a cor como estado (não virar monocromático,
+ * que era a sugestão da revisão): ela é a informação que se lê de relance na mesa. O
+ * ajuste aqui é só baixar o volume, não desligar o som.
  *
  * `texto` não é mais fixo por estado — ver `corTextoContraste`, calculado em cima do
  * preenchimento final (estado ou cor escolhida à mão).
  */
 const APARENCIAS: Record<EstadoSala, Omit<AparenciaSala, 'estado' | 'texto'>> = {
-  pendente: { rotulo: 'Ainda tem coisa', preenchimento: '#9c4f4a', contorno: CONTORNO },
-  limpa: { rotulo: 'Já limpei', preenchimento: '#43698c', contorno: CONTORNO },
+  pendente: { rotulo: 'Ainda tem coisa', preenchimento: '#6e433f', contorno: CONTORNO },
+  limpa: { rotulo: 'Já limpei', preenchimento: '#3f5568', contorno: CONTORNO },
   'sem-info': { rotulo: 'Sem informação', preenchimento: '#3d3d3d', contorno: CONTORNO },
 }
 

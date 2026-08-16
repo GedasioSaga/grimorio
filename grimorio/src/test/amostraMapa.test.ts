@@ -18,7 +18,11 @@ import { aparenciaDaSala, ESTADOS_SALA } from '../lib/salaMapa'
 import { PONTOS_SALA_POLIGONO_PADRAO, limitesDoPoligono } from '../lib/salaPoligonoMapa'
 import { aparenciaDaPorta, ESTADOS_PORTA, PORTA_ESPESSURA_PADRAO, PORTA_LARGURA_PADRAO } from '../lib/portaMapa'
 import { SIMBOLOS_MAPA, PINO_ITEM_ALTURA, PINO_ITEM_LARGURA } from '../lib/simbolosMapa'
-import { DEGRAUS_ESCADA } from '../lib/paletaMapa'
+import { desenharEscada } from '../lib/desenhoEscada'
+import { ESCADA_LARGURA_PADRAO, ESCADA_ALTURA_PADRAO } from '../lib/escadaMapa'
+import { desenharMuralha } from '../lib/desenhoMuralha'
+import { desenharTorre } from '../lib/desenhoTorre'
+import { TORRE_DIAMETRO_PADRAO } from '../lib/torreMapa'
 
 /**
  * Gera `.amostra/mapa.html`: catálogo de peças + um mapa de exemplo, para fotografar com
@@ -119,6 +123,24 @@ function gerarCatalogo(): string {
   // Corredor — sem estado nem rótulo, ver lib/corredorMapa.ts.
   cartoes.push(cartao('Corredor', svgDaPeca(140, 40, desenharCorredor({ w: 140, h: 40 }))))
 
+  // Escada — shape próprio desta leva (era grupo de retângulos nativos, ver lib/escadaMapa.ts).
+  cartoes.push(
+    cartao(
+      'Escada',
+      svgDaPeca(ESCADA_LARGURA_PADRAO, ESCADA_ALTURA_PADRAO, desenharEscada({ w: ESCADA_LARGURA_PADRAO, h: ESCADA_ALTURA_PADRAO })),
+    ),
+  )
+
+  // Muralha — só o contorno (fill "none"), ver lib/muralhaMapa.ts. Tamanho reduzido no
+  // catálogo (o padrão de nascença é grande demais para um cartão) só para caber ao lado
+  // das outras peças; a espessura do traço é a mesma constante usada no mapa de exemplo.
+  cartoes.push(cartao('Muralha', svgDaPeca(160, 112, desenharMuralha({ w: 160, h: 112 }))))
+
+  // Torre — círculo que marca um canto da muralha, ver lib/torreMapa.ts.
+  cartoes.push(
+    cartao('Torre', svgDaPeca(TORRE_DIAMETRO_PADRAO, TORRE_DIAMETRO_PADRAO, desenharTorre({ w: TORRE_DIAMETRO_PADRAO, h: TORRE_DIAMETRO_PADRAO }))),
+  )
+
   // Porta nos 3 estados — mesmo tamanho de nascença que `criarPorta` usa no app.
   for (const estado of ESTADOS_PORTA) {
     const w = PORTA_LARGURA_PADRAO
@@ -156,24 +178,6 @@ function gerarCatalogo(): string {
 }
 
 /**
- * Escada: grupo de retângulos nativos do tldraw (`geo`, `color: black`, `fill: solid`) —
- * ver `criarEscada` em `MapaToolbar.tsx`. Não é uma das quatro peças com função pura
- * pedida nesta extração (não passa por `SVGContainer` nem por um `ShapeUtil` nosso; é
- * geometria nativa do tldraw), então a amostra aproxima o visual sem chamar biblioteca
- * nenhuma — ela NÃO é fonte de verdade para a escada, só ilustra a planta de exemplo.
- */
-function desenharEscadaAproximada(x: number, y: number): string {
-  const largura = 50
-  const altura = 6
-  const espaco = 6
-  const degraus = Array.from(
-    { length: DEGRAUS_ESCADA },
-    (_, i) => `<rect x="${x}" y="${y + i * (altura + espaco)}" width="${largura}" height="${altura}" fill="#111111" stroke="#000000" />`,
-  ).join('')
-  return degraus
-}
-
-/**
  * Mapa de exemplo: uma planta pequena e plausível de castelo, para julgar o CONJUNTO —
  * mesma técnica do catálogo, funções puras compostas numa grade de salas.
  *
@@ -187,6 +191,12 @@ function desenharEscadaAproximada(x: number, y: number): string {
  * "caminho entre duas construções", como nas referências), e uma sala em polígono (L)
  * fecha o andar embaixo da Masmorra — cômodo irregular como peça única, sem emenda de
  * retângulos.
+ *
+ * Segunda revisão (muralha/torre/escada/rótulo): muralha cercando o conjunto inteiro com
+ * uma torre redonda sobreposta a cada canto (como em `4.png`); uma escada de verdade
+ * (hachura, não grade de retângulos) dentro de um corredor que desce da Torre de Vigia;
+ * a Guarita virou sala em polígono com o canto externo chanfrado, para mostrar a peça
+ * também nesse papel (não só em cômodo irregular tipo L).
  */
 function gerarMapaExemplo(): string {
   const partes: string[] = []
@@ -203,8 +213,8 @@ function gerarMapaExemplo(): string {
   // Três fileiras, todas de x=20 a x=520 (largura 500) — por isso encostam sem gerar preto
   // entre elas, mesmo as três tendo divisões internas diferentes.
   const salas: SalaDef[] = [
-    // fileira 1 — y:20-132
-    { x: 20, y: 20, w: 140, h: 112, estado: 'pendente', rotulo: 'Guarita' },
+    // fileira 1 — y:20-132. Guarita saiu daqui: agora é sala em polígono (canto chanfrado,
+    // ver bloco abaixo), no mesmo lugar (x:20,y:20,w:140,h:112).
     { x: 160, y: 20, w: 200, h: 112, estado: 'sem-info', rotulo: 'Salão de Entrada' },
     { x: 360, y: 20, w: 160, h: 112, estado: 'limpa', rotulo: 'Sala de Armas' },
     // fileira 2 — y:132-228, encosta direto na fileira 1 (sem corredor: mostra o caso
@@ -258,6 +268,30 @@ function gerarMapaExemplo(): string {
       criptaW,
       criptaH,
       desenharCorpoSalaPoligono({ pontos: cripta.pontos, estado: 'pendente', rotulo: 'Cripta', cor: '' }),
+    )}</div>`,
+  )
+
+  // Guarita: sala em polígono com o canto externo (superior-esquerdo, encostado na
+  // muralha/torre) chanfrado — mesma caixa delimitadora (20,20,140×112) que ela ocupava
+  // como retângulo, só o vértice cortado muda. Mostra a sala em polígono também nesse
+  // papel (chanfro), não só no cômodo em L que a Cripta já ilustra.
+  const guarita = {
+    x: 20,
+    y: 20,
+    pontos: [
+      { x: 30, y: 0 },
+      { x: 140, y: 0 },
+      { x: 140, y: 112 },
+      { x: 0, y: 112 },
+      { x: 0, y: 30 },
+    ],
+  }
+  const { w: guaritaW, h: guaritaH } = limitesDoPoligono(guarita.pontos)
+  partes.push(
+    `<div class="mapa-peca" style="left:${guarita.x}px;top:${guarita.y}px;width:${guaritaW}px;height:${guaritaH}px;">${svgDaPeca(
+      guaritaW,
+      guaritaH,
+      desenharCorpoSalaPoligono({ pontos: guarita.pontos, estado: 'pendente', rotulo: 'Guarita', cor: '' }),
     )}</div>`,
   )
 
@@ -328,18 +362,81 @@ function gerarMapaExemplo(): string {
     )}</div>`,
   )
 
-  // Escada dentro da Torre de Vigia, na metade debaixo do rótulo (aproximação — ver
-  // comentário acima).
-  partes.push(
-    `<svg class="mapa-peca" style="left:595px;top:118px;width:50px;height:54px;" width="50" height="54" viewBox="0 0 50 54">${desenharEscadaAproximada(0, 0)}</svg>`,
-  )
-
   // Uma divisória interna na Câmara do Trono, para o catálogo mostrar a peça no contexto.
   partes.push(
     `<svg class="mapa-peca" style="left:120px;top:228px;width:2px;height:120px;" width="2" height="120" viewBox="-4 0 8 120">${renderToStaticMarkup(createElement('g', null, desenharLinha({ dx: 0, dy: 120 })))}</svg>`,
   )
 
-  return `<div class="mapa-exemplo">${partes.join('\n')}</div>`
+  // Corredor descendo da Torre de Vigia (borda debaixo, x:560-680,y=172), com uma escada
+  // DE VERDADE (hachura, shape próprio) ocupando o miolo dele — como nas referências, um
+  // trecho de degraus dentro de um corredor mais largo, não a faixa inteira.
+  const corredorEscada = { x: 600, y: 172, w: 40, h: 140 }
+  partes.push(
+    `<div class="mapa-peca" style="left:${corredorEscada.x}px;top:${corredorEscada.y}px;width:${corredorEscada.w}px;height:${corredorEscada.h}px;">${svgDaPeca(corredorEscada.w, corredorEscada.h, desenharCorredor(corredorEscada))}</div>`,
+  )
+  const escadaNoCorredor = { x: 608, y: 190, w: 24, h: 100 }
+  partes.push(
+    `<div class="mapa-peca" style="left:${escadaNoCorredor.x}px;top:${escadaNoCorredor.y}px;width:${escadaNoCorredor.w}px;height:${escadaNoCorredor.h}px;">${svgDaPeca(escadaNoCorredor.w, escadaNoCorredor.h, desenharEscada(escadaNoCorredor))}</div>`,
+  )
+
+  /**
+   * Muralha + torres cercando o CONTEÚDO de verdade — não um número fixo de pixels
+   * chutado. `CONTEUDO_*` é a caixa delimitadora real de tudo que foi empurrado em
+   * `partes` acima (rooms de x:20 a x:680, janela no topo em y:14, rótulo de andar
+   * terminando em y:544 — conferido à mão contra cada bloco desta função).
+   *
+   * Fix de revisão: a versão anterior desenhava a muralha a 2px da borda do CONTAINER,
+   * não do conteúdo — a torre (raio 45) furava tanto o container quanto a legenda de
+   * texto ACIMA dele (coordenada Y negativa "vazava" para cima na página). Aqui o
+   * container nasce do conteúdo: `PADDING_CONTAINER` garante que a torre INTEIRA (não
+   * só o centro) caiba com folga visível antes da borda do quadro, e o conteúdo entra
+   * num wrapper deslocado (`.mapa-conteudo`) para não precisar reescrever a coordenada
+   * de cada peça já empurrada acima.
+   */
+  const CONTEUDO_MIN_X = 20
+  const CONTEUDO_MAX_X = 680
+  const CONTEUDO_MIN_Y = 14
+  const CONTEUDO_MAX_Y = 544
+  const MARGEM_MURALHA = 24 // vão entre a última peça e o traço da muralha
+  const PADDING_CONTAINER = TORRE_DIAMETRO_PADRAO / 2 + 20 // torre inteira + folga visível
+
+  const larguraConteudo = CONTEUDO_MAX_X - CONTEUDO_MIN_X
+  const alturaConteudo = CONTEUDO_MAX_Y - CONTEUDO_MIN_Y
+  const muralha = {
+    x: PADDING_CONTAINER,
+    y: PADDING_CONTAINER,
+    w: larguraConteudo + MARGEM_MURALHA * 2,
+    h: alturaConteudo + MARGEM_MURALHA * 2,
+  }
+  const larguraContainer = muralha.x * 2 + muralha.w
+  const alturaContainer = muralha.y * 2 + muralha.h
+  // desloca o conteúdo (coordenadas já escritas acima, sem reescrever nenhuma) para
+  // dentro do vão que a muralha abre.
+  const deslocamentoX = muralha.x + MARGEM_MURALHA - CONTEUDO_MIN_X
+  const deslocamentoY = muralha.y + MARGEM_MURALHA - CONTEUDO_MIN_Y
+
+  const conteudo = `<div class="mapa-conteudo" style="left:${deslocamentoX}px;top:${deslocamentoY}px;">${partes.join('\n')}</div>`
+
+  const muros: string[] = []
+  muros.push(
+    `<div class="mapa-peca" style="left:${muralha.x}px;top:${muralha.y}px;width:${muralha.w}px;height:${muralha.h}px;">${svgDaPeca(muralha.w, muralha.h, desenharMuralha(muralha))}</div>`,
+  )
+  const meiaTorre = TORRE_DIAMETRO_PADRAO / 2
+  const cantosMuralha = [
+    { x: muralha.x, y: muralha.y },
+    { x: muralha.x + muralha.w, y: muralha.y },
+    { x: muralha.x, y: muralha.y + muralha.h },
+    { x: muralha.x + muralha.w, y: muralha.y + muralha.h },
+  ]
+  for (const canto of cantosMuralha) {
+    const x = canto.x - meiaTorre
+    const y = canto.y - meiaTorre
+    muros.push(
+      `<div class="mapa-peca" style="left:${x}px;top:${y}px;width:${TORRE_DIAMETRO_PADRAO}px;height:${TORRE_DIAMETRO_PADRAO}px;">${svgDaPeca(TORRE_DIAMETRO_PADRAO, TORRE_DIAMETRO_PADRAO, desenharTorre({ w: TORRE_DIAMETRO_PADRAO, h: TORRE_DIAMETRO_PADRAO }))}</div>`,
+    )
+  }
+
+  return `<div class="mapa-exemplo" style="width:${larguraContainer}px;height:${alturaContainer}px;">${muros.join('\n')}\n${conteudo}</div>`
 }
 
 function gerarHtml(): string {
@@ -386,11 +483,14 @@ function gerarHtml(): string {
   .peca figcaption { font-size: 11px; color: #aaa; margin-top: 8px; text-align: center; }
   .mapa-exemplo {
     position: relative;
-    width: 720px;
-    height: 560px;
     background: #000000;
     border: 1px solid #2a2a2a;
+    /* width/height vêm inline (calculados a partir do conteúdo real, ver gerarMapaExemplo) */
   }
+  /* wrapper que carrega TODAS as peças de dentro da muralha (rooms, portas, símbolos,
+     corredor+escada) deslocado para dentro do vão que a muralha abre — as coordenadas de
+     cada peça continuam as mesmas escritas em gerarMapaExemplo, só a origem se move. */
+  .mapa-conteudo { position: absolute; }
   .mapa-peca { position: absolute; }
   .mapa-peca svg { display: block; overflow: visible; }
 </style>
@@ -405,7 +505,7 @@ ${catalogo}
   </div>
 
   <h2>Mapa de exemplo</h2>
-  <p class="legenda">Planta de castelo — salas encostadas, corredor ligando à torre, uma sala em polígono (Cripta) — para julgar o conjunto como massa contínua.</p>
+  <p class="legenda">Planta de castelo — salas encostadas de tamanhos variados, muralha cercando o conjunto com torre em cada canto, escada de verdade dentro de um corredor, sala em polígono em dois papéis (L da Cripta, canto chanfrado da Guarita) — para julgar o conjunto como massa contínua.</p>
 ${mapa}
 </body>
 </html>

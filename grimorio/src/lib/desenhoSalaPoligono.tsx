@@ -1,4 +1,4 @@
-import { ESPESSURA_CONTORNO_SALA, aparenciaDaSala, quebrarRotulo } from './salaMapa'
+import { ESPESSURA_CONTORNO_SALA, MARGEM_TOPO_ROTULO, aparenciaDaSala, quebrarRotulo } from './salaMapa'
 import { centroDoPoligono, limitesDoPoligono, type PontoPoligono } from './salaPoligonoMapa'
 
 /**
@@ -20,11 +20,13 @@ export interface DesenharCorpoSalaPoligonoProps {
 
 export function desenharCorpoSalaPoligono({ pontos, estado, rotulo, cor }: DesenharCorpoSalaPoligonoProps) {
   const aparencia = aparenciaDaSala(estado, cor || undefined)
-  const { w } = limitesDoPoligono(pontos)
+  const { w, minY } = limitesDoPoligono(pontos)
   const centro = centroDoPoligono(pontos)
   const linhas = quebrarRotulo(rotulo, w, FONTE_ROTULO)
-  const alturaTexto = linhas.length * ENTRELINHA
-  const primeiraLinhaY = centro.y - alturaTexto / 2 + ENTRELINHA / 2
+  // rótulo ancorado no TOPO da caixa delimitadora (mesma regra da sala retangular — ver
+  // MARGEM_TOPO_ROTULO em salaMapa.ts). `minY` e não 0: a caixa do polígono pode não
+  // começar em y=0 em coordenadas locais estranhas, embora hoje sempre comece.
+  const primeiraLinhaY = minY + MARGEM_TOPO_ROTULO + ENTRELINHA / 2
   const pontosSvg = pontos.map((p) => `${p.x},${p.y}`).join(' ')
 
   return (

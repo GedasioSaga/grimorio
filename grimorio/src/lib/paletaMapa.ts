@@ -7,15 +7,15 @@
  * fica em `estilos.geo` — não, o campo `geo` aqui é só a forma tldraw, os estilos vão
  * em `estilos.color`/`fill`/`dash`/`size`, aplicados via `DefaultColorStyle` etc).
  *
- * Escada NÃO usa a mecânica de pré-estilo: não existe geo tldraw com listras/degraus
+ * Escada, muralha e torre NÃO usam a mecânica de pré-estilo: não existe geo tldraw com
+ * listras/degraus nem contorno-sem-preenchimento com o peso que as referências pedem
  * (`GeoShapeGeoStyle.values` verificado em
  * `node_modules/@tldraw/tlschema/src/shapes/TLGeoShape.ts:40-51` — cloud, rectangle,
  * ellipse, triangle, diamond, pentagon, hexagon, octagon, star, rhombus, rhombus-2,
- * oval, trapezoid, arrow-*, x-box, check-box, heart; nada de degraus). Por isso
- * `escada` não define `geo`/`estilos`: o botão da toolbar cria na hora um grupo de N
- * retângulos finos paralelos (degraus), via `editor.createShapes` + `editor.groupShapes`
- * (ambos verificados em `node_modules/@tldraw/editor/src/lib/editor/Editor.ts:7917`
- * e `:8250-8323`).
+ * oval, trapezoid, arrow-*, x-box, check-box, heart; nada de degraus). Por isso as três
+ * não definem `geo`/`estilos`: cada uma é um shape próprio (`EscadaMapaShape.tsx`,
+ * `MuralhaMapaShape.tsx`, `TorreMapaShape.tsx`), criado pelo botão da toolbar com
+ * `editor.createShape` — mesma mecânica de `criarCorredor`/`criarSala`.
  *
  * Valores de estilo verificados contra o tlschema real (não inventados):
  * - cores: `node_modules/@tldraw/tlschema/src/styles/TLColorStyle.ts:23-37`
@@ -40,6 +40,7 @@ import { ITENS_MAPA, type SimboloId } from './simbolosMapa'
 
 export type PecaId =
   | 'sala' | 'sala-poligono' | 'corredor' | 'parede' | 'porta' | 'janela' | 'escada'
+  | 'muralha' | 'torre'
   | 'secreta' | 'armadilha' | 'marcador' | 'rotulo'
   | 'mesa' | 'cama' | 'bau' | 'andar' | 'divisoria'
   // itens: o id da peça é o mesmo do símbolo, porque um item É o seu desenho
@@ -139,6 +140,22 @@ export const ELEMENTOS_PALETA: ElementoPaleta[] = [
     estilos: {},
   },
   {
+    // contorno externo que cerca o conjunto — ver lib/muralhaMapa.ts
+    id: 'muralha',
+    rotulo: 'Muralha',
+    glifo: '▢',
+    tipo: 'acao',
+    estilos: {},
+  },
+  {
+    // círculo que marca um canto da muralha — ver lib/torreMapa.ts
+    id: 'torre',
+    rotulo: 'Torre',
+    glifo: '◯',
+    tipo: 'acao',
+    estilos: {},
+  },
+  {
     id: 'mesa',
     rotulo: 'Mesa',
     glifo: '▬',
@@ -217,9 +234,6 @@ export const ELEMENTOS_PALETA: ElementoPaleta[] = [
   ),
 ]
 
-/** Quantidade de degraus criados pelo botão "Escada" (ver MapaToolbar.tsx). */
-export const DEGRAUS_ESCADA = 5
-
 /** O que o carimbo de identidade precisa enxergar de uma forma recém-criada. */
 interface FormaCriada {
   type: string
@@ -261,6 +275,9 @@ export function pecaDaFormaCriada(
   if (forma.type === 'sala-mapa') return 'sala'
   if (forma.type === 'sala-poligono-mapa') return 'sala-poligono'
   if (forma.type === 'corredor-mapa') return 'corredor'
+  if (forma.type === 'escada-mapa') return 'escada'
+  if (forma.type === 'muralha-mapa') return 'muralha'
+  if (forma.type === 'torre-mapa') return 'torre'
 
   // símbolos desenhados carregam o próprio nome na prop `simbolo`
   if (forma.type === 'simbolo-mapa') {

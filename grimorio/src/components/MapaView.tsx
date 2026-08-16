@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { atom, Tldraw, useValue, defaultShapeUtils, type Editor, type TLComponents, type TLEditorOptions, type TLShapeId } from 'tldraw'
+import { atom, Tldraw, useValue, defaultShapeUtils, type Editor, type TLComponents, type TLEditorOptions, type TLShapeId, type TLShapePartial } from 'tldraw'
 import 'tldraw/tldraw.css'
 import { useApp } from '../state/store'
 import { useDocumentoTldraw } from './canvasDoc'
@@ -42,6 +42,9 @@ import { SalaMapaShapeUtil } from './SalaMapaShape'
 import { SalaPoligonoMapaShapeUtil } from './SalaPoligonoMapaShape'
 import { CorredorMapaShapeUtil } from './CorredorMapaShape'
 import { LinhaMapaShapeUtil } from './LinhaMapaShape'
+import { EscadaMapaShapeUtil } from './EscadaMapaShape'
+import { MuralhaMapaShapeUtil } from './MuralhaMapaShape'
+import { TorreMapaShapeUtil } from './TorreMapaShape'
 import { pecaDaFormaCriada } from '../lib/paletaMapa'
 import { retirarPlantaPendente } from '../lib/mapaIAPendente'
 
@@ -50,7 +53,7 @@ import { retirarPlantaPendente } from '../lib/mapaIAPendente'
 // drop (ver `criarHandlersDeDrop` chamado abaixo): mapas salvos ANTES desta mudança podem
 // ter um `item-card` colado à mão, e desregistrar o tipo faria o documento inteiro ser
 // recusado ao carregar (mesmo motivo do `PortaShapeUtil` no `CanvasView.tsx`).
-const shapeUtilsCustom = [CharacterCardShapeUtil, CenarioCardShapeUtil, ItemCardShapeUtil, ItemMapaShapeUtil, PortaShapeUtil, SimboloMapaShapeUtil, SalaMapaShapeUtil, SalaPoligonoMapaShapeUtil, CorredorMapaShapeUtil, LinhaMapaShapeUtil]
+const shapeUtilsCustom = [CharacterCardShapeUtil, CenarioCardShapeUtil, ItemCardShapeUtil, ItemMapaShapeUtil, PortaShapeUtil, SimboloMapaShapeUtil, SalaMapaShapeUtil, SalaPoligonoMapaShapeUtil, CorredorMapaShapeUtil, LinhaMapaShapeUtil, EscadaMapaShapeUtil, MuralhaMapaShapeUtil, TorreMapaShapeUtil]
 const shapeUtilsDoStore = [...defaultShapeUtils, ...shapeUtilsCustom]
 
 // combina os overlays de espaço-de-tela num só slot (InFrontOfTheCanvas aceita 1 componente)
@@ -169,7 +172,14 @@ export function MapaView({ caminho, nome }: { caminho: string; nome: string }) {
         .getCurrentPageShapes()
         .filter((s) => camadaDoShape(s.meta, camadasAtom.get()).id === id)
       if (orfaos.length) {
-        editor.updateShapes(orfaos.map((s) => ({ id: s.id, type: s.type, meta: { ...s.meta, camada: idHerdeira } })))
+        // `as TLShapePartial[]`: o `.map` genérico sobre shapes de tipos MISTOS perde a
+        // correlação individual entre `id`/`type` que o tipo discriminado de
+        // `TLShapePartial` exige por elemento (TS não distribui a união de `s.type` de
+        // volta por item) — mesmo objeto que `editor.updateShapes` aceita em runtime,
+        // só o checker que não consegue provar. Ver mesma nota nos outros 4 usos abaixo.
+        editor.updateShapes(
+          orfaos.map((s) => ({ id: s.id, type: s.type, meta: { ...s.meta, camada: idHerdeira } })) as TLShapePartial[],
+        )
       }
     }
     atualizarCamadas(restantes)
@@ -228,7 +238,7 @@ export function MapaView({ caminho, nome }: { caminho: string; nome: string }) {
               type: s.type,
               isLocked: true,
               meta: { ...s.meta, travadoPelaCamada: true },
-            })),
+            })) as TLShapePartial[],
           )
         }
       } else {
@@ -242,7 +252,7 @@ export function MapaView({ caminho, nome }: { caminho: string; nome: string }) {
               const metaRestante = { ...s.meta }
               delete (metaRestante as Record<string, unknown>).travadoPelaCamada
               return { id: s.id, type: s.type, isLocked: false, meta: metaRestante }
-            }),
+            }) as TLShapePartial[],
           )
         }
       }
@@ -270,7 +280,7 @@ export function MapaView({ caminho, nome }: { caminho: string; nome: string }) {
     const bounds = editor.getShapePageBounds(id)
     if (!shape || !bounds) return
     const local = editor.getPointInParentSpace(id, { x: quadradosParaPx(quadrados, QUADRADO_PX), y: bounds.y })
-    editor.updateShape({ id, type: shape.type, x: local.x, y: local.y })
+    editor.updateShape({ id, type: shape.type, x: local.x, y: local.y } as TLShapePartial)
   }
 
   function aoAplicarY(id: TLShapeId, quadrados: number) {
@@ -280,7 +290,7 @@ export function MapaView({ caminho, nome }: { caminho: string; nome: string }) {
     const bounds = editor.getShapePageBounds(id)
     if (!shape || !bounds) return
     const local = editor.getPointInParentSpace(id, { x: bounds.x, y: quadradosParaPx(quadrados, QUADRADO_PX) })
-    editor.updateShape({ id, type: shape.type, x: local.x, y: local.y })
+    editor.updateShape({ id, type: shape.type, x: local.x, y: local.y } as TLShapePartial)
   }
 
   /**

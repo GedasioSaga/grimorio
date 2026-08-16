@@ -25,7 +25,7 @@ describe('ELEMENTOS_PALETA', () => {
 
     expect(construcao).toEqual([
       'sala', 'sala-poligono', 'corredor', 'parede', 'porta', 'divisoria', 'janela', 'escada',
-      'mesa', 'cama', 'bau', 'secreta', 'armadilha', 'marcador', 'rotulo', 'andar',
+      'muralha', 'torre', 'mesa', 'cama', 'bau', 'secreta', 'armadilha', 'marcador', 'rotulo', 'andar',
     ])
     expect(itens).toEqual([
       'pocao', 'erva', 'chave', 'documento', 'moeda',
@@ -155,8 +155,8 @@ describe('peças da leva 4a', () => {
     expect(porTipo('linha')).toEqual(['divisoria'])
     // só as de construção: os itens também são 'acao' e são conferidos no teste próprio
     expect(porTipo('acao').filter((id) => !ELEMENTOS_PALETA.find((e) => e.id === id)?.item)).toEqual([
-      'sala', 'sala-poligono', 'corredor', 'porta', 'janela', 'escada', 'mesa', 'cama', 'bau', 'secreta',
-      'armadilha', 'marcador', 'andar',
+      'sala', 'sala-poligono', 'corredor', 'porta', 'janela', 'escada', 'muralha', 'torre',
+      'mesa', 'cama', 'bau', 'secreta', 'armadilha', 'marcador', 'andar',
     ])
   })
 
@@ -205,6 +205,21 @@ describe('pecaDaFormaCriada — identidade deduzida da própria forma', () => {
   it('reconhece o corredor pelo tipo do shape próprio', () => {
     const corredor = { type: 'corredor-mapa', props: { w: 120, h: 40 } }
     expect(pecaDaFormaCriada(corredor)).toBe('corredor')
+  })
+
+  it('reconhece a escada pelo tipo do shape próprio', () => {
+    const escada = { type: 'escada-mapa', props: { w: 200, h: 56 } }
+    expect(pecaDaFormaCriada(escada)).toBe('escada')
+  })
+
+  it('reconhece a muralha pelo tipo do shape próprio', () => {
+    const muralha = { type: 'muralha-mapa', props: { w: 680, h: 520 } }
+    expect(pecaDaFormaCriada(muralha)).toBe('muralha')
+  })
+
+  it('reconhece a torre pelo tipo do shape próprio', () => {
+    const torre = { type: 'torre-mapa', props: { w: 90, h: 90 } }
+    expect(pecaDaFormaCriada(torre)).toBe('torre')
   })
 
   it('amostra decorativa da legenda não conta como peça do mapa', () => {

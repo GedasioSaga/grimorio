@@ -95,11 +95,32 @@ describe('shapes próprios do Mapa registram tipo e props', () => {
     expect(Object.keys(CorredorMapaShapeUtil.props)).toEqual(['w', 'h'])
   })
 
+  it('EscadaMapaShapeUtil', async () => {
+    const { EscadaMapaShapeUtil } = await import('../components/EscadaMapaShape')
+    expect(EscadaMapaShapeUtil.type).toBe('escada-mapa')
+    expect(Object.keys(EscadaMapaShapeUtil.props)).toEqual(['w', 'h'])
+  })
+
+  it('MuralhaMapaShapeUtil', async () => {
+    const { MuralhaMapaShapeUtil } = await import('../components/MuralhaMapaShape')
+    expect(MuralhaMapaShapeUtil.type).toBe('muralha-mapa')
+    expect(Object.keys(MuralhaMapaShapeUtil.props)).toEqual(['w', 'h'])
+  })
+
+  it('TorreMapaShapeUtil', async () => {
+    const { TorreMapaShapeUtil } = await import('../components/TorreMapaShape')
+    expect(TorreMapaShapeUtil.type).toBe('torre-mapa')
+    expect(Object.keys(TorreMapaShapeUtil.props)).toEqual(['w', 'h'])
+  })
+
   it('cada shape próprio tem um tipo distinto — tipo repetido derruba o editor inteiro', async () => {
     const tipos = [
       (await import('../components/SalaMapaShape')).SalaMapaShapeUtil.type,
       (await import('../components/SalaPoligonoMapaShape')).SalaPoligonoMapaShapeUtil.type,
       (await import('../components/CorredorMapaShape')).CorredorMapaShapeUtil.type,
+      (await import('../components/EscadaMapaShape')).EscadaMapaShapeUtil.type,
+      (await import('../components/MuralhaMapaShape')).MuralhaMapaShapeUtil.type,
+      (await import('../components/TorreMapaShape')).TorreMapaShapeUtil.type,
       (await import('../components/LinhaMapaShape')).LinhaMapaShapeUtil.type,
       (await import('../components/PortaShape')).PortaShapeUtil.type,
       (await import('../components/SimboloMapaShape')).SimboloMapaShapeUtil.type,

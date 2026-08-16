@@ -1,5 +1,5 @@
 import type { VinculoSala } from './vinculoSalaCenario'
-import { ESPESSURA_CONTORNO_SALA, aparenciaDaSala, quebrarRotulo } from './salaMapa'
+import { ESPESSURA_CONTORNO_SALA, MARGEM_TOPO_ROTULO, aparenciaDaSala, quebrarRotulo } from './salaMapa'
 
 /**
  * Miolo do desenho da sala, extraído de `SalaMapaShape.tsx` para função pura: sem
@@ -31,8 +31,9 @@ export interface DesenharCorpoSalaProps {
 export function desenharCorpoSala({ w, h, estado, rotulo, cor, vinculo }: DesenharCorpoSalaProps) {
   const aparencia = aparenciaDaSala(estado, cor || undefined)
   const linhas = quebrarRotulo(rotulo, w, FONTE_ROTULO)
-  const alturaTexto = linhas.length * ENTRELINHA
-  const primeiraLinhaY = h / 2 - alturaTexto / 2 + ENTRELINHA / 2
+  // rótulo ancorado no TOPO, não centralizado — ver MARGEM_TOPO_ROTULO em salaMapa.ts
+  // (o porquê: deixar o miolo da sala livre para o ícone da peça largada dentro dela).
+  const primeiraLinhaY = MARGEM_TOPO_ROTULO + ENTRELINHA / 2
 
   const badgeCx = w - BADGE_MARGEM - BADGE_RAIO
   const badgeCy = BADGE_MARGEM + BADGE_RAIO

@@ -9,7 +9,7 @@ import {
   useValue,
   type StyleProp,
 } from 'tldraw'
-import { DEGRAUS_ESCADA, ELEMENTOS_PALETA, type ElementoPaleta } from '../lib/paletaMapa'
+import { ELEMENTOS_PALETA, type ElementoPaleta } from '../lib/paletaMapa'
 import { GavetaPecas } from './GavetaPecas'
 import { ComandosMapa } from './ComandosMapa'
 import { AcoesMapaIA } from './AcoesMapaIA'
@@ -17,6 +17,9 @@ import { PORTA_ESPESSURA_PADRAO, PORTA_LARGURA_PADRAO } from '../lib/portaMapa'
 import { SALA_ALTURA_PADRAO, SALA_LARGURA_PADRAO } from './SalaMapaShape'
 import { PONTOS_SALA_POLIGONO_PADRAO } from '../lib/salaPoligonoMapa'
 import { CORREDOR_ALTURA_PADRAO, CORREDOR_LARGURA_PADRAO } from './CorredorMapaShape'
+import { ESCADA_ALTURA_PADRAO, ESCADA_LARGURA_PADRAO } from '../lib/escadaMapa'
+import { MURALHA_ALTURA_PADRAO, MURALHA_LARGURA_PADRAO } from '../lib/muralhaMapa'
+import { TORRE_DIAMETRO_PADRAO } from '../lib/torreMapa'
 import { proximoNumero } from '../lib/portaMapa'
 import { definicaoDoSimbolo, type SimboloId } from '../lib/simbolosMapa'
 import { tamanhoDoSimbolo } from './SimboloMapaShape'
@@ -97,13 +100,10 @@ const MINIMO_PARA_DISTRIBUIR = 3
  * (primeiro elemento da paleta cuja cor bate) é calculado uma vez, e o botão
  * "Retângulo"/"Elipse" só acende quando NENHUM elemento da paleta está ativo.
  *
- * Escada é um botão de AÇÃO, não de ferramenta: ela cria na hora um grupo de
- * `DEGRAUS_ESCADA` retângulos finos e paralelos centrados na viewport, via
- * `editor.createShapes` + `editor.groupShapes` (verificado em
- * `node_modules/@tldraw/editor/src/lib/editor/Editor.ts:7917` e `:8250-8323` —
- * decisão documentada em `src/lib/paletaMapa.ts`). `groupShapes` só agrupa quando a
- * ferramenta corrente é `select` (`Editor.ts:8287-8288` — "Only group when the
- * select tool is active"), por isso o `run` troca para `select` antes de agrupar.
+ * Escada, muralha e torre são botões de AÇÃO, não de ferramenta: cada uma cria na hora
+ * um shape próprio (`escada-mapa`/`muralha-mapa`/`torre-mapa`) centrado na viewport, via
+ * `editor.createShape` — mesma mecânica de `criarCorredor`/`criarSala` (decisão
+ * documentada em `src/lib/paletaMapa.ts` e nos respectivos `lib/*Mapa.ts`).
  *
  * ## Liga/desliga da grade (fix de review — Fatia 3, Task B)
  *
@@ -174,6 +174,8 @@ export function MapaToolbar() {
   function aplicarElementoPaleta(elemento: ElementoPaleta) {
     if (elemento.tipo === 'acao') {
       if (elemento.id === 'escada') criarEscada()
+      else if (elemento.id === 'muralha') criarMuralha()
+      else if (elemento.id === 'torre') criarTorre()
       else if (elemento.id === 'sala') criarSala()
       else if (elemento.id === 'sala-poligono') criarSalaPoligono()
       else if (elemento.id === 'corredor') criarCorredor()
@@ -194,37 +196,66 @@ export function MapaToolbar() {
     })
   }
 
+  /**
+   * Escada nasce no centro da tela, do tamanho de um trecho comum de corredor — o usuário
+   * redimensiona (arrasta as alças) para o comprimento real, e a hachura acompanha (ver
+   * `desenharEscada`). Shape próprio desde esta leva; antes era um grupo de retângulos
+   * nativos do tldraw (ver `lib/escadaMapa.ts` para o porquê da troca).
+   */
   function criarEscada() {
-    const largura = 120
-    const altura = 14
-    const espaco = 20
-    const alturaTotal = DEGRAUS_ESCADA * altura + (DEGRAUS_ESCADA - 1) * espaco
     const centro = editor.getViewportPageBounds().center
-    const xInicial = centro.x - largura / 2
-    const yInicial = centro.y - alturaTotal / 2
-
-    const ids = Array.from({ length: DEGRAUS_ESCADA }, () => createShapeId())
-
+    const id = createShapeId()
     editor.run(() => {
-      editor.createShapes(
-        ids.map((id, i) => ({
-          id,
-          type: 'geo',
-          x: xInicial,
-          y: yInicial + i * (altura + espaco),
-          props: {
-            geo: 'rectangle',
-            w: largura,
-            h: altura,
-            color: 'black',
-            fill: 'solid',
-            dash: 'solid',
-            size: 's',
-          },
-        })),
-      )
+      editor.createShape({
+        id,
+        type: 'escada-mapa',
+        x: centro.x - ESCADA_LARGURA_PADRAO / 2,
+        y: centro.y - ESCADA_ALTURA_PADRAO / 2,
+        props: { w: ESCADA_LARGURA_PADRAO, h: ESCADA_ALTURA_PADRAO },
+      })
       editor.setCurrentTool('select')
-      editor.groupShapes(ids)
+      editor.setSelectedShapes([id])
+    })
+  }
+
+  /**
+   * Muralha nasce grande o bastante para já cercar uma planta pequena — o usuário arrasta
+   * as alças até encaixar no contorno real, e manda para trás (não é ação automática:
+   * quem decidiu a ordem de empilhamento é sempre o usuário) para não cobrir as salas.
+   */
+  function criarMuralha() {
+    const centro = editor.getViewportPageBounds().center
+    const id = createShapeId()
+    editor.run(() => {
+      editor.createShape({
+        id,
+        type: 'muralha-mapa',
+        x: centro.x - MURALHA_LARGURA_PADRAO / 2,
+        y: centro.y - MURALHA_ALTURA_PADRAO / 2,
+        props: { w: MURALHA_LARGURA_PADRAO, h: MURALHA_ALTURA_PADRAO },
+      })
+      editor.setCurrentTool('select')
+      editor.setSelectedShapes([id])
+    })
+  }
+
+  /**
+   * Torre nasce pequena, no centro da tela — o usuário arrasta até o canto da muralha
+   * (não há canto fixo para nascer encaixada: a muralha é livre e redimensionável).
+   */
+  function criarTorre() {
+    const centro = editor.getViewportPageBounds().center
+    const id = createShapeId()
+    editor.run(() => {
+      editor.createShape({
+        id,
+        type: 'torre-mapa',
+        x: centro.x - TORRE_DIAMETRO_PADRAO / 2,
+        y: centro.y - TORRE_DIAMETRO_PADRAO / 2,
+        props: { w: TORRE_DIAMETRO_PADRAO, h: TORRE_DIAMETRO_PADRAO },
+      })
+      editor.setCurrentTool('select')
+      editor.setSelectedShapes([id])
     })
   }
 

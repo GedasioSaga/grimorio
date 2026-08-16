@@ -16,9 +16,12 @@ import { ELEMENTOS_PALETA, type ElementoPaleta, type PecaId } from './paletaMapa
  * - peça DESENHADA (janela, armadilha, mesa…): não há como "pintar" um retângulo até
  *   virar um losango com "!". A forma velha é trocada por um `simbolo-mapa` ocupando o
  *   mesmo espaço.
- * - porta e escada ficam de fora. A porta é uma marca SOBRE a parede, com tamanho e
- *   posição próprios — converter um retângulo grande em porta daria uma barra gigante
- *   sem parede embaixo. A escada é um grupo de formas, não uma forma.
+ * - porta, escada, muralha, torre e corredor ficam de fora: cada uma já é um shape
+ *   próprio (ver `EscadaMapaShape.tsx`/`MuralhaMapaShape.tsx`/`TorreMapaShape.tsx`) sem
+ *   regra de conversão específica, e caem no catch-all "precisa ser desenhada, não
+ *   convertida" abaixo. A porta é o único caso com motivo próprio: é uma marca SOBRE a
+ *   parede, com tamanho e posição próprios — converter um retângulo grande em porta
+ *   daria uma barra gigante sem parede embaixo.
  */
 
 export type PlanoConversao =
