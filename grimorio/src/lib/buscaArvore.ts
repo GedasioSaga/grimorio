@@ -31,8 +31,24 @@ export interface Achado<T> {
 /** Quantos níveis de ancestral o rótulo mostra antes de cortar com '…/'. */
 const MAX_NIVEIS_ROTULO = 2
 
-/** Minúsculas e sem acento, para "joao" achar "João". */
+/**
+ * Minúsculas e sem acento, para "joao" achar "João".
+ *
+ * Tolera entrada que não é string. Parece defensivo demais para um helper de texto, e não é:
+ * o que entra aqui é NOME DE ENTIDADE lido do disco, e o cofre é dado do usuário — um `.json`
+ * gravado pela metade, uma página sem `titulo`, um arquivo editado à mão. Sem esta guarda, um
+ * único campo faltando derruba a tela inteira do app (`s.normalize` de `undefined`), que foi
+ * exatamente o que aconteceu com a busca global. Todo o resto do app já trata arquivo torto
+ * marcando `erro: true` e seguindo; a busca era a única peça que quebrava.
+ *
+ * O aviso no console existe para o dado torto não sumir de vista: degradar em silêncio
+ * esconderia a causa, e o sintoma voltaria noutro lugar.
+ */
 export function normalizar(s: string): string {
+  if (typeof s !== 'string') {
+    console.warn('Busca: esperava texto e recebeu', s, '— entidade sem nome no cofre?')
+    return ''
+  }
   return s.normalize('NFD').replace(/\p{Diacritic}/gu, '').toLowerCase().trim()
 }
 

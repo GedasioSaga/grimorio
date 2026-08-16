@@ -8,7 +8,7 @@
  */
 import { convertFileSrc } from '@tauri-apps/api/core'
 import { createShapeId, type Editor, type TLShapeId } from 'tldraw'
-import { gerarConteudo, type ImagemIA } from './gemini'
+import { ErroModeloInexistente, gerarConteudo, type ImagemIA } from './gemini'
 import { mimeDaImagem, uint8ParaBase64 } from './bin'
 import { QUADRADO_PX, quadradosParaPx, type Caixa } from './quadrados'
 import { proximoNumero } from './portaMapa'
@@ -60,21 +60,43 @@ export async function gerarPlantaIA(opts: {
   imagem?: ImagemIA
   chaves: string[]
   modelo?: string
+  /** Modelo que a conta comprovadamente tem: usado se o preferido nao existir (HTTP 404). */
+  modeloReserva?: string
 }): Promise<ResultadoGeracaoPlanta> {
   if (opts.chaves.length === 0) {
     return { ok: false, erro: 'IA não configurada. Cole sua chave da API do Gemini quando solicitado.' }
   }
+  const pedido = {
+    system: promptSistemaMapa(),
+    historico: [{ papel: 'user' as const, texto: opts.descricao || 'Monte um mapa a partir da imagem anexada.' }],
+    imagens: opts.imagem ? [opts.imagem] : [],
+    chaves: opts.chaves,
+  }
+
+  /**
+   * Planta é raciocínio espacial, então o mapa pede um modelo mais capaz que o escolhido para
+   * texto. Mas `MODELOS_CONHECIDOS` é uma lista curada À MÃO, e o Google publica e aposenta
+   * nomes sem avisar: o preferido pode simplesmente não existir para esta conta. Foi o que
+   * aconteceu na primeira versão — 404 em todas as chaves, e a mensagem culpava as chaves.
+   *
+   * Então o forte é uma PREFERÊNCIA, não um requisito: se a conta não o tem, cai para o modelo
+   * que o usuário já usa no resto do app, que por definição funciona. Gerar uma planta pior é
+   * muito melhor que não gerar planta nenhuma.
+   */
+  const preferido = opts.modelo ?? MODELO_MAPA_PADRAO
   let texto: string
   try {
-    texto = await gerarConteudo({
-      system: promptSistemaMapa(),
-      historico: [{ papel: 'user', texto: opts.descricao || 'Monte um mapa a partir da imagem anexada.' }],
-      imagens: opts.imagem ? [opts.imagem] : [],
-      chaves: opts.chaves,
-      modelo: opts.modelo ?? MODELO_MAPA_PADRAO,
-    })
+    texto = await gerarConteudo({ ...pedido, modelo: preferido })
   } catch (e) {
-    return { ok: false, erro: e instanceof Error ? e.message : String(e) }
+    const reserva = opts.modeloReserva
+    if (!(e instanceof ErroModeloInexistente) || !reserva || reserva === preferido) {
+      return { ok: false, erro: e instanceof Error ? e.message : String(e) }
+    }
+    try {
+      texto = await gerarConteudo({ ...pedido, modelo: reserva })
+    } catch (e2) {
+      return { ok: false, erro: e2 instanceof Error ? e2.message : String(e2) }
+    }
   }
 
   const parse = parsearPlantaIA(texto)

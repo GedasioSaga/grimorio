@@ -130,6 +130,21 @@ let indiceChave = 0
 /** Erro de conteúdo vazio/bloqueado: é definitivo, trocar de chave não muda nada. */
 const SEM_CONTEUDO = 'A IA não retornou conteúdo.'
 
+/**
+ * O modelo pedido não existe para esta conta (HTTP 404).
+ *
+ * Classe própria, e não uma string de erro, porque quem chama PRECISA distinguir isto de
+ * "a IA falhou": a lista de modelos do app é curada à mão e envelhece — o Google publica e
+ * aposenta nomes sem avisar —, então cair para um modelo que a conta comprovadamente tem é
+ * recuperação legítima, não remendo. Ver `gerarPlantaIA`.
+ */
+export class ErroModeloInexistente extends Error {
+  constructor(readonly modelo: string) {
+    super(`O modelo "${modelo}" não existe ou sua conta não tem acesso a ele.`)
+    this.name = 'ErroModeloInexistente'
+  }
+}
+
 export async function gerarConteudo(opts: PedidoIA): Promise<string> {
   const chaves = opts.chaves
   if (chaves.length === 0) {
@@ -160,6 +175,13 @@ export async function gerarConteudo(opts: PedidoIA): Promise<string> {
       const status = (e as { statusHttp?: number }).statusHttp
       if (status) ultimoStatus = status
       ultimoDetalhe = status ? `HTTP ${status}` : sanitizarErro(String(e), chaves)
+      /**
+       * 404 é o MODELO que não existe para esta conta, não a chave que falhou. Trocar de
+       * chave não muda nada: o laço percorre todas, todas devolvem 404, e o usuário recebe
+       * "IA indisponível após tentar todas as chaves" — que aponta para o lugar errado e
+       * esconde a causa. Falha na hora, dizendo qual modelo o servidor não conhece.
+       */
+      if (status === 404) throw new ErroModeloInexistente(modelo)
       continue // erro antes de qualquer texto: tenta a próxima chave
     }
   }

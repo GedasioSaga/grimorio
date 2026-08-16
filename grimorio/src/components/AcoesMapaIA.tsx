@@ -12,6 +12,7 @@ import {
   inserirPlantaNoMapaAberto,
 } from '../lib/gerarMapaIA'
 import { definirPlantaPendente } from '../lib/mapaIAPendente'
+import { modeloSalvo } from '../lib/modeloIA'
 
 type Destino = 'aqui' | 'novo'
 
@@ -104,9 +105,17 @@ export function AcoesMapaIA() {
           return
         }
       }
-      // sem `modelo`: `gerarPlantaIA` usa o padrão FORTE fixo para mapa (`MODELO_MAPA_PADRAO`
-      // em gerarMapaIA.ts), independente do modelo escolhido para texto — ver o porquê lá.
-      const resultado = await gerarPlantaIA({ descricao: texto, imagem, chaves })
+      // sem `modelo`: `gerarPlantaIA` prefere o padrão FORTE de mapa (`MODELO_MAPA_PADRAO` em
+      // gerarMapaIA.ts), independente do modelo escolhido para texto. `modeloReserva` é a
+      // rede: a lista de modelos do app é curada à mão e o Google aposenta nomes sem avisar,
+      // então se o forte não existir para esta conta (HTTP 404) a geração cai para o modelo
+      // que o usuário já usa no resto do app — que, por estar em uso, comprovadamente existe.
+      const resultado = await gerarPlantaIA({
+        descricao: texto,
+        imagem,
+        chaves,
+        modeloReserva: modeloSalvo(),
+      })
       if (!resultado.ok) {
         await avisar(resultado.erro, true)
         return

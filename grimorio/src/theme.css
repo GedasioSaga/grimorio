@@ -1331,3 +1331,26 @@ button:hover { border-color: var(--dourado); color: var(--dourado-claro); }
 .painel-vinculo-quebrado {
   display: block; font-size: 11px; color: var(--erro); margin-top: 4px;
 }
+
+/* ---- limite de erro (rede contra a janela preta) ---- */
+.limite-erro {
+  max-width: 720px; margin: 48px auto; padding: 24px;
+  display: flex; flex-direction: column; gap: 12px; align-items: flex-start;
+  background: var(--fundo-painel); border: 1px solid var(--erro); border-radius: 8px;
+  color: var(--texto); font-size: 14px;
+}
+.limite-erro h1 { font-family: var(--serif); color: var(--dourado-claro); margin: 0; font-size: 22px; }
+.limite-erro p { margin: 0; color: var(--texto-fraco); line-height: 1.5; }
+.limite-erro pre {
+  width: 100%; margin: 0; padding: 10px; border-radius: 6px; overflow-x: auto;
+  background: var(--fundo); border: 1px solid var(--borda); color: var(--texto);
+  font-size: 12px; white-space: pre-wrap; word-break: break-word;
+}
+.limite-erro-mensagem { color: var(--erro); }
+.limite-erro-pilha { max-height: 260px; overflow-y: auto; color: var(--texto-fraco); }
+.limite-erro details { width: 100%; }
+.limite-erro summary { cursor: pointer; color: var(--texto-fraco); }
+.limite-erro button {
+  padding: 8px 16px; border-radius: 6px; cursor: pointer;
+  background: var(--fundo-elevado); border: 1px solid var(--dourado); color: var(--dourado-claro);
+}
