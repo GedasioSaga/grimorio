@@ -3,10 +3,12 @@ import { beforeEach, describe, expect, it } from 'vitest'
 import {
   MODELOS_CONHECIDOS,
   MODELO_PADRAO,
+  modeloMapaSalvo,
   modeloSalvo,
   montarOpcoes,
   rotuloDoModelo,
   salvarModelo,
+  salvarModeloMapa,
 } from '../lib/modeloIA'
 
 describe('modeloSalvo / salvarModelo', () => {
@@ -69,5 +71,63 @@ describe('rotuloDoModelo', () => {
   it('nome legível para conhecido, o próprio id para o resto', () => {
     expect(rotuloDoModelo('gemini-3.1-flash-lite')).toBe('Gemini 3.1 Flash-Lite')
     expect(rotuloDoModelo('gemini-9-ultra')).toBe('gemini-9-ultra')
+  })
+})
+
+// Modelo do MAPA: chave própria (grimorio.modeloIA.mapa), independente da de texto.
+// "Automático" aqui é `undefined` — quem chama (gerarMapaIA.ts) decide o padrão, não
+// esta função, então os testes não fixam um id de padrão específico.
+describe('modeloMapaSalvo / salvarModeloMapa', () => {
+  const PADRAO_MAPA = 'gemini-3-pro' // só para os testes — o real vive em gerarMapaIA.ts
+
+  beforeEach(() => {
+    localStorage.clear()
+  })
+
+  it('nada escolhido → Automático (undefined), sem inventar um padrão embutido', () => {
+    expect(modeloMapaSalvo()).toBeUndefined()
+  })
+
+  it('guarda e devolve a escolha', () => {
+    salvarModeloMapa('gemini-3.6-flash', PADRAO_MAPA)
+    expect(modeloMapaSalvo()).toBe('gemini-3.6-flash')
+  })
+
+  it('escolher o padrão do mapa limpa a chave (volta a Automático)', () => {
+    salvarModeloMapa('gemini-3.6-flash', PADRAO_MAPA)
+    salvarModeloMapa(PADRAO_MAPA, PADRAO_MAPA)
+    expect(localStorage.getItem('grimorio.modeloIA.mapa')).toBeNull()
+    expect(modeloMapaSalvo()).toBeUndefined()
+  })
+
+  it('vazio ou só espaço volta a Automático', () => {
+    salvarModeloMapa('   ', PADRAO_MAPA)
+    expect(modeloMapaSalvo()).toBeUndefined()
+  })
+
+  it('lixo salvo direto no storage volta trimado, sem validar contra lista nenhuma', () => {
+    localStorage.setItem('grimorio.modeloIA.mapa', '   modelo-que-nao-existe  ')
+    expect(modeloMapaSalvo()).toBe('modelo-que-nao-existe')
+  })
+
+  it('modelo que sumiu da API: a função continua devolvendo o id cru — quem valida contra a lista é a tela, não o storage', () => {
+    salvarModeloMapa('gemini-3-antigo-aposentado', PADRAO_MAPA)
+    const opcoes = montarOpcoes(['gemini-3.1-flash-lite']) // API não oferece mais o modelo salvo
+    expect(opcoes.some((o) => o.id === 'gemini-3-antigo-aposentado')).toBe(false)
+    expect(modeloMapaSalvo()).toBe('gemini-3-antigo-aposentado')
+  })
+
+  it('as duas chaves são independentes: mexer na do mapa não mexe na de texto, e vice-versa', () => {
+    salvarModelo('gemini-3-pro')
+    salvarModeloMapa('gemini-3.6-flash', PADRAO_MAPA)
+    expect(modeloSalvo()).toBe('gemini-3-pro')
+    expect(modeloMapaSalvo()).toBe('gemini-3.6-flash')
+
+    salvarModeloMapa(PADRAO_MAPA, PADRAO_MAPA) // limpa só o mapa
+    expect(modeloSalvo()).toBe('gemini-3-pro') // texto intacto
+    expect(modeloMapaSalvo()).toBeUndefined()
+
+    salvarModelo(MODELO_PADRAO) // limpa só o texto
+    expect(modeloSalvo()).toBe(MODELO_PADRAO)
   })
 })

@@ -23,6 +23,8 @@ import { TORRE_DIAMETRO_PADRAO } from '../lib/torreMapa'
 import { proximoNumero } from '../lib/portaMapa'
 import { definicaoDoSimbolo, type SimboloId } from '../lib/simbolosMapa'
 import { tamanhoDoSimbolo } from './SimboloMapaShape'
+import { aceitaCanto, cantoDaPeca, OPCOES_CANTO, type CantoMapa } from '../lib/cantosMapa'
+import { aplicarCanto, cantoAtivoAtom, setCantoAtivo } from '../lib/cantoAtivo'
 
 /** Style props do tldraw indexados pelo mesmo nome usado em `ElementoPaleta.estilos`. */
 const STYLE_PROPS_POR_NOME: Record<string, StyleProp<string>> = {
@@ -137,6 +139,31 @@ export function MapaToolbar() {
     [editor],
   )
   const isGridMode = useValue('mapa-toolbar-grade', () => editor.getInstanceState().isGridMode, [editor])
+  /**
+   * O que os botões de canto ACENDEM, e se eles estão disponíveis.
+   *
+   * Com seleção, o aceso vem da SELEÇÃO, não do padrão guardado: o painel de propriedades
+   * mostra o canto da peça selecionada, e as duas superfícies exibindo valores diferentes na
+   * mesma tela fariam o usuário clicar no botão "já aceso" achando que confirma o estado — e
+   * converter a peça sem querer. Seleção mista (uma reta, uma arredondada) não acende
+   * nenhum: não há valor comum para mostrar.
+   *
+   * `disponivel` é falso quando há seleção e NENHUMA peça dela tem canto (parede da paleta,
+   * sala, e todo retângulo `geo` de mapa antigo). Sem isso o botão acendia e nada acontecia
+   * — feedback positivo para ação que não ocorreu, pior que botão desabilitado.
+   */
+  const canto = useValue(
+    'mapa-toolbar-canto',
+    () => {
+      const selecionadas = editor.getSelectedShapeIds().map((id) => editor.getShape(id))
+      const comCanto = selecionadas.filter((s): s is NonNullable<typeof s> => !!s && aceitaCanto(s.type))
+      if (selecionadas.length === 0) return { aceso: cantoAtivoAtom(editor).get(), disponivel: true }
+      if (comCanto.length === 0) return { aceso: null, disponivel: false }
+      const valores = new Set(comCanto.map((s) => cantoDaPeca(s)))
+      return { aceso: valores.size === 1 ? [...valores][0] : null, disponivel: true }
+    },
+    [editor],
+  )
   // Elemento da paleta cujo estado corrente bate POR INTEIRO (geo + todos os estilos).
   // Tem precedência sobre Retângulo/Elipse — ver JSDoc "Colisão entre grupos".
   const elementoPaletaAtivo = useValue(
@@ -168,6 +195,19 @@ export function MapaToolbar() {
     editor.run(() => {
       editor.setStyleForNextShapes(GeoShapeGeoStyle, geo)
       editor.setCurrentTool('geo')
+    })
+  }
+
+  /**
+   * Canto reto/arredondado. Um clique faz as DUAS coisas, como no Excalidraw: vira o padrão
+   * das próximas peças E aplica na seleção atual, se houver. Sem aplicar na seleção, trocar
+   * o canto exigiria apagar e redesenhar; sem virar padrão, cada peça nova voltaria ao
+   * arredondado e o usuário reclicaria o botão a cada desenho.
+   */
+  function escolherCanto(canto: CantoMapa) {
+    editor.run(() => {
+      setCantoAtivo(editor, canto)
+      aplicarCanto(editor, editor.getSelectedShapeIds(), canto)
     })
   }
 
@@ -326,8 +366,9 @@ export function MapaToolbar() {
 
   /**
    * Porta nasce no centro da tela, livre (azul), para o usuário arrastar até a parede.
-   * Fica à frente (`bringToFront`, Editor.ts:6780) porque é uma marca SOBRE a parede — se
-   * nascesse atrás da sala, sumiria.
+   * Fica à frente da estrutura por CONSTRUÇÃO — o `registerBeforeCreateHandler` do
+   * `MapaView` (banda "abertura" de `lib/ordemMapa.ts`) já garante isso sempre, não só
+   * neste instante; não precisa mais de `bringToFront` aqui.
    */
   function criarPorta() {
     const centro = editor.getViewportPageBounds().center
@@ -340,7 +381,6 @@ export function MapaToolbar() {
         y: centro.y - PORTA_ESPESSURA_PADRAO / 2,
         props: { w: PORTA_LARGURA_PADRAO, h: PORTA_ESPESSURA_PADRAO, estado: 'livre' },
       })
-      editor.bringToFront([id])
       editor.setCurrentTool('select')
       editor.setSelectedShapes([id])
     })
@@ -378,7 +418,6 @@ export function MapaToolbar() {
         y: centro.y - h / 2,
         props: { w, h, simbolo, rotulo },
       })
-      editor.bringToFront([id])
       editor.setCurrentTool('select')
       editor.setSelectedShapes([id])
     })
@@ -389,10 +428,13 @@ export function MapaToolbar() {
     { titulo: 'Mão', icone: '✋', ativo: toolId === 'hand', aoClicar: () => selecionarFerramenta('hand') },
     { titulo: 'Caneta', icone: '✏️', ativo: toolId === 'draw', aoClicar: () => selecionarFerramenta('draw') },
     {
+      // Peça PRÓPRIA do mapa (`retangulo-mapa`), não mais o `geo` nativo: só assim o canto
+      // arredondado existe (o `geo` do tldraw não tem raio de canto) e a peça ganha cor
+      // livre, espessura e preenchimento — ver `lib/retanguloMapa.ts`.
       titulo: 'Retângulo',
       icone: '▭',
-      ativo: toolId === 'geo' && geoAtual === 'rectangle' && !elementoPaletaAtivo,
-      aoClicar: () => selecionarGeo('rectangle'),
+      ativo: toolId === 'retangulo-mapa',
+      aoClicar: () => selecionarFerramenta('retangulo-mapa'),
     },
     {
       titulo: 'Elipse',
@@ -402,7 +444,15 @@ export function MapaToolbar() {
     },
     { titulo: 'Linha', icone: '／', ativo: toolId === 'line', aoClicar: () => selecionarFerramenta('line') },
     { titulo: 'Texto', icone: 'T', ativo: toolId === 'text', aoClicar: () => selecionarFerramenta('text') },
-    { titulo: 'Borracha', icone: '⌫', ativo: toolId === 'eraser', aoClicar: () => selecionarFerramenta('eraser') },
+    {
+      // Peça C: o `eraser` foi trocado por `BorrachaTrechoMapaTool` (mesmo id, ver
+      // MapaView.tsx) — em cima de uma divisória apaga só o trecho coberto; em
+      // qualquer outra peça continua apagando o shape inteiro, como sempre foi.
+      titulo: 'Borracha (em divisórias, apaga só o trecho passado)',
+      icone: '⌫',
+      ativo: toolId === 'eraser',
+      aoClicar: () => selecionarFerramenta('eraser'),
+    },
   ]
 
   return (
@@ -459,6 +509,23 @@ export function MapaToolbar() {
         >
           ⊞
         </button>
+        <div className="mapa-toolbar-divisor" aria-hidden="true" />
+        {OPCOES_CANTO.map((opcao) => (
+          <button
+            key={opcao.id}
+            type="button"
+            className={`btn-icon${canto.aceso === opcao.id ? ' ativo' : ''}`}
+            disabled={!canto.disponivel}
+            title={
+              canto.disponivel
+                ? `Canto ${opcao.rotulo.toLowerCase()} (vale para a seleção e para as próximas peças)`
+                : 'Nenhuma peça selecionada tem canto — só linha e retângulo do mapa têm'
+            }
+            onClick={() => escolherCanto(opcao.id)}
+          >
+            {opcao.icone}
+          </button>
+        ))}
         <div className="mapa-toolbar-divisor" aria-hidden="true" />
         <GavetaPecas pecaAtivaId={elementoPaletaAtivo?.id} aoEscolher={aplicarElementoPaleta} />
         <div className="mapa-toolbar-divisor" aria-hidden="true" />

@@ -1,0 +1,146 @@
+/* Grade de inventário (aba Itens de cenário e personagem) — ver InventarioAcervo.tsx.
+   Classes daqui são só as NOVAS da grade; o resto da aba (busca, "+ criar", container com
+   scroll) continua nas classes .cenario-* / .acervo-criar já existentes em theme.css. */
+
+/* personagem não tem texto livre embaixo do acervo (só cenário tem `itens: string`) — sem
+   isto, o wrapper `.cenario-acervo` (theme.css) capa em 40% de altura pensando que há uma
+   segunda metade pra preencher, e sobra vazio embaixo da grade. `.cenario-acervo` junto na
+   mesma tag eleva a especificidade (0,2,0 > 0,1,0), então isto vence sem depender de ordem
+   de import entre theme.css e este arquivo. */
+.cenario-acervo.inventario-acervo-cheio {
+  flex: 1 1 auto;
+  max-height: none;
+  border-bottom: none;
+}
+
+.inventario-grade {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(84px, 1fr));
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.inventario-slot {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  background: var(--fundo-elevado);
+  border: 1px solid var(--borda);
+  border-radius: 6px;
+  overflow: hidden;
+}
+.inventario-slot:hover,
+.inventario-slot:focus-within {
+  border-color: var(--dourado);
+}
+
+.inventario-slot-arte {
+  position: relative;
+  aspect-ratio: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px;
+  background: var(--fundo);
+  border: none;
+  border-bottom: 1px solid var(--borda);
+  cursor: pointer;
+}
+.inventario-slot-arte img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.inventario-slot-arte svg {
+  width: 72%;
+  height: 72%;
+}
+
+/* contador grande e colorido no canto — é o que se lê "de relance", como na referência */
+.inventario-slot-qtd {
+  position: absolute;
+  right: 3px;
+  bottom: 3px;
+  min-width: 1.4em;
+  padding: 0 4px;
+  font-family: var(--sans);
+  font-weight: 800;
+  font-size: 13px;
+  line-height: 1.5;
+  text-align: center;
+  color: var(--dourado-claro);
+  background: rgba(0, 0, 0, 0.72);
+  border: 1px solid var(--dourado);
+  border-radius: 8px;
+}
+
+.inventario-slot-nome {
+  padding: 3px 5px;
+  font-size: 11px;
+  color: var(--texto);
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ações (± qtd, remover): fora do caminho visual até o slot ganhar foco/hover, mas
+   continuam no fluxo do DOM — Tab alcança os botões e :focus-within revela sozinho */
+.inventario-slot-acoes {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px 3px 3px;
+  opacity: 0;
+  transition: opacity 0.12s ease;
+}
+.inventario-slot:hover .inventario-slot-acoes,
+.inventario-slot:focus-within .inventario-slot-acoes {
+  opacity: 1;
+}
+
+.inventario-slot-btn {
+  flex: 0 0 auto;
+  padding: 1px 5px;
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--texto);
+  background: var(--fundo);
+  border: 1px solid var(--borda);
+  border-radius: 4px;
+  cursor: pointer;
+}
+.inventario-slot-btn:hover {
+  border-color: var(--dourado);
+  color: var(--dourado-claro);
+}
+.inventario-slot-remover {
+  margin-left: auto;
+}
+.inventario-slot-remover:hover {
+  border-color: var(--erro);
+  color: var(--erro);
+}
+
+.inventario-slot-qtd-input {
+  width: 30px;
+  min-width: 0;
+  padding: 1px 2px;
+  font-size: 11px;
+  text-align: center;
+  color: var(--texto);
+  background: var(--fundo);
+  border: 1px solid var(--borda);
+  border-radius: 4px;
+  outline: none;
+}
+.inventario-slot-qtd-input:focus {
+  border-color: var(--dourado);
+}
+/* o spinner nativo rouba largura de um campo tão estreito */
+.inventario-slot-qtd-input::-webkit-inner-spin-button,
+.inventario-slot-qtd-input::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}

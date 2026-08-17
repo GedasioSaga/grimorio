@@ -24,6 +24,14 @@ export interface VersaoPersonagem {
   extras: string     // HTML
   anotacoes: string  // HTML
   imagens: ImagemPersonagem[]
+  /**
+   * Itens de verdade que o personagem carrega — mesmo formato do acervo de cenário
+   * (`ItemNoCenario`). Opcional (diferente de `VersaoCenario.acervo`): campo retrofitado,
+   * então literais de teste anteriores a ele não têm a chave — mesmo motivo de `foco` ser
+   * opcional. `normalizarVersaoPersonagem` sempre preenche com `[]`; código de exibição
+   * trata ausência com `?? []`.
+   */
+  acervo?: ItemNoCenario[]
 }
 
 export interface Personagem {
@@ -122,6 +130,13 @@ export interface CanvasDoc {
   documento: unknown | null // snapshot tldraw { document, session }
   /** só em mapa (fatia 3); ausente em canvas comum e em mapa criado antes desta fatia. */
   camadas?: CamadaMapa[]
+  /**
+   * Convenção de ORDEM da lista acima. Ausente = versão 1, quando o array só decidia a
+   * ordem de exibição do painel e o primeiro item era a linha de CIMA. A partir da versão
+   * 2 a lista significa empilhamento (índice 0 = fundo) e o painel é que desenha invertido
+   * — ver `migrarOrdemCamadas` em `camadasMapa.ts`, que converte o doc antigo no load.
+   */
+  versaoCamadas?: number
   criadoEm: string
   modificadoEm: string
 }

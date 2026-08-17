@@ -1,0 +1,87 @@
+/**
+ * src/estilos/localizacao.css — Barra de Localização da ficha (Cenário/Personagem/Item) e o
+ * seletor de destino que ela abre. Fica fora de theme.css (área disputada); reusa as variáveis
+ * de cor que já existem lá.
+ */
+
+.barra-localizacao {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 6px 20px;
+  border-bottom: 1px solid var(--borda);
+  background: var(--fundo-elevado);
+  font-size: 12px;
+}
+
+.barra-localizacao-caminho {
+  color: var(--texto-fraco);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+
+.barra-localizacao-separador {
+  margin: 0 6px;
+  opacity: 0.6;
+}
+
+.barra-localizacao-atual {
+  color: var(--dourado-claro);
+}
+
+.barra-localizacao-desconhecida {
+  font-style: italic;
+}
+
+.barra-localizacao-acoes {
+  display: flex;
+  gap: 6px;
+  flex: 0 0 auto;
+}
+
+.barra-localizacao-btn {
+  background: transparent;
+  border: 1px solid var(--borda);
+  color: var(--texto-fraco);
+  border-radius: 4px;
+  padding: 3px 10px;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.barra-localizacao-btn:hover {
+  color: var(--texto);
+  background: var(--fundo-painel);
+  border-color: var(--dourado);
+}
+
+.localizacao-seletor {
+  width: min(480px, 90vw);
+}
+
+.localizacao-seletor-lista {
+  max-height: 320px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.localizacao-seletor-item {
+  text-align: left;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  padding: 6px 10px;
+  color: var(--texto);
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.localizacao-seletor-item:hover {
+  background: var(--fundo-elevado);
+  border-color: var(--borda);
+}

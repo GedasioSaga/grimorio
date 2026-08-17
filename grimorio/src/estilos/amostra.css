@@ -1,0 +1,109 @@
+/**
+ * src/estilos/amostra.css — bancada de interface (amostra.html), fora do theme.css
+ * disputado. Só o essencial: menu de cenas + moldura das cenas. As telas em si
+ * reusam as classes que theme.css já dá aos componentes reais (.cenario-acervo,
+ * .mapa-wrap, .mapa-toolbar…), então não há nada a duplicar aqui.
+ */
+
+.amostra-app {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+}
+
+.amostra-menu {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 10px 20px;
+  background: var(--fundo-painel);
+  border-bottom: 1px solid var(--borda);
+}
+
+.amostra-menu-titulo {
+  font-family: var(--serif);
+  color: var(--dourado-claro);
+  font-size: 15px;
+  margin-right: 16px;
+}
+
+.amostra-menu a {
+  color: var(--texto-fraco);
+  text-decoration: none;
+  padding: 6px 12px;
+  border-radius: 4px;
+  font-size: 13px;
+  border: 1px solid transparent;
+}
+
+.amostra-menu a:hover {
+  color: var(--texto);
+  background: var(--fundo-elevado);
+}
+
+.amostra-menu a.ativo {
+  color: var(--dourado);
+  background: var(--fundo-elevado);
+  border-color: var(--borda);
+}
+
+/* filho único e flex — dá altura de verdade tanto para a cena rolável (ficha)
+   quanto para o .mapa-wrap (theme.css), que exige um ancestral flex para caber. */
+.amostra-corpo {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.amostra-cena {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 24px 32px;
+}
+
+.amostra-cena h1 {
+  font-family: var(--serif);
+  color: var(--dourado-claro);
+  font-size: 20px;
+  margin: 0 0 6px;
+}
+
+.amostra-legenda {
+  color: var(--texto-fraco);
+  font-size: 13px;
+  margin: 0 0 20px;
+}
+
+.amostra-legenda code,
+.amostra-nota code {
+  color: var(--dourado);
+}
+
+.amostra-caixa {
+  background: var(--fundo-painel);
+  border: 1px solid var(--borda);
+  border-radius: 8px;
+  padding: 20px;
+  max-width: 720px;
+}
+
+.amostra-nota {
+  margin-top: 16px;
+  font-size: 12px;
+  color: var(--texto-fraco);
+  max-width: 720px;
+}
+
+/* cena #opcoes: OpcoesIA.tsx nasceu para viver dentro de .opcoes-modal (theme.css) —
+   aqui ela não tem esse pai, então a caixa da bancada dá a mesma largura/moldura. */
+.amostra-caixa-opcoes {
+  max-width: 640px;
+  padding: 0;
+}
+
+.amostra-caixa-opcoes .opcoes-conteudo {
+  padding: 20px;
+}

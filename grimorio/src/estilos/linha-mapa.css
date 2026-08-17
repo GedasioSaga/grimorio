@@ -1,0 +1,24 @@
+/* Cor da divisória (Peça C): completa `.painel-cores`/`.painel-cor`/`.btn-icon`, que já
+   existem em theme.css (reaproveitados de `SeletorCor`/sala) — só o que theme.css não
+   tem entra aqui. Ver CLAUDE.md: theme.css não é tocado por esta peça. */
+
+.linha-conta-gotas {
+  margin-left: 2px;
+}
+
+.linha-conta-gotas.ativo {
+  border-color: var(--dourado);
+  color: var(--dourado-claro);
+  background: var(--fundo-elevado);
+}
+
+.linha-cor-personalizada-input {
+  margin-top: 4px;
+  width: 100%;
+  height: 26px;
+  padding: 0;
+  border: 1px solid var(--borda);
+  border-radius: 4px;
+  background: var(--fundo-painel);
+  cursor: pointer;
+}

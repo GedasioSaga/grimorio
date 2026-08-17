@@ -1,8 +1,17 @@
 import { useEffect, useState } from 'react'
 import { lerChaves, salvarChaves } from '../lib/chavesIA'
 import { listarModelos } from '../lib/gemini'
+import { MODELO_MAPA_PADRAO } from '../lib/gerarMapaIA'
 import { JANELAS, JANELA_PADRAO, janelaSalva, salvarJanela } from '../lib/chatIA'
-import { modeloSalvo, montarOpcoes, salvarModelo, type Faixa, type OpcaoModelo } from '../lib/modeloIA'
+import {
+  modeloMapaSalvo,
+  modeloSalvo,
+  montarOpcoes,
+  salvarModelo,
+  salvarModeloMapa,
+  type Faixa,
+  type OpcaoModelo,
+} from '../lib/modeloIA'
 import { pedirTexto } from './dialogos'
 
 const ETIQUETA: Record<Faixa, string> = {
@@ -19,6 +28,9 @@ function rotuloJanela(n: number): string {
 export function OpcoesIA() {
   const [chaves, setChaves] = useState<string[]>(() => lerChaves())
   const [modelo, setModelo] = useState<string>(() => modeloSalvo())
+  // efetivo, não bruto: "Automático" e o modelo padrão explicitamente escolhido resolvem
+  // para o mesmo id (MODELO_MAPA_PADRAO), então a tela trata os dois como o mesmo estado.
+  const [modeloMapa, setModeloMapa] = useState<string>(() => modeloMapaSalvo() ?? MODELO_MAPA_PADRAO)
   const [janela, setJanela] = useState<number>(() => janelaSalva())
   const [opcoes, setOpcoes] = useState<OpcaoModelo[]>(() => montarOpcoes([]))
   const [consultando, setConsultando] = useState(false)
@@ -58,6 +70,11 @@ export function OpcoesIA() {
     setModelo(id)
   }
 
+  function escolherModeloMapa(id: string) {
+    salvarModeloMapa(id, MODELO_MAPA_PADRAO)
+    setModeloMapa(id)
+  }
+
   function escolherJanela(n: number) {
     salvarJanela(n)
     setJanela(n)
@@ -66,6 +83,8 @@ export function OpcoesIA() {
   // o modelo salvo pode não estar na lista (chave trocada, modelo aposentado): mostrar
   // uma lista onde nada está marcado esconderia o problema em vez de contá-lo
   const modeloForaDaLista = opcoes.length > 0 && !opcoes.some((o) => o.id === modelo)
+  const modeloMapaForaDaLista =
+    opcoes.length > 0 && modeloMapa !== MODELO_MAPA_PADRAO && !opcoes.some((o) => o.id === modeloMapa)
 
   return (
     <>
@@ -100,6 +119,52 @@ export function OpcoesIA() {
               className={`opcao-modelo${modelo === o.id ? ' ativa' : ''}`}
               aria-pressed={modelo === o.id}
               onClick={() => escolherModelo(o.id)}
+            >
+              <span className="opcao-modelo-topo">
+                <span className="opcao-modelo-nome">{o.rotulo}</span>
+                <span className="opcao-modelo-faixa">{ETIQUETA[o.faixa]}</span>
+              </span>
+              <span className="opcao-modelo-nota">{o.nota}</span>
+              {!o.conhecido && <span className="opcao-modelo-id">{o.id}</span>}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className="opcoes-secao">
+        <h3>Modelo do mapa</h3>
+        <p className="opcoes-vazio">
+          Escolha SEPARADA da de cima — esta só vale para "IA monta o mapa", nunca para o chat.
+          Planta é raciocínio espacial: um modelo barato costuma devolver cômodos soltos, sem
+          parede em comum. Por isso o padrão é o mais capaz; troque aqui só se quiser testar
+          outro.
+          {consultando && ' Conferindo o que sua chave enxerga…'}
+        </p>
+        {modeloMapaForaDaLista && (
+          <p className="opcoes-aviso">
+            O modelo do mapa salvo (<code>{modeloMapa}</code>) não aparece para esta chave. Escolha
+            outro abaixo, ou a montagem do mapa vai falhar na hora do uso.
+          </p>
+        )}
+        <div className="opcoes-modelos">
+          <button
+            className={`opcao-modelo${modeloMapa === MODELO_MAPA_PADRAO ? ' ativa' : ''}`}
+            aria-pressed={modeloMapa === MODELO_MAPA_PADRAO}
+            onClick={() => escolherModeloMapa(MODELO_MAPA_PADRAO)}
+          >
+            <span className="opcao-modelo-topo">
+              <span className="opcao-modelo-nome">Automático (o mais capaz)</span>
+            </span>
+            <span className="opcao-modelo-nota">
+              Deixa o Grimório escolher o modelo mais forte disponível para montar a planta.
+            </span>
+          </button>
+          {opcoes.map((o) => (
+            <button
+              key={o.id}
+              className={`opcao-modelo${modeloMapa === o.id ? ' ativa' : ''}`}
+              aria-pressed={modeloMapa === o.id}
+              onClick={() => escolherModeloMapa(o.id)}
             >
               <span className="opcao-modelo-topo">
                 <span className="opcao-modelo-nome">{o.rotulo}</span>

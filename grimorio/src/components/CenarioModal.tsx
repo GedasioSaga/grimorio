@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { open, message } from '@tauri-apps/plugin-dialog'
 import { convertFileSrc } from '@tauri-apps/api/core'
-import { useApp } from '../state/store'
+import { registrarFlushModal, useApp } from '../state/store'
 import { encontrarCenarioNode } from '../lib/cenarioArvore'
 import { desvincularPersonagem, personagensVivos, vincularPersonagem } from '../lib/cenarioVinculo'
 import { EditorTexto } from './EditorTexto'
@@ -16,9 +16,11 @@ import { htmlParaMarkdown, markdownParaHtml } from '../lib/markdownHtml'
 import { carregarImagensIA } from '../lib/imagensIA'
 import { promptDescreverCenarioCorrido, promptDescreverCenarioTopicos, SYSTEM_ESCRITOR } from '../lib/promptsIA'
 import { BarraVersoes } from './BarraVersoes'
+import { BarraLocalizacao } from './BarraLocalizacao'
 import { EnquadrarRetrato } from './EnquadrarRetrato'
 import { posicaoCss } from '../lib/focoRetrato'
 import { aplicarPatchCenario, versaoAtiva, type PatchCenario } from '../lib/cenarioVersao'
+import '../estilos/localizacao.css'
 
 const AUTOSAVE_DEBOUNCE_MS = 800
 
@@ -71,10 +73,16 @@ export function CenarioModal({ cenarioId }: { cenarioId: string }) {
   const c = useApp((s) => s.cenarios[cenarioId])
   const vaultPath = useApp((s) => s.vaultPath)
   const repo = useApp((s) => s.repo)
-  const caminhoCenarioPorId = useApp((s) => s.caminhoCenarioPorId)
   const fecharCenario = useApp((s) => s.fecharCenario)
   const recarregarArvore = useApp((s) => s.recarregarArvore)
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  // true quando o cache tem edição ainda não confirmada em disco. Separado de `timer.current`
+  // de propósito: uma tentativa de salvar cancela e zera o timer ANTES de terminar, e se ela
+  // FALHAR a edição continua sem estar gravada — `timer.current` sozinho não expressa isso.
+  // Sem `sujo`, a segunda tentativa de mover (depois de uma falha, sem editar nada de novo)
+  // acharia "nada pendente" e deixaria a edição pra trás. Só volta a `false` quando `salvar()`
+  // confirma sucesso (ou quando a entidade some — nesse caso não há mais o que gravar).
+  const sujo = useRef(false)
   const [salvarErro, setSalvarErro] = useState<string | null>(null)
   const [aba, setAba] = useState<Aba>('descricao')
   const [chatAberto, setChatAberto] = useState(false)
@@ -94,13 +102,26 @@ export function CenarioModal({ cenarioId }: { cenarioId: string }) {
   // desmontou com gravação pendente: cancela o debounce e grava já (fire-and-forget;
   // VaultRepo serializa escritas por caminho, mesmo padrão do PerfilModal)
   useEffect(() => () => {
-    if (timer.current) {
-      clearTimeout(timer.current)
-      timer.current = null
-      void salvar()
-    }
+    if (timer.current) clearTimeout(timer.current)
+    timer.current = null
+    if (sujo.current) void salvar()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  // registra o flush AGUARDÁVEL que a Barra de Localização chama antes de mover/absorver
+  // este cenário — sem isto, o timer local acima (agendado com o caminho de ANTES da
+  // mudança) dispara 800ms depois no lugar errado. `salvar` não fecha sobre nada do
+  // render (lê tudo via `useApp.getState()`), então registrar uma vez por montagem basta.
+  useEffect(() => registrarFlushModal('cenario', cenarioId, async () => {
+    if (timer.current) clearTimeout(timer.current)
+    timer.current = null
+    // checa `sujo`, não `timer.current`: uma tentativa de flush anterior pode ter zerado o
+    // timer e FALHADO — a edição continua pendente sem timer nenhum agendado. Só reporta
+    // "nada pendente" quando `salvar()` de fato confirmou a gravação em disco.
+    if (!sujo.current) return true
+    return await salvar()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }), [cenarioId])
 
   useEffect(() => {
     const aoTeclar = (e: KeyboardEvent) => {
@@ -117,6 +138,7 @@ export function CenarioModal({ cenarioId }: { cenarioId: string }) {
 
   function agendarSalvar(mudancas: PatchCenario) {
     if (timer.current) clearTimeout(timer.current)
+    sujo.current = true
     timer.current = setTimeout(() => {
       timer.current = null
       void salvar()
@@ -128,16 +150,25 @@ export function CenarioModal({ cenarioId }: { cenarioId: string }) {
   }
 
   async function salvar(): Promise<boolean> {
-    const atual = useApp.getState().cenarios[cenarioId]
+    // repo e caminho RE-RESOLVIDOS no disparo (não desestruturados do render que agendou):
+    // mover o cenário troca `caminhoCenarioPorId` no store, e uma closure presa no valor
+    // antigo gravaria no diretório que acabou de deixar de existir. Mesmo racional de
+    // `agendarSalvarCenario` em state/store.ts — ver o comentário lá.
+    const { repo, caminhoCenarioPorId, cenarios } = useApp.getState()
+    const atual = cenarios[cenarioId]
     const caminho = caminhoCenarioPorId[cenarioId]
-    if (!repo || !caminho || !atual) return true
+    // entidade sumiu (excluída/movida por fora): não há mais o que gravar, e isso NÃO é falha
+    if (!repo || !caminho || !atual) { sujo.current = false; return true }
     try {
       await repo.salvarCenario(caminho, { ...atual })
+      sujo.current = false // só agora a edição está confirmada em disco
       setSalvarErro(null)
       await recarregarArvore()
       return true
     } catch (e) {
-      // não relança: chamadas debounced são fire-and-forget
+      // não relança: chamadas debounced são fire-and-forget. `sujo` continua `true` de
+      // propósito — é o que faz a PRÓXIMA tentativa (novo clique em "Mover", novo debounce)
+      // realmente tentar gravar de novo, em vez de reportar "nada pendente" por engano.
       console.error('Falha ao salvar cenário:', e)
       setSalvarErro(String(e))
       return false
@@ -166,9 +197,9 @@ export function CenarioModal({ cenarioId }: { cenarioId: string }) {
   }
 
   async function fechar() {
-    if (timer.current) {
-      clearTimeout(timer.current)
-      timer.current = null
+    if (timer.current) clearTimeout(timer.current)
+    timer.current = null
+    if (sujo.current) {
       const ok = await salvar()
       if (!ok) return
     }
@@ -241,6 +272,7 @@ export function CenarioModal({ cenarioId }: { cenarioId: string }) {
           <button className="btn-icon perfil-fechar" onClick={() => void fechar()}>✕</button>
         </div>
         <BarraVersoes cenarioId={cenarioId} />
+        <BarraLocalizacao tipo="cenario" id={cenarioId} />
         <div className="perfil-abas">
           {ABAS.map((a) => (
             <button key={a.id} className={aba === a.id ? 'ativo' : ''} onClick={() => setAba(a.id)}>

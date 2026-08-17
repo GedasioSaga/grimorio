@@ -1,131 +1,64 @@
 import { useEffect, useRef, useState } from 'react'
-import { atom, Tldraw, useValue, defaultShapeUtils, type Editor, type TLComponents, type TLEditorOptions, type TLShapeId, type TLShapePartial } from 'tldraw'
+import { Tldraw, type Editor } from 'tldraw'
 import 'tldraw/tldraw.css'
 import { useApp } from '../state/store'
 import { useDocumentoTldraw } from './canvasDoc'
 import { criarHandlersDeDrop } from './dropsDeEntidade'
 import { exportarCanvas } from './exportarCanvas'
 import { registrarAtalhos } from './atalhosCanvas'
-import { CharacterCardShapeUtil } from './CharacterCardShape'
-import { CenarioCardShapeUtil } from './CenarioCardShape'
-import { ItemCardShapeUtil } from './ItemCardShape'
-import { ItemMapaShapeUtil } from './ItemMapaShape'
-import { MedidasMapa } from './MedidasMapa'
-import { ReguasMapa } from './ReguasMapa'
-import { MapaToolbar } from './MapaToolbar'
-import { ControleZoom } from './ControleZoom'
 import { PainelCamadas } from './PainelCamadas'
-import {
-  PainelPropriedades,
-  ProvedorSelecaoPropriedades,
-  SelecaoPropriedadesBridge,
-  type SelecaoPropriedades,
-} from './PainelPropriedades'
+import { PainelPropriedades, ProvedorContagemCamadas, ProvedorSelecaoPropriedades, type SelecaoPropriedades } from './PainelPropriedades'
 import { registrarEditor, desregistrarEditor } from '../lib/canvasAtivo'
 import { criarUsuarioDoMapa } from '../lib/usuarioMapa'
-import { QUADRADO_PX, quadradosParaPx } from '../lib/quadrados'
+import { QUADRADO_PX } from '../lib/quadrados'
+import { useCamadasMapa } from '../lib/camadasMapaEditor'
 import {
-  alternarOculta,
-  alternarTravada,
-  camadaDoShape,
-  camadasDoDoc,
-  criarCamada,
-  moverCamada,
-  removerCamada,
-  renomearCamada,
-  shapeOculto,
-} from '../lib/camadasMapa'
-import type { CamadaMapa } from '../lib/types'
-import { PortaShapeUtil } from './PortaShape'
-import { SimboloMapaShapeUtil } from './SimboloMapaShape'
-import { SalaMapaShapeUtil } from './SalaMapaShape'
-import { SalaPoligonoMapaShapeUtil } from './SalaPoligonoMapaShape'
-import { CorredorMapaShapeUtil } from './CorredorMapaShape'
-import { LinhaMapaShapeUtil } from './LinhaMapaShape'
-import { EscadaMapaShapeUtil } from './EscadaMapaShape'
-import { MuralhaMapaShapeUtil } from './MuralhaMapaShape'
-import { TorreMapaShapeUtil } from './TorreMapaShape'
-import { pecaDaFormaCriada } from '../lib/paletaMapa'
+  COMPONENTS_MAPA_BASE,
+  SHAPE_UTILS_CUSTOM_MAPA,
+  SHAPE_UTILS_DO_STORE_MAPA,
+  TOOLS_CUSTOM_MAPA,
+  registrarBeforeCreateMapa,
+  usePainelPropriedadesMapa,
+} from '../lib/montagemMapa'
+import { getCantoAtivo } from '../lib/cantoAtivo'
 import { retirarPlantaPendente } from '../lib/mapaIAPendente'
-
-// mesmos card-shapes do canvas: mapa aceita drop de personagem/cenário/item.
-// `ItemCardShapeUtil` continua registrado mesmo o mapa não criando mais `item-card` por
-// drop (ver `criarHandlersDeDrop` chamado abaixo): mapas salvos ANTES desta mudança podem
-// ter um `item-card` colado à mão, e desregistrar o tipo faria o documento inteiro ser
-// recusado ao carregar (mesmo motivo do `PortaShapeUtil` no `CanvasView.tsx`).
-const shapeUtilsCustom = [CharacterCardShapeUtil, CenarioCardShapeUtil, ItemCardShapeUtil, ItemMapaShapeUtil, PortaShapeUtil, SimboloMapaShapeUtil, SalaMapaShapeUtil, SalaPoligonoMapaShapeUtil, CorredorMapaShapeUtil, LinhaMapaShapeUtil, EscadaMapaShapeUtil, MuralhaMapaShapeUtil, TorreMapaShapeUtil]
-const shapeUtilsDoStore = [...defaultShapeUtils, ...shapeUtilsCustom]
-
-// combina os overlays de espaço-de-tela num só slot (InFrontOfTheCanvas aceita 1 componente)
-function MapaOverlay() {
-  return (
-    <>
-      <MedidasMapa />
-      <ReguasMapa />
-      <SelecaoPropriedadesBridge />
-    </>
-  )
-}
-
-// constante de módulo: não recriar o objeto de components a cada render.
-// `NavigationPanel` (minimap + menu de zoom nativos, em inglês) dá lugar ao
-// `ControleZoom` — mesmo slot, mesma faixa de rodapé da toolbar; ver ControleZoom.tsx.
-const componentsMapa: TLComponents = {
-  InFrontOfTheCanvas: MapaOverlay,
-  Toolbar: MapaToolbar,
-  NavigationPanel: ControleZoom,
-}
 
 export function MapaView({ caminho, nome }: { caminho: string; nome: string }) {
   const repo = useApp((s) => s.repo)
   const vaultPath = useApp((s) => s.vaultPath)
   const editorRef = useRef<Editor | null>(null)
-  const { store, erro, salvandoErro } = useDocumentoTldraw(caminho, shapeUtilsDoStore)
+  // SHAPE_UTILS_DO_STORE_MAPA é constante de módulo de propósito: `useDocumentoTldraw` tem
+  // esse array nas deps do efeito que monta o store, então identidade nova a cada render
+  // remontaria o store em laço (o mapa piscando, canvas nunca carregando).
+  const { store, erro, salvandoErro } = useDocumentoTldraw(caminho, SHAPE_UTILS_DO_STORE_MAPA)
   const { aoArrastarSobre, aoSoltar } = criarHandlersDeDrop(editorRef, vaultPath, { itemViraMiniatura: true })
   const [copiaOk, setCopiaOk] = useState(false)
   const [copiaErro, setCopiaErro] = useState<string | null>(null)
 
   /**
-   * Camadas vivem num `atom` do tldraw (`@tldraw/state`, reexportado por `tldraw` —
-   * verificado em node_modules/@tldraw/editor/src/index.ts:4 `export * from '@tldraw/state'`),
-   * não em `useState` puro. Motivo: `getShapeVisibility` é lido por
-   * `TldrawEditor.tsx:509-521` no array de deps do `useLayoutEffect` que CRIA o editor —
-   * uma nova identidade de função ali recria o editor inteiro (perde seleção/câmera/
-   * histórico). Com o valor num atom, a função passada para `getShapeVisibility` tem
-   * identidade estável (criada uma vez via `useRef`) e ainda assim é reativa: o cache
-   * de visibilidade por shape (`Editor.ts:832-844`, um `@computed`) rastreia a leitura
-   * de `atom.get()` dentro do callback e invalida sozinho quando o atom muda.
-   */
-  const camadasAtomRef = useRef<ReturnType<typeof atom<CamadaMapa[]>> | null>(null)
-  if (!camadasAtomRef.current) camadasAtomRef.current = atom<CamadaMapa[]>('mapa-camadas', camadasDoDoc(undefined))
-  const camadasAtom = camadasAtomRef.current
-  const camadas = useValue(camadasAtom)
-
-  /**
    * Usuário só do mapa: snap sempre ligado sem contaminar o Canvas (o porquê inteiro
-   * está em `usuarioMapa.ts`). Criado uma vez via `useRef` pelo mesmo motivo do atom
-   * acima — `user` está no array de deps do `useLayoutEffect` que cria o editor
-   * (node_modules/@tldraw/editor/src/lib/TldrawEditor.tsx:516), então uma identidade
-   * nova a cada render recriaria o editor inteiro.
+   * está em `usuarioMapa.ts`). Criado uma vez via `useRef` porque `user` está no array de
+   * deps do `useLayoutEffect` que cria o editor (node_modules/@tldraw/editor/src/lib/
+   * TldrawEditor.tsx:516), então identidade nova a cada render recriaria o editor inteiro.
    */
   const usuarioMapaRef = useRef<ReturnType<typeof criarUsuarioDoMapa> | null>(null)
   if (!usuarioMapaRef.current) usuarioMapaRef.current = criarUsuarioDoMapa()
 
-  const [camadaAtivaId, setCamadaAtivaId] = useState('base')
-  const camadaAtivaIdRef = useRef(camadaAtivaId)
-  camadaAtivaIdRef.current = camadaAtivaId
-
+  /**
+   * Camadas: estado, ações do painel, visibilidade e reaplicação da ordem de empilhamento
+   * vêm todos de `lib/camadasMapaEditor.tsx` — MESMA fonte que a bancada
+   * (`amostra/CenaMapa.tsx`) usa, pelo mesmo motivo de `lib/montagemMapa.tsx`. Daqui só
+   * sai o que é do app real: a persistência no cofre.
+   */
+  const camadasMapa = useCamadasMapa(editorRef, {
+    persistir: (novo) =>
+      void repo?.salvarCamadasMapa(caminho, novo).catch((e) => console.error("Falha ao salvar camadas do mapa:", e)),
+  })
 
   // seleção pro PainelPropriedades: chega via SelecaoPropriedadesBridge (dentro do
   // <Tldraw>, único lugar com useEditor/useValue) através de contexto — ver
   // PainelPropriedades.tsx para o porquê de não dar pra passar como prop direta.
   const [selecaoProp, setSelecaoProp] = useState<SelecaoPropriedades>(null)
-
-  // identidade estável (mesmo motivo do atom acima): fica fora do componente-render,
-  // criada uma única vez via useRef, e ainda reage porque lê `camadasAtom.get()` por dentro.
-  const getShapeVisibilityRef = useRef<TLEditorOptions['getShapeVisibility']>((shape) => {
-    return shapeOculto(shape.meta, camadasAtom.get()) ? 'hidden' : 'inherit'
-  })
 
   // carrega as camadas do doc (o hook useDocumentoTldraw devolve só o store tldraw;
   // ler `camadas` exige reler o doc — decisão da Task A: reler no MapaView em vez de
@@ -138,222 +71,19 @@ export function MapaView({ caminho, nome }: { caminho: string; nome: string }) {
       .lerCanvasDoc(caminho)
       .then((doc) => {
         if (!ativo) return
-        const normalizadas = camadasDoDoc(doc.camadas)
-        camadasAtom.set(normalizadas)
-        setCamadaAtivaId(normalizadas[0].id)
+        camadasMapa.carregarCamadas(doc.camadas, doc.versaoCamadas)
       })
-      .catch((e) => console.warn('Mapa: não deu para ler as camadas do doc:', e))
+      .catch((e) => console.warn("Mapa: não deu para ler as camadas do doc:", e))
     return () => {
       ativo = false
     }
-  }, [repo, caminho, camadasAtom])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [repo, caminho])
 
-  function atualizarCamadas(novo: CamadaMapa[]) {
-    camadasAtom.set(novo)
-    void repo?.salvarCamadasMapa(caminho, novo).catch((e) => console.error('Falha ao salvar camadas do mapa:', e))
-  }
-
-  function aoCriarCamada(nomeCamada: string) {
-    const r = criarCamada(camadasAtom.get(), nomeCamada)
-    atualizarCamadas(r.camadas)
-    setCamadaAtivaId(r.novaId)
-  }
-
-  function aoRenomearCamada(id: string, nomeCamada: string) {
-    atualizarCamadas(renomearCamada(camadasAtom.get(), id, nomeCamada))
-  }
-
-  function aoExcluirCamada(id: string) {
-    const { camadas: restantes, idHerdeira } = removerCamada(camadasAtom.get(), id)
-    if (restantes.length === camadasAtom.get().length) return // nunca removeu (era a última)
-    const editor = editorRef.current
-    if (editor) {
-      const orfaos = editor
-        .getCurrentPageShapes()
-        .filter((s) => camadaDoShape(s.meta, camadasAtom.get()).id === id)
-      if (orfaos.length) {
-        // `as TLShapePartial[]`: o `.map` genérico sobre shapes de tipos MISTOS perde a
-        // correlação individual entre `id`/`type` que o tipo discriminado de
-        // `TLShapePartial` exige por elemento (TS não distribui a união de `s.type` de
-        // volta por item) — mesmo objeto que `editor.updateShapes` aceita em runtime,
-        // só o checker que não consegue provar. Ver mesma nota nos outros 4 usos abaixo.
-        editor.updateShapes(
-          orfaos.map((s) => ({ id: s.id, type: s.type, meta: { ...s.meta, camada: idHerdeira } })) as TLShapePartial[],
-        )
-      }
-    }
-    atualizarCamadas(restantes)
-    if (camadaAtivaIdRef.current === id) setCamadaAtivaId(idHerdeira)
-  }
-
-  /**
-   * Esconder uma camada também TIRA DA SELEÇÃO as formas dela: `getSelectedShapeIds`
-   * devolve o estado de seleção cru da página, sem filtrar o que está escondido
-   * (node_modules/@tldraw/editor/src/lib/editor/Editor.ts:1681-1683), e forma
-   * selecionada-mas-invisível continua obedecendo a tudo — alinhar/distribuir da barra
-   * contextual, os campos do painel de propriedades, as setas do teclado. O usuário
-   * moveria às cegas algo que só reaparece deslocado ao religar a camada.
-   */
-  function aoAlternarOcultaCamada(id: string) {
-    const novo = alternarOculta(camadasAtom.get(), id)
-    const editor = editorRef.current
-    if (editor && novo.find((c) => c.id === id)?.oculta) {
-      const selecionadas = editor.getSelectedShapeIds()
-      const visiveis = selecionadas.filter((sid) => {
-        const shape = editor.getShape(sid)
-        return shape ? camadaDoShape(shape.meta, novo).id !== id : false
-      })
-      if (visiveis.length !== selecionadas.length) editor.setSelectedShapes(visiveis)
-    }
-    atualizarCamadas(novo)
-  }
-
-  /**
-   * Trava/destrava em massa: não existe `getShapeLocked` (só `getShapeVisibility` tem
-   * esse mecanismo — Editor.ts:266), então travar aplica `isLocked` diretamente nos
-   * shapes da camada via `editor.updateShapes([{id, type, isLocked}])` — o MESMO
-   * mecanismo que `editor.toggleLock` usa por trás (verificado em
-   * node_modules/@tldraw/editor/src/lib/editor/Editor.ts:6660-6671).
-   *
-   * FIX (review): destravar em massa não pode reverter um travamento MANUAL que o
-   * usuário fez num shape individual (cadeado do próprio tldraw, fora do painel de
-   * camadas). Por isso `meta.travadoPelaCamada: true` marca só os shapes que ESTE
-   * toggle travou (os que já chegaram travados ficam sem marca — preservados como
-   * estão); destravar só mexe em quem tem a marca, e a remove ao destravar. A mesma
-   * marca é carimbada no side-effect de criação (`onMount`, abaixo) quando a forma
-   * nasce numa camada já travada — senão ela ficaria travada "sem dono" para sempre.
-   */
-  function aoAlternarTravadaCamada(id: string) {
-    const novo = alternarTravada(camadasAtom.get(), id)
-    const camada = novo.find((c) => c.id === id)
-    const editor = editorRef.current
-    if (editor && camada) {
-      const daCamada = editor.getCurrentPageShapes().filter((s) => camadaDoShape(s.meta, novo).id === id)
-      if (camada.travada) {
-        const aTravar = daCamada.filter((s) => !s.isLocked)
-        if (aTravar.length) {
-          editor.updateShapes(
-            aTravar.map((s) => ({
-              id: s.id,
-              type: s.type,
-              isLocked: true,
-              meta: { ...s.meta, travadoPelaCamada: true },
-            })) as TLShapePartial[],
-          )
-        }
-      } else {
-        const aDestravar = daCamada.filter((s) => (s.meta as Record<string, unknown>).travadoPelaCamada === true)
-        if (aDestravar.length) {
-          editor.updateShapes(
-            aDestravar.map((s) => {
-              // `delete` via cast local só pra tirar a marca; `metaRestante` continua
-              // tipado como `s.meta` (JsonObject) — sem isso o updateShapes recusa o
-              // objeto (meta vira Record<string, unknown>, incompatível com JsonObject).
-              const metaRestante = { ...s.meta }
-              delete (metaRestante as Record<string, unknown>).travadoPelaCamada
-              return { id: s.id, type: s.type, isLocked: false, meta: metaRestante }
-            }) as TLShapePartial[],
-          )
-        }
-      }
-    }
-    atualizarCamadas(novo)
-  }
-
-  function aoMoverCamada(id: string, direcao: 'cima' | 'baixo') {
-    atualizarCamadas(moverCamada(camadasAtom.get(), id, direcao))
-  }
-
-  /**
-   * Mover (X/Y): `editor.updateShape({x,y})` espera coordenadas do PARENT space do
-   * shape, não do page space — dentro de um grupo os dois divergem. Conversão feita
-   * com `editor.getPointInParentSpace(id, pagePoint)`, verificado em
-   * node_modules/@tldraw/editor/src/lib/editor/Editor.ts:5611-5620: aplica a inversa
-   * da `getShapePageTransform` do PAI, ou devolve o ponto intacto quando o pai é a
-   * própria página (`isPageId(freshShape.parentId)`) — caso simples sem grupo dá
-   * exatamente o ponto de página, então X/Y aplicam sem desvio.
-   */
-  function aoAplicarX(id: TLShapeId, quadrados: number) {
-    const editor = editorRef.current
-    if (!editor) return
-    const shape = editor.getShape(id)
-    const bounds = editor.getShapePageBounds(id)
-    if (!shape || !bounds) return
-    const local = editor.getPointInParentSpace(id, { x: quadradosParaPx(quadrados, QUADRADO_PX), y: bounds.y })
-    editor.updateShape({ id, type: shape.type, x: local.x, y: local.y } as TLShapePartial)
-  }
-
-  function aoAplicarY(id: TLShapeId, quadrados: number) {
-    const editor = editorRef.current
-    if (!editor) return
-    const shape = editor.getShape(id)
-    const bounds = editor.getShapePageBounds(id)
-    if (!shape || !bounds) return
-    const local = editor.getPointInParentSpace(id, { x: bounds.x, y: quadradosParaPx(quadrados, QUADRADO_PX) })
-    editor.updateShape({ id, type: shape.type, x: local.x, y: local.y } as TLShapePartial)
-  }
-
-  /**
-   * Redimensionar (L/A): não existe "setar w/h" genérico — `props.w/h` só existe em
-   * `geo`. A API real é `editor.resizeShape(id, scale, { scaleOrigin })`, verificada
-   * em Editor.ts:7568-7620 + `_scalePagePoint` (Editor.ts:7735-7752): o ponto igual a
-   * `scaleOrigin` fica fixo sob a escala. Usando `scaleOrigin` = topo-esquerda ATUAL
-   * dos page bounds, o canto superior-esquerdo não se move — só L/A mudam, X/Y ficam
-   * intocados.
-   */
-  function aoAplicarL(id: TLShapeId, quadrados: number) {
-    const editor = editorRef.current
-    if (!editor) return
-    const bounds = editor.getShapePageBounds(id)
-    if (!bounds || bounds.w <= 0) return
-    const larguraAlvoPx = quadradosParaPx(quadrados, QUADRADO_PX)
-    editor.resizeShape(id, { x: larguraAlvoPx / bounds.w, y: 1 }, { scaleOrigin: { x: bounds.x, y: bounds.y } })
-  }
-
-  function aoAplicarA(id: TLShapeId, quadrados: number) {
-    const editor = editorRef.current
-    if (!editor) return
-    const bounds = editor.getShapePageBounds(id)
-    if (!bounds || bounds.h <= 0) return
-    const alturaAlvoPx = quadradosParaPx(quadrados, QUADRADO_PX)
-    editor.resizeShape(id, { x: 1, y: alturaAlvoPx / bounds.h }, { scaleOrigin: { x: bounds.x, y: bounds.y } })
-  }
-
-  /** Troca o estado da sala/porta selecionada (vermelho, azul, escuro; livre, trancada). */
-  function aoTrocarEstado(id: TLShapeId, estado: string) {
-    const editor = editorRef.current
-    const shape = editor?.getShape(id)
-    if (!editor || !shape) return
-    editor.updateShape({ id, type: shape.type, props: { estado } } as Parameters<typeof editor.updateShape>[0])
-  }
-
-  /**
-   * Texto que a própria forma desenha: nome do cômodo na sala, "1F" no rótulo de andar,
-   * número no marcador. Todos guardam o texto na mesma prop `rotulo`.
-   */
-  function aoRenomearSala(id: TLShapeId, nome: string) {
-    const editor = editorRef.current
-    const shape = editor?.getShape(id)
-    if (!editor || !shape) return
-    if (shape.type !== 'sala-mapa' && shape.type !== 'simbolo-mapa') return
-    editor.updateShape({ id, type: shape.type, props: { rotulo: nome } } as Parameters<typeof editor.updateShape>[0])
-  }
-
-  /** Cor escolhida à mão para a sala; string vazia devolve o controle ao estado. */
-  function aoTrocarCor(id: TLShapeId, cor: string) {
-    const editor = editorRef.current
-    const shape = editor?.getShape(id)
-    if (!editor || !shape || shape.type !== 'sala-mapa') return
-    editor.updateShape({ id, type: shape.type, props: { cor } } as Parameters<typeof editor.updateShape>[0])
-  }
-
-  /** Vincula/desvincula o Cenário que a sala abre; string vazia desfaz o vínculo. */
-  function aoVincularCenario(id: TLShapeId, cenarioId: string) {
-    const editor = editorRef.current
-    const shape = editor?.getShape(id)
-    if (!editor || !shape || shape.type !== 'sala-mapa') return
-    editor.updateShape({ id, type: shape.type, props: { cenarioId } } as Parameters<typeof editor.updateShape>[0])
-  }
+  // ações do PainelPropriedades (mover, redimensionar, estado, cor, conta-gotas) e a
+  // ordenação/cor-padrão de criação: extraídas para `lib/montagemMapa.tsx`, a MESMA
+  // fonte que a bancada (`amostra/CenaMapa.tsx`) usa — ver o cabeçalho de lá.
+  const acoesPropriedades = usePainelPropriedadesMapa(editorRef)
 
   async function exportar(formato: 'png' | 'svg') {
     const editor = editorRef.current
@@ -380,12 +110,14 @@ export function MapaView({ caminho, nome }: { caminho: string; nome: string }) {
         <button onClick={() => void exportar('svg')}>Exportar SVG</button>
       </div>
       <ProvedorSelecaoPropriedades value={setSelecaoProp}>
+      <ProvedorContagemCamadas value={camadasMapa.definirContagem}>
       <Tldraw
         store={store}
-        shapeUtils={shapeUtilsCustom}
-        components={componentsMapa}
+        shapeUtils={SHAPE_UTILS_CUSTOM_MAPA}
+        tools={TOOLS_CUSTOM_MAPA}
+        components={COMPONENTS_MAPA_BASE}
         user={usuarioMapaRef.current}
-        getShapeVisibility={getShapeVisibilityRef.current}
+        getShapeVisibility={camadasMapa.getShapeVisibility}
         onMount={(editor) => {
           registrarEditor(editor)
           editorRef.current = editor
@@ -418,39 +150,33 @@ export function MapaView({ caminho, nome }: { caminho: string; nome: string }) {
             },
           })
           /**
-           * Forma nova nasce na camada ativa: `registerBeforeCreateHandler('shape', ...)`
-           * — mecanismo verificado em
-           * node_modules/@tldraw/store/src/lib/StoreSideEffects.ts:458-484 (é o handler
-           * que pode MODIFICAR o record antes de criar, ao contrário do afterCreate, que
-           * só reage). Shapes coladas/remotas já com `meta.camada` não são sobrescritas.
-           * Também carimba `isLocked` de saída quando a camada ativa já está travada —
-           * sem isso, uma forma criada numa camada travada nasceria destravada até o
-           * próximo travar/destravar. Ganha também `meta.travadoPelaCamada: true` nesse
-           * caso — mesma marca de `aoAlternarTravadaCamada` — senão o destravar em
-           * massa não saberia que foi a camada (e não um travamento manual do usuário)
-           * quem travou essa forma, e ela ficaria presa travada para sempre.
+           * Forma nova nasce na camada ativa, com a ordem de empilhamento por banda e a
+           * cor padrão de divisória: `registrarBeforeCreateMapa` (lib/montagemMapa.tsx) —
+           * mesma função que a bancada usa, ver o cabeçalho de lá para o mecanismo
+           * completo (`registerBeforeCreateHandler`).
            */
-          const cancelarSideEffect = editor.sideEffects.registerBeforeCreateHandler('shape', (shape, source) => {
-            if (source !== 'user') return shape
-            const metaAtual = shape.meta as Record<string, unknown>
-            if (typeof metaAtual.camada === 'string') return shape
-            const ativa = camadaAtivaIdRef.current
-            const camadaAtiva = camadasAtom.get().find((c) => c.id === ativa)
-            const travadaPelaCamada = !!camadaAtiva?.travada
-            // identidade deduzida da própria forma, não de "última peça clicada" — o
-            // porquê está inteiro no JSDoc de `pecaDaFormaCriada` (paletaMapa.ts).
-            const peca = pecaDaFormaCriada(shape as Parameters<typeof pecaDaFormaCriada>[0])
-            return {
-              ...shape,
-              meta: {
-                ...shape.meta,
-                camada: ativa,
-                ...(peca ? { peca } : {}),
-                ...(travadaPelaCamada ? { travadoPelaCamada: true } : {}),
-              },
-              isLocked: travadaPelaCamada ? true : shape.isLocked,
-            }
+          const cancelarSideEffect = registrarBeforeCreateMapa(editor, {
+            getCamadaAtivaId: camadasMapa.getCamadaAtivaId,
+            getCamadaTravada: camadasMapa.getCamadaTravada,
+            getOrdemCamadas: camadasMapa.getOrdemCamadas,
+            getCantoPadrao: () => getCantoAtivo(editor),
           })
+          /**
+           * A normalização de ordem NÃO acontece aqui, e isso é deliberado.
+           *
+           * Neste ponto o atom de camadas ainda é a "Base" implícita: a lista de verdade só
+           * chega pelo `lerCanvasDoc` do efeito acima, que é I/O assíncrono. Normalizar com
+           * a pilha errada trata TODA peça como órfã (`indiceDaCamada` devolve 0 para id
+           * fora da lista) e achata a página inteira só por banda — destruindo o
+           * empilhamento por camada que o usuário montou, marcando o documento como editado
+           * e fazendo o autosave regravar o arquivo a cada abertura, sem ninguém tocar em
+           * nada. Em cofre sincronizado é exatamente a divergência que gera cópia de
+           * conflito (ver `canvasDoc.ts`).
+           *
+           * Quem normaliza é `carregarCamadas`, já com a pilha certa. Se a leitura falhar, a
+           * ordem salva fica como está — errada é melhor que achatada, porque achatar
+           * PERSISTE o estrago.
+           */
           /**
            * Planta de IA pendente (mapa criado pela "IA monta o mapa" — ver
            * `AcoesMapaIA.tsx` e `lib/mapaIAPendente.ts`): o mapa nasceu vazio nesta mesma
@@ -472,32 +198,20 @@ export function MapaView({ caminho, nome }: { caminho: string; nome: string }) {
           }
         }}
       />
+      </ProvedorContagemCamadas>
       </ProvedorSelecaoPropriedades>
       {/* Os dois painéis são itens de uma coluna flex — quem os empilha é o CSS, medindo a
           altura real de cada um. Empurrar o de camadas por um `top` calculado aqui é o que
           fazia ele cobrir o de propriedades quando a seleção tinha muitos campos. */}
       <div className="mapa-coluna-esq">
-        <PainelPropriedades
-          selecao={selecaoProp}
-          aoAplicarX={aoAplicarX}
-          aoAplicarY={aoAplicarY}
-          aoAplicarL={aoAplicarL}
-          aoAplicarA={aoAplicarA}
-          aoTrocarEstado={aoTrocarEstado}
-          aoRenomearSala={aoRenomearSala}
-          aoTrocarCor={aoTrocarCor}
-          aoVincularCenario={aoVincularCenario}
-        />
+        <PainelPropriedades selecao={selecaoProp} {...acoesPropriedades} />
         <PainelCamadas
-          camadas={camadas}
-          ativaId={camadaAtivaId}
-          aoSelecionarAtiva={setCamadaAtivaId}
-          aoCriar={aoCriarCamada}
-          aoRenomear={aoRenomearCamada}
-          aoExcluir={aoExcluirCamada}
-          aoAlternarOculta={aoAlternarOcultaCamada}
-          aoAlternarTravada={aoAlternarTravadaCamada}
-          aoMover={aoMoverCamada}
+          camadas={camadasMapa.camadas}
+          ativaId={camadasMapa.camadaAtivaId}
+          temSelecao={selecaoProp !== null}
+          camadasDaSelecao={selecaoProp?.camadasDaSelecao ?? []}
+          contagemPorCamada={camadasMapa.contagemPorCamada}
+          {...camadasMapa.acoesDoPainel}
         />
       </div>
       <div className="canvas-banners">

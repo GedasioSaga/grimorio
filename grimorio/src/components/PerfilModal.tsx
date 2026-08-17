@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState } from 'react'
 import { open, message } from '@tauri-apps/plugin-dialog'
 import { convertFileSrc } from '@tauri-apps/api/core'
-import { useApp } from '../state/store'
+import { registrarFlushModal, useApp } from '../state/store'
 import { EditorTexto } from './EditorTexto'
 import { GaleriaPersonagem } from './GaleriaPersonagem'
 import { AbaVinculos } from './AbaVinculos'
+import { AcervoCenario } from './AcervoCenario'
 import { AcoesIA, type AcaoIA } from './AcoesIA'
 import { ChatEntidade } from './ChatEntidade'
 import { contextoDeEntidade } from '../lib/contextoIA'
@@ -13,19 +14,22 @@ import { htmlParaMarkdown, markdownParaHtml } from '../lib/markdownHtml'
 import { promptDescreverPersonagem, SYSTEM_ESCRITOR } from '../lib/promptsIA'
 import { carregarImagensIA } from '../lib/imagensIA'
 import { BarraVersoesPersonagem } from './BarraVersoesPersonagem'
+import { BarraLocalizacao } from './BarraLocalizacao'
 import { EnquadrarRetrato } from './EnquadrarRetrato'
 import { posicaoCss } from '../lib/focoRetrato'
 import { aplicarPatchPersonagem, versaoAtivaPersonagem, type PatchPersonagem } from '../lib/personagemVersao'
+import '../estilos/localizacao.css'
 
 const AUTOSAVE_DEBOUNCE_MS = 800
 
-type Aba = 'descricao' | 'informacao' | 'historia' | 'imagens' | 'extras' | 'anotacoes' | 'vinculos'
-type AbaTexto = Exclude<Aba, 'imagens' | 'vinculos'>
+type Aba = 'descricao' | 'informacao' | 'historia' | 'itens' | 'imagens' | 'extras' | 'anotacoes' | 'vinculos'
+type AbaTexto = Exclude<Aba, 'imagens' | 'itens' | 'vinculos'>
 
 const ABAS: { id: Aba; rotulo: string }[] = [
   { id: 'descricao', rotulo: 'Descrição' },
   { id: 'informacao', rotulo: 'Informações' },
   { id: 'historia', rotulo: 'História' },
+  { id: 'itens', rotulo: 'Itens' },
   { id: 'imagens', rotulo: 'Imagens' },
   { id: 'extras', rotulo: 'Extras' },
   { id: 'anotacoes', rotulo: 'Anotações' },
@@ -56,6 +60,10 @@ export function PerfilModal({ personagemId }: { personagemId: string }) {
   const fecharPerfil = useApp((s) => s.fecharPerfil)
   const recarregarArvore = useApp((s) => s.recarregarArvore)
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  // true quando o cache tem edição ainda não confirmada em disco. Separado de `timer.current`
+  // de propósito: ver o comentário equivalente em CenarioModal — mesmo defeito, mesmo conserto,
+  // os três modais compartilham o padrão byte-a-byte.
+  const sujo = useRef(false)
   const [salvarErro, setSalvarErro] = useState<string | null>(null)
   const [aba, setAba] = useState<Aba>('descricao')
   const [chatAberto, setChatAberto] = useState(false)
@@ -76,13 +84,26 @@ export function PerfilModal({ personagemId }: { personagemId: string }) {
   // desmontou com gravação pendente: cancela o debounce e grava já (fire-and-forget;
   // VaultRepo serializa escritas por caminho, mesmo padrão do CanvasView)
   useEffect(() => () => {
-    if (timer.current) {
-      clearTimeout(timer.current)
-      timer.current = null
-      void salvar()
-    }
+    if (timer.current) clearTimeout(timer.current)
+    timer.current = null
+    if (sujo.current) void salvar()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  // registra o flush AGUARDÁVEL que a Barra de Localização chama antes de mover este
+  // personagem — sem isto, o timer local acima (agendado com o caminho de ANTES da
+  // mudança) dispara 800ms depois no diretório antigo. `moverPersonagem` só remove o
+  // ARQUIVO (não a pasta — ver vaultRepo.ts), então esse disparo tardio RESSUSCITA um
+  // .json fantasma com o mesmo id no lugar de onde saiu. `salvar` não fecha sobre nada
+  // do render (lê tudo via `useApp.getState()`), então registrar uma vez por montagem basta.
+  useEffect(() => registrarFlushModal('personagem', personagemId, async () => {
+    if (timer.current) clearTimeout(timer.current)
+    timer.current = null
+    // checa `sujo`, não `timer.current`: ver o comentário equivalente em CenarioModal.
+    if (!sujo.current) return true
+    return await salvar()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }), [personagemId])
 
   useEffect(() => {
     const aoTeclar = (e: KeyboardEvent) => {
@@ -99,6 +120,7 @@ export function PerfilModal({ personagemId }: { personagemId: string }) {
 
   function agendarSalvar(mudancas: PatchPersonagem) {
     if (timer.current) clearTimeout(timer.current)
+    sujo.current = true
     timer.current = setTimeout(() => {
       timer.current = null
       void salvar()
@@ -110,16 +132,22 @@ export function PerfilModal({ personagemId }: { personagemId: string }) {
   }
 
   async function salvar(): Promise<boolean> {
-    const atual = useApp.getState().personagens[personagemId]
+    // repo e caminho RE-RESOLVIDOS no disparo (não desestruturados do render que agendou):
+    // ver o comentário equivalente em CenarioModal.salvar / state/store.ts.
+    const { repo, caminhoPorId, personagens } = useApp.getState()
+    const atual = personagens[personagemId]
     const caminho = caminhoPorId[personagemId]
-    if (!repo || !caminho || !atual) return true
+    // entidade sumiu (excluída/movida por fora): não há mais o que gravar, e isso NÃO é falha
+    if (!repo || !caminho || !atual) { sujo.current = false; return true }
     try {
       await repo.salvarPersonagem(caminho, { ...atual })
+      sujo.current = false // só agora a edição está confirmada em disco
       setSalvarErro(null)
       await recarregarArvore()
       return true
     } catch (e) {
-      // não relança: chamadas debounced são fire-and-forget
+      // não relança: chamadas debounced são fire-and-forget. `sujo` continua `true` de
+      // propósito — ver o comentário equivalente em CenarioModal.
       console.error('Falha ao salvar perfil:', e)
       setSalvarErro(String(e))
       return false
@@ -151,9 +179,9 @@ export function PerfilModal({ personagemId }: { personagemId: string }) {
   }
 
   async function fechar() {
-    if (timer.current) {
-      clearTimeout(timer.current)
-      timer.current = null
+    if (timer.current) clearTimeout(timer.current)
+    timer.current = null
+    if (sujo.current) {
       const ok = await salvar()
       if (!ok) return // banner explica a falha; segundo ✕ (sem save pendente) ainda fecha
     }
@@ -186,13 +214,13 @@ export function PerfilModal({ personagemId }: { personagemId: string }) {
             system={SYSTEM_ESCRITOR}
             abaAtual={aba}
             rotuloAbaAtual={ABAS.find((a) => a.id === aba)?.rotulo ?? aba}
-            abaEhTexto={aba !== 'imagens' && aba !== 'vinculos'}
+            abaEhTexto={aba !== 'imagens' && aba !== 'itens' && aba !== 'vinculos'}
             acoes={ACOES_IA_PERSONAGEM}
             snapshot={() => {
               const s = useApp.getState()
               const ent = s.personagens[personagemId]
               const vEnt = ent ? versaoAtivaPersonagem(ent) : null
-              const ehTexto = aba !== 'imagens' && aba !== 'vinculos'
+              const ehTexto = aba !== 'imagens' && aba !== 'itens' && aba !== 'vinculos'
               return {
                 dadosBase: `# Personagem\nNome: ${ent?.nome ?? ''}\nResumo: ${vEnt?.resumo ?? ''}`,
                 textoAtual: ehTexto && vEnt ? htmlParaMarkdown((vEnt as unknown as Record<string, string>)[aba] ?? '') : '',
@@ -226,6 +254,7 @@ export function PerfilModal({ personagemId }: { personagemId: string }) {
           <button className="btn-icon perfil-fechar" onClick={() => void fechar()}>✕</button>
         </div>
         <BarraVersoesPersonagem personagemId={personagemId} />
+        <BarraLocalizacao tipo="personagem" id={personagemId} />
         <div className="perfil-abas">
           {ABAS.map((a) => (
             <button key={a.id} className={aba === a.id ? 'ativo' : ''} onClick={() => setAba(a.id)}>
@@ -241,6 +270,20 @@ export function PerfilModal({ personagemId }: { personagemId: string }) {
           />
         ) : aba === 'vinculos' ? (
           <AbaVinculos entidadeTipo="personagem" entidadeId={personagemId} />
+        ) : aba === 'itens' ? (
+          <AcervoCenario
+            className="inventario-acervo-cheio"
+            acervo={va.acervo ?? []}
+            onChange={(mudanca) => {
+              // lê o acervo mais fresco do store, não o `va.acervo` fechado neste render — mesmo
+              // motivo do CenarioModal: um updater assíncrono pode resolver depois de uma edição
+              // concorrente já ter mudado o acervo
+              const atualPersonagem = useApp.getState().personagens[personagemId]
+              const acervoAtual = (atualPersonagem ? versaoAtivaPersonagem(atualPersonagem).acervo : va.acervo) ?? []
+              const acervo = typeof mudanca === 'function' ? mudanca(acervoAtual) : mudanca
+              agendarSalvar({ acervo })
+            }}
+          />
         ) : (
           <EditorTexto
             key={`${aba}:${p.versaoAtivaId}`}

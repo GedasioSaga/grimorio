@@ -11,6 +11,7 @@ interface ArvoreDeArquivos {
   arquivos: ItemRef[]
 }
 import { slugify, slugUnico } from './slug'
+import { VERSAO_CAMADAS } from './camadasMapa'
 import { normalizarFoco } from './focoRetrato'
 import { normalizarVinculos } from './vinculos'
 import { normalizarChat, type MensagemChat } from './chatIA'
@@ -41,6 +42,8 @@ export function normalizarVersaoPersonagem(raw: Record<string, any>): VersaoPers
     extras: raw?.extras ?? '',
     anotacoes: raw?.anotacoes ?? '',
     imagens: Array.isArray(raw?.imagens) ? raw.imagens : [],
+    // ficha antiga não tem este campo (nasceu depois): vira acervo vazio, não quebra a abertura
+    acervo: Array.isArray(raw?.acervo) ? raw.acervo.filter((a: any) => typeof a?.itemId === 'string') : [],
   }
 }
 
@@ -346,11 +349,16 @@ export class VaultRepo {
     })
   }
 
-  /** Atualiza só as camadas do mapa (read-modify-write na fila do caminho — mesmo padrão de `salvarDocumentoCanvas`). */
+  /**
+   * Atualiza só as camadas do mapa (read-modify-write na fila do caminho — mesmo padrão de
+   * `salvarDocumentoCanvas`). Carimba `versaoCamadas` junto: a lista gravada aqui já está na
+   * convenção atual (fundo → topo), e sem o marcador o próximo load a reinverteria achando
+   * que veio da convenção antiga — ver `migrarOrdemCamadas` em `camadasMapa.ts`.
+   */
   async salvarCamadasMapa(caminho: string, camadas: CamadaMapa[]): Promise<void> {
     return this.naFila(caminho, async () => {
       const atual: CanvasDoc = JSON.parse(await this.fs.readText(this.abs(caminho)))
-      const salvo = { ...atual, camadas, modificadoEm: agora() }
+      const salvo = { ...atual, camadas, versaoCamadas: VERSAO_CAMADAS, modificadoEm: agora() }
       await this.fs.writeTextAtomic(this.abs(caminho), JSON.stringify(salvo, null, 2))
     })
   }
@@ -702,6 +710,56 @@ export class VaultRepo {
       await this.fs.mkdirAll(this.abs(dirNotas))
       await this.fs.writeTextAtomic(this.abs(caminho), JSON.stringify({ mensagens }, null, 2))
     })
+  }
+
+  /** Todo caminho de documento que PODE conter uma sala-mapa: sessão, canvas ou mapa (soltos ou de campanha). */
+  private caminhosCanvasDaArvore(tree: VaultTree): string[] {
+    const out: string[] = []
+    for (const i of tree.canvasesSoltos) if (!i.erro) out.push(i.caminho)
+    for (const i of tree.mapasSoltos) if (!i.erro) out.push(i.caminho)
+    for (const camp of tree.campanhas) {
+      for (const i of camp.sessoes) if (!i.erro) out.push(i.caminho)
+      for (const i of camp.canvases) if (!i.erro) out.push(i.caminho)
+    }
+    return out
+  }
+
+  /**
+   * Redireciona toda sala de mapa que apontava para `origemId` a passar a apontar para
+   * `destinoId` — chamada pela absorção de cenário (`store.ts`, `absorverCenarioComoVersao`).
+   * Sem isto a sala fica com vínculo "quebrado" mesmo com o conteúdo dela vivo dentro do
+   * cenário de destino: `cenarioId` é uma prop de shape do tldraw (`SalaMapaShape.tsx`),
+   * enterrada dentro do snapshot de CADA documento — não há como saber de antemão quais
+   * documentos têm uma sala apontando pra este cenário sem abrir cada um.
+   *
+   * Varre TODO documento que pode conter uma sala (não só mapas — sessão/canvas comum
+   * também podem ter uma shape sala-mapa arrastada pra lá). Um documento individual
+   * corrompido/ilegível é pulado (log + segue); nunca derruba a absorção inteira por
+   * causa de um mapa que já estava com problema antes.
+   */
+  async redirecionarSalasDeCenario(tree: VaultTree, origemId: string, destinoId: string): Promise<number> {
+    let total = 0
+    for (const caminho of this.caminhosCanvasDaArvore(tree)) {
+      try {
+        const doc = await this.lerCanvasDoc(caminho)
+        const snapshot = doc.documento as { document?: Record<string, unknown> } | null
+        const registros = snapshot?.document
+        if (!registros) continue
+        let mudou = false
+        for (const rec of Object.values(registros)) {
+          const r = rec as { typeName?: string; type?: string; props?: Record<string, unknown> }
+          if (r?.typeName === 'shape' && r.type === 'sala-mapa' && r.props?.cenarioId === origemId) {
+            r.props.cenarioId = destinoId
+            mudou = true
+            total++
+          }
+        }
+        if (mudou) await this.salvarCanvasDoc(caminho, doc)
+      } catch (e) {
+        console.error(`Falha ao redirecionar salas de mapa em ${caminho}:`, e)
+      }
+    }
+    return total
   }
 
   // ---------- árvore ----------

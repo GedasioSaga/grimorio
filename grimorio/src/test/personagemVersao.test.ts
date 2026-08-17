@@ -40,6 +40,11 @@ describe('aplicarPatchPersonagem', () => {
     aplicarPatchPersonagem(orig, { resumo: 'z' })
     expect(orig.versoes[0].resumo).toBe('')
   })
+  it('acervo é chave de versão: roteia pra versão ativa, não pro topo do personagem', () => {
+    const r = aplicarPatchPersonagem(p({ versaoAtivaId: 'v2' }), { acervo: [{ itemId: 'i1' }] })
+    expect(r.versoes[1].acervo).toEqual([{ itemId: 'i1' }])
+    expect(r.versoes[0].acervo).toBeUndefined()
+  })
 })
 
 describe('helpers undefined-safe + comNomeEspelho', () => {

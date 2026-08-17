@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { open, message } from '@tauri-apps/plugin-dialog'
 import { convertFileSrc } from '@tauri-apps/api/core'
-import { useApp } from '../state/store'
+import { registrarFlushModal, useApp } from '../state/store'
 import type { Item } from '../lib/types'
 import { EditorTexto } from './EditorTexto'
 import { AbaVinculos } from './AbaVinculos'
@@ -13,7 +13,9 @@ import { htmlParaMarkdown, markdownParaHtml } from '../lib/markdownHtml'
 import { carregarImagensIA } from '../lib/imagensIA'
 import { promptDescreverItem, SYSTEM_ESCRITOR } from '../lib/promptsIA'
 import { EnquadrarRetrato } from './EnquadrarRetrato'
+import { BarraLocalizacao } from './BarraLocalizacao'
 import { posicaoCss } from '../lib/focoRetrato'
+import '../estilos/localizacao.css'
 
 const AUTOSAVE_DEBOUNCE_MS = 800
 
@@ -61,10 +63,13 @@ export function ItemModal({ itemId }: { itemId: string }) {
   const item = useApp((s) => s.itens[itemId])
   const vaultPath = useApp((s) => s.vaultPath)
   const repo = useApp((s) => s.repo)
-  const caminhoItemPorId = useApp((s) => s.caminhoItemPorId)
   const fecharItem = useApp((s) => s.fecharItem)
   const recarregarArvore = useApp((s) => s.recarregarArvore)
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  // true quando o cache tem edição ainda não confirmada em disco. Separado de `timer.current`
+  // de propósito: ver o comentário equivalente em CenarioModal — mesmo defeito, mesmo conserto,
+  // os três modais compartilham o padrão byte-a-byte.
+  const sujo = useRef(false)
   const [salvarErro, setSalvarErro] = useState<string | null>(null)
   const [aba, setAba] = useState<Aba>('descricao')
   const [chatAberto, setChatAberto] = useState(false)
@@ -83,18 +88,32 @@ export function ItemModal({ itemId }: { itemId: string }) {
   // desmontou com gravação pendente: cancela o debounce e grava já (fire-and-forget;
   // VaultRepo serializa escritas por caminho, mesmo padrão do CenarioModal)
   useEffect(() => () => {
-    if (timer.current) {
-      clearTimeout(timer.current)
-      timer.current = null
-      void salvar()
-    }
+    if (timer.current) clearTimeout(timer.current)
+    timer.current = null
+    if (sujo.current) void salvar()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  // registra o flush AGUARDÁVEL que a Barra de Localização chama antes de mover este
+  // item — sem isto, o timer local acima (agendado com o caminho de ANTES da mudança)
+  // dispara 800ms depois no diretório antigo. `moverItem` só remove o ARQUIVO (não a
+  // pasta), então esse disparo tardio RESSUSCITA um .json fantasma com o mesmo id no
+  // lugar de onde saiu. `salvar` não fecha sobre nada do render (lê tudo via
+  // `useApp.getState()`), então registrar uma vez por montagem basta.
+  useEffect(() => registrarFlushModal('item', itemId, async () => {
+    if (timer.current) clearTimeout(timer.current)
+    timer.current = null
+    // checa `sujo`, não `timer.current`: ver o comentário equivalente em CenarioModal.
+    if (!sujo.current) return true
+    return await salvar()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }), [itemId])
 
   if (!item) return null
 
   function agendarSalvar(mudancas: Partial<Item>) {
     if (timer.current) clearTimeout(timer.current)
+    sujo.current = true
     timer.current = setTimeout(() => {
       timer.current = null
       void salvar()
@@ -104,16 +123,22 @@ export function ItemModal({ itemId }: { itemId: string }) {
   }
 
   async function salvar(): Promise<boolean> {
-    const atual = useApp.getState().itens[itemId]
+    // repo e caminho RE-RESOLVIDOS no disparo (não desestruturados do render que agendou):
+    // ver o comentário equivalente em CenarioModal.salvar / state/store.ts.
+    const { repo, caminhoItemPorId, itens } = useApp.getState()
+    const atual = itens[itemId]
     const caminho = caminhoItemPorId[itemId]
-    if (!repo || !caminho || !atual) return true
+    // entidade sumiu (excluída/movida por fora): não há mais o que gravar, e isso NÃO é falha
+    if (!repo || !caminho || !atual) { sujo.current = false; return true }
     try {
       await repo.salvarItem(caminho, { ...atual })
+      sujo.current = false // só agora a edição está confirmada em disco
       setSalvarErro(null)
       await recarregarArvore()
       return true
     } catch (e) {
-      // não relança: chamadas debounced são fire-and-forget
+      // não relança: chamadas debounced são fire-and-forget. `sujo` continua `true` de
+      // propósito — ver o comentário equivalente em CenarioModal.
       console.error('Falha ao salvar item:', e)
       setSalvarErro(String(e))
       return false
@@ -142,9 +167,9 @@ export function ItemModal({ itemId }: { itemId: string }) {
   }
 
   async function fechar() {
-    if (timer.current) {
-      clearTimeout(timer.current)
-      timer.current = null
+    if (timer.current) clearTimeout(timer.current)
+    timer.current = null
+    if (sujo.current) {
       const ok = await salvar()
       if (!ok) return
     }
@@ -211,6 +236,7 @@ export function ItemModal({ itemId }: { itemId: string }) {
             onClick={() => setChatAberto((v) => !v)}>💬</button>
           <button className="btn-icon perfil-fechar" onClick={() => void fechar()}>✕</button>
         </div>
+        <BarraLocalizacao tipo="item" id={itemId} />
         <div className="perfil-abas">
           {ABAS.map((a) => (
             <button key={a.id} className={aba === a.id ? 'ativo' : ''} onClick={() => setAba(a.id)}>

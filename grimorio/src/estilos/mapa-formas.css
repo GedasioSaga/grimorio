@@ -1,0 +1,166 @@
+/* Complementa `theme.css` para as peças de desenho do mapa (retângulo e camadas). Só o que
+   o theme não tem entra aqui — `.painel-estado`, `.painel-estado-opcao`, `.btn-icon` e
+   `.painel-propriedades-campo` já existem lá e são reaproveitados como estão. */
+
+/* A coluna esquerda cresceu de conteúdo nesta leva: o painel de propriedades ganhou Cantos
+   e Traço, e cada linha de camada ganhou o ⤵ de mover a seleção — em 200px o nome da
+   camada era cortado em "Anot…". 224px cabem os seis ícones e ainda sobra nome legível.
+   Os dois painéis mudam JUNTOS: larguras diferentes na mesma coluna leem como desalinho.
+
+   Seletor com o ancestral (`.mapa-coluna-esq`) de propósito: `theme.css` define a largura
+   com a mesma especificidade, e a ordem entre as duas folhas depende de onde cada import
+   cai no bundle — especificidade maior não depende de ordem. */
+.mapa-coluna-esq .painel-propriedades,
+.mapa-coluna-esq .painel-camadas {
+  width: 224px;
+}
+
+/* `.painel-estado-opcoes` é COLUNA no theme, e com razão: o estado da sala/porta é uma
+   frase ("Já limpei", "Precisa de algo") que só cabe em linha cheia. Cantos e espessura são
+   escolhas curtas — em coluna, cinco espessuras comiam metade da altura do painel e
+   empurravam X/Y/L/A para fora da vista. Lado a lado elas cabem numa fileira. */
+.painel-opcoes-lado-a-lado {
+  flex-direction: row;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.painel-opcoes-lado-a-lado .painel-estado-opcao {
+  flex: 0 0 auto;
+  border-color: var(--borda);
+  padding: 4px 7px;
+}
+
+/* Espessura se escolhe pelo olho, não pelo número: cada opção mostra uma barra da própria
+   grossura, do mesmo jeito que o seletor de estado mostra a própria cor. */
+.painel-opcao-espessura {
+  width: 30px;
+  justify-content: center;
+  padding: 4px;
+}
+
+.painel-amostra-espessura {
+  width: 100%;
+  border-radius: 1px;
+  background: currentColor;
+}
+
+/* "Preencher" é caixa de marcar: precisa ser LINHA, não coluna. `.painel-propriedades-campo`
+   é `flex-direction: column` (serve aos campos X/Y/L/A, rótulo em cima do input), o que
+   deixaria a marca acima do texto em vez de ao lado. */
+.painel-retangulo-preenchido {
+  flex-direction: row;
+  align-items: center;
+  gap: 6px;
+  margin-top: 6px;
+  cursor: pointer;
+}
+
+.painel-retangulo-preenchido input {
+  margin: 0;
+  cursor: pointer;
+}
+
+.painel-camadas-dica {
+  flex-shrink: 0;
+  margin: 0;
+  font-size: 10px;
+  color: var(--texto-fraco);
+}
+
+.painel-camadas-dica strong {
+  color: var(--dourado-claro);
+  font-weight: 500;
+}
+
+/* Marca a camada onde a seleção mora. Ponto, e não negrito ou cor de fundo: a linha ativa
+   já usa borda dourada e fundo elevado, e um terceiro realce competindo com esses dois
+   deixaria de ser possível ler qual é qual. */
+.painel-camadas-nome.com-selecao::before {
+  content: '';
+  display: inline-block;
+  width: 5px;
+  height: 5px;
+  margin-right: 6px;
+  border-radius: 50%;
+  background: var(--dourado);
+  vertical-align: middle;
+}
+
+/* Só aparece quando há seleção — destacado para o usuário achar o alvo de uma olhada, já
+   que ele surge no meio de botões que estavam ali o tempo todo. */
+.camada-receber-selecao {
+  color: var(--dourado-claro);
+}
+
+/* Contagem de peças da camada. Ao lado do nome e discreta: é referência ("tem 21 coisas
+   aqui"), não valor a comparar — competir com o nome faria a linha ler como tabela. */
+.painel-camadas-contagem {
+  flex: 0 0 auto;
+  margin: 0 4px 0 2px;
+  font-size: 10px;
+  color: var(--texto-fraco);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Item de camada em DUAS fileiras: nome+contagem em cima, ações embaixo. Numa fileira só,
+   o nome dividia 200px com seis botões e sobravam ~7 caracteres — "Segredos do Mestre" e
+   "Segredos dos Jogadores" ficavam indistinguíveis. */
+.mapa-coluna-esq .painel-camadas-item {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 2px;
+}
+
+.painel-camadas-linha-nome {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+  min-width: 0;
+  /* o nome é o identificador da linha: alinhado à esquerda, como qualquer lista de itens */
+  text-align: left;
+}
+
+.painel-camadas-item .painel-camadas-acoes {
+  justify-content: flex-end;
+  gap: 2px;
+}
+
+/* ---- arrasto de camada ---- */
+
+/* A linha arrastada fica fantasma no lugar de origem: o cursor já carrega a imagem dela, e
+   dois desenhos iguais e sólidos ao mesmo tempo fazem perder de vista qual é qual. */
+.mapa-coluna-esq .painel-camadas-item.arrastando {
+  opacity: 0.4;
+}
+
+/* Traço de inserção onde a camada vai cair. Linha, e não realce da linha inteira: realçar a
+   linha alvo diria "vai trocar com esta", que é outra ação — o traço diz "entra AQUI, entre
+   as duas". `position: relative` no item para o traço se ancorar nele. */
+.mapa-coluna-esq .painel-camadas-item {
+  position: relative;
+}
+
+.mapa-coluna-esq .painel-camadas-item.solta-antes::before,
+.mapa-coluna-esq .painel-camadas-item.solta-depois::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: var(--dourado);
+  border-radius: 1px;
+  pointer-events: none;
+}
+
+.mapa-coluna-esq .painel-camadas-item.solta-antes::before { top: -2px; }
+.mapa-coluna-esq .painel-camadas-item.solta-depois::after { bottom: -2px; }
+
+/* Cursor de alça: a linha inteira é arrastável, então ela precisa dizer isso antes do gesto. */
+.mapa-coluna-esq .painel-camadas-linha-nome {
+  cursor: grab;
+}
+
+.mapa-coluna-esq .painel-camadas-item.arrastando .painel-camadas-linha-nome {
+  cursor: grabbing;
+}

@@ -2,7 +2,7 @@ import type { Personagem, VersaoPersonagem } from './types'
 
 // nome É por-versão (transformação). O top-level Personagem.nome é ESPELHO da versão ativa.
 export const CHAVES_VERSAO_PERSONAGEM = [
-  'nome', 'retrato', 'foco', 'resumo', 'descricao', 'informacao', 'historia', 'extras', 'anotacoes', 'imagens',
+  'nome', 'retrato', 'foco', 'resumo', 'descricao', 'informacao', 'historia', 'extras', 'anotacoes', 'imagens', 'acervo',
 ] as const
 
 export type PatchPersonagem =

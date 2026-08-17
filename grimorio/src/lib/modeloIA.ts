@@ -13,6 +13,7 @@
  */
 
 const CHAVE = 'grimorio.modeloIA'
+const CHAVE_MAPA = 'grimorio.modeloIA.mapa'
 
 /** Usado quando nada foi escolhido — o mesmo que o app sempre usou. */
 export const MODELO_PADRAO = 'gemini-3.1-flash-lite'
@@ -111,4 +112,27 @@ export function salvarModelo(id: string): void {
 /** Rótulo legível de um id (o próprio id quando não conhecemos). */
 export function rotuloDoModelo(id: string): string {
   return porId.get(id)?.rotulo ?? id
+}
+
+/**
+ * Modelo do MAPA salvo nesta máquina — chave própria, separada da de texto (`CHAVE`).
+ * `undefined` significa "Automático": nada foi escolhido, então quem chama usa o padrão
+ * forte do mapa (`MODELO_MAPA_PADRAO`, em gerarMapaIA.ts). Ao contrário de `modeloSalvo`,
+ * esta função não devolve um padrão embutido — o padrão do mapa não vive aqui, e inventar
+ * um aqui seria uma segunda fonte de verdade para o mesmo valor.
+ */
+export function modeloMapaSalvo(): string | undefined {
+  const s = localStorage.getItem(CHAVE_MAPA)
+  return s && s.trim() ? s.trim() : undefined
+}
+
+/**
+ * Persiste a escolha do mapa; vazio ou igual a `padrao` volta a "Automático" (remove a
+ * chave) — mesmo padrão de `salvarModelo`. `padrao` entra por parâmetro (não por import de
+ * gerarMapaIA.ts) para esta função não depender de saber qual é o padrão atual do mapa.
+ */
+export function salvarModeloMapa(id: string, padrao: string): void {
+  const limpo = id.trim()
+  if (!limpo || limpo === padrao) localStorage.removeItem(CHAVE_MAPA)
+  else localStorage.setItem(CHAVE_MAPA, limpo)
 }

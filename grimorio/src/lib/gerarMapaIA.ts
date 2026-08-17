@@ -299,11 +299,13 @@ function especificacaoParaCriarShape(
 
 /**
  * Insere a planta no mapa ABERTO, em área vazia (sem encostar no que já existe) e com
- * tudo selecionado — um Ctrl+Z desfaz a inserção inteira (decisão 3). Portas ficam à
- * frente (mesma regra de `criarPorta` na toolbar: são uma marca sobre a parede).
+ * tudo selecionado — um Ctrl+Z desfaz a inserção inteira (decisão 3). Porta/escada/torre
+ * ficam acima da estrutura por CONSTRUÇÃO — o `registerBeforeCreateHandler` do
+ * `MapaView` (banda "abertura" de `lib/ordemMapa.ts`) já garante isso pra QUALQUER
+ * criação, então não precisa mais de `bringToFront` manual aqui.
  *
- * TUDO isto — criar, trazer porta à frente, trocar ferramenta, selecionar E mover a
- * câmera — acontece dentro de UM `editor.run()`. Verificado em
+ * TUDO isto — criar, trocar ferramenta, selecionar E mover a câmera — acontece dentro de
+ * UM `editor.run()`. Verificado em
  * `node_modules/@tldraw/editor/src/lib/editor/managers/HistoryManager/HistoryManager.ts:85-113`:
  * `batch(fn)` acumula toda mudança do `fn` num `pendingDiff` só (via `transact`), e um
  * `run()` aninhado dentro de outro (`_isInBatch` já `true`) não abre um novo — continua no
@@ -311,7 +313,7 @@ function especificacaoParaCriarShape(
  * está vazio, ou seja: span de um só `editor.run()` = um só Ctrl+Z. O único jeito de
  * quebrar isso em vários passos seria chamar `editor.markHistoryStoppingPoint()` no meio
  * — e o único lugar do editor que chama isso é o próprio método público (`Editor.ts:1203`,
- * única ocorrência), que nada aqui invoca. `createShapes`/`bringToFront`/`setCurrentTool`/
+ * única ocorrência), que nada aqui invoca. `createShapes`/`setCurrentTool`/
  * `setSelectedShapes`/`zoomToBounds` não abrem marca nenhuma.
  */
 export function inserirPlantaNoMapaAberto(editor: Editor, planta: PlantaIA): void {
@@ -333,11 +335,9 @@ export function inserirPlantaNoMapaAberto(editor: Editor, planta: PlantaIA): voi
   const specs = plantaParaEspecificacoes(planta, origem, proximoMarcadorNoEditor(editor))
   const formas = specs.map(especificacaoParaCriarShape)
   const ids: TLShapeId[] = formas.map((f) => f.id as TLShapeId)
-  const idsPortas = formas.filter((f) => f.type === 'porta-mapa').map((f) => f.id as TLShapeId)
 
   editor.run(() => {
     editor.createShapes(formas)
-    if (idsPortas.length) editor.bringToFront(idsPortas)
     editor.setCurrentTool('select')
     editor.setSelectedShapes(ids)
 

@@ -38,6 +38,25 @@ export function contarDescendentes(n: CenarioNode): number {
   return n.filhos.reduce((acc, f) => acc + 1 + contarDescendentes(f), 0)
 }
 
+/**
+ * Ids de todos os sub-cenários de `n`, em qualquer profundidade (não inclui o próprio `n`).
+ * Usado por `absorverCenarioComoVersao`: mover a pasta do cenário-origem para a lixeira leva
+ * junto TODOS os sub-cenários dela (é uma pasta só), então qualquer vínculo ou sala de mapa
+ * que apontava para um deles precisa ser redirecionado igual ao que apontava para a própria
+ * origem — senão sobra apontando para um id que só existe dentro da lixeira.
+ */
+export function idsDescendentes(n: CenarioNode): string[] {
+  const out: string[] = []
+  const rec = (node: CenarioNode) => {
+    for (const f of node.filhos) {
+      out.push(f.id)
+      rec(f)
+    }
+  }
+  rec(n)
+  return out
+}
+
 /** Id do pai de um cenário na árvore, ou null se for raiz / não existir. */
 export function paiDoCenario(raiz: PastaCenarioNode, id: string): string | null {
   const emFilhos = (nos: CenarioNode[]): string | null => {

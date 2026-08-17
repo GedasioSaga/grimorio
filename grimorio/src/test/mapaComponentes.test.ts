@@ -12,9 +12,23 @@ import { describe, it, expect } from 'vitest'
  * Importar de verdade cada módulo e conferir que o export é uma função cobre essa classe
  * inteira: se qualquer import circular aparecer, o valor chega `undefined` aqui e o teste
  * quebra no CI em vez de sumir na cara do usuário.
+ *
+ * ## Timeout generoso, de propósito
+ *
+ * O primeiro `import()` daqui arrasta o subsistema de mapa INTEIRO para dentro do worker —
+ * tldraw, os 13 shapeUtils, as ferramentas, a barra. Sob a carga da suíte completa (~490
+ * arquivos, vários deles montando jsdom e tldraw), essa primeira carga passava dos 5s
+ * padrão e o teste falhava com `STACK_TRACE_ERROR` — mensagem de TIMEOUT, sem nenhuma
+ * asserção quebrada, apontando para a linha onde o teste foi declarado. Passava sozinho,
+ * falhava junto: a cara clássica de defeito de isolamento, e não era.
+ *
+ * O que este arquivo mede é "o módulo carrega e o export é uma função". Quanto tempo leva
+ * para carregar é ruído de máquina ocupada, não regressão — então o limite fica alto aqui e
+ * segue em 5s no resto da suíte, onde tempo de teste ainda é sinal.
  */
+const CARGA_LENTA_MS = 30_000
 
-describe('componentes do Mapa carregam e exportam função', () => {
+describe('componentes do Mapa carregam e exportam função', { timeout: CARGA_LENTA_MS }, () => {
   it('MapaToolbar', async () => {
     const { MapaToolbar } = await import('../components/MapaToolbar')
     expect(typeof MapaToolbar).toBe('function')

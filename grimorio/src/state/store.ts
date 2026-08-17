@@ -2,9 +2,10 @@ import { create } from 'zustand'
 import type { Cenario, Item, ItemRef, PastaItemNode, PastaNode, Personagem, TipoEntidadeVinculo, VaultTree, VersaoCenario, VersaoPersonagem, Vinculo } from '../lib/types'
 import { tauriFs } from '../lib/fsBridge'
 import { VaultRepo } from '../lib/vaultRepo'
-import { coletarCenarioRefs } from '../lib/cenarioArvore'
+import { coletarCenarioRefs, encontrarCenarioNode, idsDescendentes } from '../lib/cenarioArvore'
 import { adicionarVinculo as adicionarVinculoPuro, removerVinculo as removerVinculoPuro, campanhasDe, participacaoDe, TIPO_PARTICIPA } from '../lib/vinculos'
 import { aplicarPatchCenario, versaoAtiva, type PatchCenario } from '../lib/cenarioVersao'
+import { absorverCenario, cenarioDestinoValido, redirecionarVinculosAbsorcao } from '../lib/localizacaoEntidade'
 import { aplicarPatchPersonagem, versaoAtivaPersonagem, comNomeEspelho, type PatchPersonagem } from '../lib/personagemVersao'
 import { CHAVE_FILTRO, CHAVE_VAULT, chaveDeCofre, normalizarCaminho, registrar as registrarCofre } from '../lib/cofres'
 import { atualizarLayoutSalvo, type LayoutSalvo, type Posicao } from '../lib/grafoLayoutPersistido'
@@ -22,6 +23,23 @@ const timersSalvarCenario = new Map<string, ReturnType<typeof setTimeout>>()
 
 // itens não têm card no canvas, mas o modal fecha durante o debounce pelos mesmos motivos
 const timersSalvarItem = new Map<string, ReturnType<typeof setTimeout>>()
+
+/**
+ * Ids com edição no cache ainda não confirmada em disco — SEPARADO dos timers acima de
+ * propósito. `descarregarFilasPendentes` cancela e some com o timer ANTES de tentar gravar
+ * (precisa: um timer que sobrevive à troca de cofre gravaria no caminho do cofre novo com o
+ * conteúdo do antigo). Se a gravação falhar depois disso, sem este registro à parte o id
+ * não fica pendente em lugar nenhum — a PRÓXIMA chamada (outro clique em "Mover", por
+ * exemplo) não encontraria timer nenhum, reportaria "nada pendente" e deixaria a edição pra
+ * trás. Um id só sai daqui quando `repo.salvar*` de fato confirma a gravação; entidade que
+ * sumiu (excluída/movida por fora) também sai — não há mais o que gravar, e isso não é falha.
+ */
+const personagensSujos = new Set<string>()
+const cenariosSujos = new Set<string>()
+const itensSujos = new Set<string>()
+// vínculos e layout da teia são arquivo único cada: dirty é booleano, não Set
+let vinculosSujo = false
+let layoutTeiaSujo = false
 
 /**
  * Avisado sempre que uma gravação é AGENDADA. É o gatilho de "o usuário salvou alguma coisa"
@@ -55,9 +73,51 @@ function sinalizarGravacao(): void {
   }
 }
 
+/**
+ * Registro de "descarregue agora" para os autosaves LOCAIS dos modais (Perfil/Cenário/Item).
+ * Esses modais mantêm timer e closure de gravação PRÓPRIOS (`timer.current` em cada
+ * componente), fora dos timers de módulo acima — por isso `descarregarFilas` não os
+ * enxerga (ver a docstring dela). A Barra de Localização precisa flushar esse pendente
+ * ANTES de mover/absorver a entidade: sem isso, o timer local do modal (agendado com o
+ * caminho de ANTES da mudança) dispara depois — e escreve no lugar errado, ou falha
+ * silenciosamente e perde a edição. Ver `CenarioModal`/`PerfilModal`/`ItemModal`.
+ *
+ * Chave = `${tipo}:${id}`; só o modal aberto para aquela entidade se registra, então nunca
+ * há mais de um flusher por chave — o `set` simplesmente substitui.
+ *
+ * O flusher devolve `boolean` (mesmo contrato do `salvar()` de cada modal): `true` = gravou
+ * (ou não tinha nada pendente), `false` = tentou gravar e falhou. A Barra de Localização
+ * PRECISA desse booleano — sem ele, uma falha de disco vira sucesso aparente e o mover/
+ * absorver segue em frente sem a edição do usuário em lugar nenhum. Ver `flushModalPendente`.
+ */
+const flushersModal = new Map<string, () => Promise<boolean>>()
+
+/** Chamado pelo modal ao montar; devolve o cancelador (chamar no cleanup do efeito). */
+export function registrarFlushModal(tipo: string, id: string, flush: () => Promise<boolean>): () => void {
+  const chave = `${tipo}:${id}`
+  flushersModal.set(chave, flush)
+  return () => {
+    if (flushersModal.get(chave) === flush) flushersModal.delete(chave)
+  }
+}
+
+/**
+ * Chamado pela Barra de Localização antes de mover/absorver. Devolve `true` quando não há
+ * modal registrado para `tipo:id` (nada para flushar, nada falhou) OU quando a gravação deu
+ * certo; `false` quando havia gravação pendente e ela FALHOU — quem chama não pode seguir
+ * para mover/absorver nesse caso (a edição só existe no cache agora; mover apontaria o
+ * caminho novo para um arquivo que nunca recebeu essa edição).
+ */
+export async function flushModalPendente(tipo: string, id: string): Promise<boolean> {
+  const flush = flushersModal.get(`${tipo}:${id}`)
+  if (!flush) return true
+  return flush()
+}
+
 /** Agenda a persistência debounced do cenário `id` (reusada por edições e ações de versão). */
 function agendarSalvarCenario(get: () => AppState, id: string) {
   sinalizarGravacao()
+  cenariosSujos.add(id)
   const pendente = timersSalvarCenario.get(id)
   if (pendente) clearTimeout(pendente)
   timersSalvarCenario.set(
@@ -68,11 +128,14 @@ function agendarSalvarCenario(get: () => AppState, id: string) {
       const { repo, caminhoCenarioPorId, cenarios } = get()
       const caminho = caminhoCenarioPorId[id]
       const c = cenarios[id]
-      if (!repo || !caminho || !c) return
-      // fire-and-forget: VaultRepo serializa escritas por caminho
-      repo.salvarCenario(caminho, { ...c }).catch((e) => {
-        console.error('Falha ao salvar cenário:', e)
-      })
+      if (!repo || !caminho || !c) { cenariosSujos.delete(id); return } // sumiu: nada a gravar
+      // fire-and-forget: VaultRepo serializa escritas por caminho. NÃO limpa `cenariosSujos`
+      // no catch: a falha tem de continuar pendente para `descarregarFilasPendentes` pegar.
+      repo.salvarCenario(caminho, { ...c })
+        .then(() => cenariosSujos.delete(id))
+        .catch((e) => {
+          console.error('Falha ao salvar cenário:', e)
+        })
     }, SALVAR_PARCIAL_DEBOUNCE_MS),
   )
 }
@@ -80,6 +143,7 @@ function agendarSalvarCenario(get: () => AppState, id: string) {
 /** Agenda a persistência debounced do item `id`. */
 function agendarSalvarItem(get: () => AppState, id: string) {
   sinalizarGravacao()
+  itensSujos.add(id)
   const pendente = timersSalvarItem.get(id)
   if (pendente) clearTimeout(pendente)
   timersSalvarItem.set(
@@ -90,11 +154,14 @@ function agendarSalvarItem(get: () => AppState, id: string) {
       const { repo, caminhoItemPorId, itens } = get()
       const caminho = caminhoItemPorId[id]
       const i = itens[id]
-      if (!repo || !caminho || !i) return
-      // fire-and-forget: VaultRepo serializa escritas por caminho
-      repo.salvarItem(caminho, { ...i }).catch((e) => {
-        console.error('Falha ao salvar item:', e)
-      })
+      if (!repo || !caminho || !i) { itensSujos.delete(id); return } // sumiu: nada a gravar
+      // fire-and-forget: VaultRepo serializa escritas por caminho. NÃO limpa `itensSujos`
+      // no catch: a falha tem de continuar pendente para `descarregarFilasPendentes` pegar.
+      repo.salvarItem(caminho, { ...i })
+        .then(() => itensSujos.delete(id))
+        .catch((e) => {
+          console.error('Falha ao salvar item:', e)
+        })
     }, SALVAR_PARCIAL_DEBOUNCE_MS),
   )
 }
@@ -102,6 +169,7 @@ function agendarSalvarItem(get: () => AppState, id: string) {
 /** Agenda a persistência debounced do personagem `id` (reusada por edições e ações de versão). */
 function agendarSalvarPersonagem(get: () => AppState, id: string) {
   sinalizarGravacao()
+  personagensSujos.add(id)
   const pendente = timersSalvarParcial.get(id)
   if (pendente) clearTimeout(pendente)
   timersSalvarParcial.set(
@@ -112,11 +180,14 @@ function agendarSalvarPersonagem(get: () => AppState, id: string) {
       const { repo, caminhoPorId, personagens } = get()
       const caminho = caminhoPorId[id]
       const p = personagens[id]
-      if (!repo || !caminho || !p) return
-      // fire-and-forget: VaultRepo serializa escritas por caminho
-      repo.salvarPersonagem(caminho, { ...p }).catch((e) => {
-        console.error('Falha ao salvar personagem:', e)
-      })
+      if (!repo || !caminho || !p) { personagensSujos.delete(id); return } // sumiu: nada a gravar
+      // fire-and-forget: VaultRepo serializa escritas por caminho. NÃO limpa `personagensSujos`
+      // no catch: a falha tem de continuar pendente para `descarregarFilasPendentes` pegar.
+      repo.salvarPersonagem(caminho, { ...p })
+        .then(() => personagensSujos.delete(id))
+        .catch((e) => {
+          console.error('Falha ao salvar personagem:', e)
+        })
     }, SALVAR_PARCIAL_DEBOUNCE_MS),
   )
 }
@@ -233,6 +304,13 @@ interface AppState extends EstadoDeCofre {
   renomearVersao(id: string, versaoId: string, nome: string): void
   /** Remove a versão (nunca a última); se remover a ativa, recua pra primeira. */
   removerVersao(id: string, versaoId: string): void
+  /**
+   * Barra de Localização, ação "Transformar em versão de...": `origemId` deixa de existir como
+   * cenário próprio e vira uma (ou mais, se tinha várias versões) versão nova de `destinoId`.
+   * O que sobra de `origemId` no disco vai para a lixeira — nunca some de vez. Se a origem
+   * estava aberta na tela, a ficha passa a apontar para o destino (ele é quem sobrevive).
+   */
+  absorverCenarioComoVersao(origemId: string, destinoId: string): Promise<void>
   abrirCenario(id: string): void
   fecharCenario(): void
   carregarItens(): Promise<void>
@@ -279,13 +357,17 @@ const SALVAR_VINCULOS_DEBOUNCE_MS = 800
 
 function agendarSalvarVinculos(get: () => AppState) {
   sinalizarGravacao()
+  vinculosSujo = true
   if (timerSalvarVinculos) clearTimeout(timerSalvarVinculos)
   timerSalvarVinculos = setTimeout(() => {
     timerSalvarVinculos = null
     const { repo, vinculos } = get()
-    if (!repo) return
-    // fire-and-forget: VaultRepo serializa escritas por caminho
-    repo.salvarVinculos(vinculos).catch((e) => console.error('Falha ao salvar vínculos:', e))
+    if (!repo) { vinculosSujo = false; return }
+    // fire-and-forget: VaultRepo serializa escritas por caminho. NÃO limpa `vinculosSujo`
+    // no catch: a falha tem de continuar pendente para `descarregarFilasPendentes` pegar.
+    repo.salvarVinculos(vinculos)
+      .then(() => { vinculosSujo = false })
+      .catch((e) => console.error('Falha ao salvar vínculos:', e))
   }, SALVAR_VINCULOS_DEBOUNCE_MS)
 }
 
@@ -301,13 +383,17 @@ const SALVAR_LAYOUT_TEIA_DEBOUNCE_MS = SALVAR_PARCIAL_DEBOUNCE_MS
 
 function agendarSalvarLayoutTeia(get: () => AppState) {
   sinalizarGravacao()
+  layoutTeiaSujo = true
   if (timerSalvarLayoutTeia) clearTimeout(timerSalvarLayoutTeia)
   timerSalvarLayoutTeia = setTimeout(() => {
     timerSalvarLayoutTeia = null
     const { repo, layoutsTeia } = get()
-    if (!repo) return
-    // fire-and-forget: VaultRepo serializa escritas por caminho
-    repo.salvarLayoutTeia(layoutsTeia).catch((e) => console.error('Falha ao salvar layout da teia:', e))
+    if (!repo) { layoutTeiaSujo = false; return }
+    // fire-and-forget: VaultRepo serializa escritas por caminho. NÃO limpa `layoutTeiaSujo`
+    // no catch: a falha tem de continuar pendente para `descarregarFilasPendentes` pegar.
+    repo.salvarLayoutTeia(layoutsTeia)
+      .then(() => { layoutTeiaSujo = false })
+      .catch((e) => console.error('Falha ao salvar layout da teia:', e))
   }, SALVAR_LAYOUT_TEIA_DEBOUNCE_MS)
 }
 
@@ -324,23 +410,28 @@ function agendarSalvarLayoutTeia(get: () => AppState) {
  * Enxerga só os timers de nível de módulo — ver a docstring de `descarregarFilas`.
  */
 async function descarregarFilasPendentes(get: () => AppState): Promise<FalhaDescarga[]> {
-  const idsPersonagens = [...timersSalvarParcial.keys()]
+  // a fila de tentativa é `*Sujos` (sobrevive a uma falha), NÃO as chaves do timer (que
+  // acabou de ser cancelado embaixo). Ver a docstring de `personagensSujos` acima: sem essa
+  // separação, um id cuja gravação falhar aqui não fica pendente em lugar nenhum, e a
+  // PRÓXIMA chamada (outro "Mover" na Barra de Localização, por exemplo) reportaria "nada
+  // pendente" sem ter gravado nada — perda silenciosa e definitiva.
+  const idsPersonagens = [...personagensSujos]
   for (const t of timersSalvarParcial.values()) clearTimeout(t)
   timersSalvarParcial.clear()
 
-  const idsCenarios = [...timersSalvarCenario.keys()]
+  const idsCenarios = [...cenariosSujos]
   for (const t of timersSalvarCenario.values()) clearTimeout(t)
   timersSalvarCenario.clear()
 
-  const idsItens = [...timersSalvarItem.keys()]
+  const idsItens = [...itensSujos]
   for (const t of timersSalvarItem.values()) clearTimeout(t)
   timersSalvarItem.clear()
 
-  const tinhaVinculos = timerSalvarVinculos !== null
+  const tinhaVinculos = vinculosSujo
   if (timerSalvarVinculos) clearTimeout(timerSalvarVinculos)
   timerSalvarVinculos = null
 
-  const tinhaLayoutTeia = timerSalvarLayoutTeia !== null
+  const tinhaLayoutTeia = layoutTeiaSujo
   if (timerSalvarLayoutTeia) clearTimeout(timerSalvarLayoutTeia)
   timerSalvarLayoutTeia = null
 
@@ -352,52 +443,62 @@ async function descarregarFilasPendentes(get: () => AppState): Promise<FalhaDesc
     const caminho = caminhoPorId[id]
     const p = personagens[id]
     // pular NÃO é falha: sem caminho ou sem entidade = foi excluída antes do disparo
-    if (!caminho || !p) continue
+    if (!caminho || !p) { personagensSujos.delete(id); continue }
     try {
       await repo.salvarPersonagem(caminho, { ...p })
+      personagensSujos.delete(id) // só sai da fila quando REALMENTE gravou
     } catch (e) {
       console.error('Falha ao salvar personagem:', e)
       falhas.push({ caminho, rotulo: p.nome, erro: e })
+      // continua em `personagensSujos`: a próxima chamada tenta de novo de verdade
     }
   }
   for (const id of idsCenarios) {
     const caminho = caminhoCenarioPorId[id]
     const c = cenarios[id]
     // pular NÃO é falha: sem caminho ou sem entidade = foi excluído antes do disparo
-    if (!caminho || !c) continue
+    if (!caminho || !c) { cenariosSujos.delete(id); continue }
     try {
       await repo.salvarCenario(caminho, { ...c })
+      cenariosSujos.delete(id) // só sai da fila quando REALMENTE gravou
     } catch (e) {
       console.error('Falha ao salvar cenário:', e)
       falhas.push({ caminho, rotulo: c.nome, erro: e })
+      // continua em `cenariosSujos`: a próxima chamada tenta de novo de verdade
     }
   }
   for (const id of idsItens) {
     const caminho = caminhoItemPorId[id]
     const i = itens[id]
     // pular NÃO é falha: sem caminho ou sem entidade = foi excluído antes do disparo
-    if (!caminho || !i) continue
+    if (!caminho || !i) { itensSujos.delete(id); continue }
     try {
       await repo.salvarItem(caminho, { ...i })
+      itensSujos.delete(id) // só sai da fila quando REALMENTE gravou
     } catch (e) {
       console.error('Falha ao salvar item:', e)
       falhas.push({ caminho, rotulo: i.nome, erro: e })
+      // continua em `itensSujos`: a próxima chamada tenta de novo de verdade
     }
   }
   if (tinhaVinculos) {
     try {
       await repo.salvarVinculos(vinculos)
+      vinculosSujo = false // só sai da fila quando REALMENTE gravou
     } catch (e) {
       console.error('Falha ao salvar vínculos:', e)
       falhas.push({ caminho: 'vinculos.json', rotulo: 'Vínculos', erro: e })
+      // `vinculosSujo` continua true: a próxima chamada tenta de novo de verdade
     }
   }
   if (tinhaLayoutTeia) {
     try {
       await repo.salvarLayoutTeia(layoutsTeia)
+      layoutTeiaSujo = false // só sai da fila quando REALMENTE gravou
     } catch (e) {
       console.error('Falha ao salvar layout da teia:', e)
       falhas.push({ caminho: 'layout-teia.json', rotulo: 'Layout da teia', erro: e })
+      // `layoutTeiaSujo` continua true: a próxima chamada tenta de novo de verdade
     }
   }
   return falhas
@@ -708,6 +809,79 @@ export const useApp = create<AppState>((set, get) => ({
     const versaoAtivaId = c.versaoAtivaId === versaoId ? versoes[0].id : c.versaoAtivaId
     set((s) => ({ cenarios: { ...s.cenarios, [id]: { ...s.cenarios[id], versoes, versaoAtivaId } } }))
     agendarSalvarCenario(get, id)
+  },
+
+  async absorverCenarioComoVersao(origemId, destinoId) {
+    const { repo, cenarios, caminhoCenarioPorId, tree, vinculos } = get()
+    const origem = cenarios[origemId]
+    const destino = cenarios[destinoId]
+    const caminhoOrigem = caminhoCenarioPorId[origemId]
+    const caminhoDestino = caminhoCenarioPorId[destinoId]
+    if (!repo || !origem || !destino || !caminhoOrigem || !caminhoDestino || !tree) return
+    // defesa em profundidade: a UI já filtra (BarraLocalizacao/destinosAbsorverCenario), mas
+    // esta é a ação mais destrutiva da barra e merece a MESMA guarda de baixo nível que
+    // `moverCenario` já tem — chamar isto direto com a origem nela mesma (ou num descendente
+    // dela) duplicaria as versões do cenário dentro dele mesmo e mandaria o resultado pra
+    // lixeira: o cenário se autodestruiria.
+    if (!cenarioDestinoValido(tree, origemId, caminhoDestino)) return
+    const atualizado = absorverCenario(destino, origem, () => crypto.randomUUID())
+    // `moverCenarioParaLixeira` move a PASTA inteira da origem (ver `LixeiraExecutor.
+    // moverPastaParaLixeira`), levando junto todo sub-cenário dela — mas só as versões da
+    // origem entram em `atualizado` (o conteúdo dos sub-cenários não foi absorvido). Sem
+    // incluir os ids deles aqui, um vínculo ou sala de mapa que apontava para um SUB-cenário
+    // ficaria "quebrado" para sempre (aponta pra um id que só existe dentro da lixeira) até
+    // alguém restaurar a origem a mão. Redireciona para o MESMO destino da origem: não é o
+    // conteúdo deles que está lá, mas é o lugar mais próximo que sobrevive na árvore — melhor
+    // um vínculo que aponta pra algo vivo do que um ponteiro morto.
+    const nodeOrigem = encontrarCenarioNode(tree.cenarios, origemId)
+    const idsDescendentesOrigem = nodeOrigem ? idsDescendentes(nodeOrigem) : []
+    const idsAbsorvidos = [origemId, ...idsDescendentesOrigem]
+    // vínculos e salas de mapa que apontavam pra origem (ou pra um sub-cenário dela): sem
+    // redirecionar, sobrevivem "quebrados" mesmo com o conteúdo da origem vivo dentro do
+    // destino agora — ver `redirecionarVinculosAbsorcao` e `VaultRepo.redirecionarSalasDeCenario`.
+    // a origem DIRETA vira versão de verdade no destino — o conteúdo dela está lá, então o
+    // redirect é honesto sem nota nenhuma. Um SUB-cenário não: o conteúdo dele foi inteiro
+    // pra lixeira (só as versões da origem direta entram em `atualizado`), então o vínculo
+    // redirecionado leva a nota "era sobre: X, fundido no destino" — ver a docstring de
+    // `redirecionarVinculosAbsorcao`. Cenário fora do cache (`cenarios[id]` ausente) cai no
+    // nome da origem: melhor uma nota genérica do que nenhuma.
+    //
+    // TODAS as origens (direta + descendentes) entram numa ÚNICA chamada, não uma por
+    // descendente encadeada: a dedupe da função só enxerga o que ELA tocou, então encadear
+    // faria o vínculo redirecionado do segundo descendente colidir com o do primeiro (que já
+    // não é mais "tocado" do ponto de vista da segunda chamada) e sumir sem aviso — ver a
+    // docstring de `redirecionarVinculosAbsorcao`.
+    const origensAbsorcao = [
+      { id: origemId },
+      ...idsDescendentesOrigem.map((id) => ({ id, notaDescendente: cenarios[id]?.nome ?? origem.nome })),
+    ]
+    const novosVinculos = redirecionarVinculosAbsorcao(vinculos, origensAbsorcao, destinoId)
+    // grava o destino ANTES de mover a origem pra lixeira: se a gravação falhar, a origem
+    // continua existindo (nada foi perdido) em vez de sumir sem o conteúdo ter sido migrado
+    await repo.salvarCenario(caminhoDestino, atualizado)
+    if (novosVinculos !== vinculos) await repo.salvarVinculos(novosVinculos)
+    // best-effort: mapa corrompido não pode derrubar a absorção (o conteúdo já migrou e a
+    // origem já vai pra lixeira de qualquer jeito) — o método já loga por documento
+    for (const id of idsAbsorvidos) {
+      await repo.redirecionarSalasDeCenario(tree, id, destinoId).catch((e) => {
+        console.error('Falha ao redirecionar salas de mapa após absorção:', e)
+      })
+    }
+    await repo.moverCenarioParaLixeira(caminhoOrigem, origem.nome, origem.id || undefined)
+    set((s) => {
+      // a origem sobrevive só na lixeira: some do cache pra não continuar em teia/busca/sidebar
+      const { [origemId]: _cenarioRemovido, ...cenariosResto } = s.cenarios
+      const { [origemId]: _caminhoRemovido, ...caminhosResto } = s.caminhoCenarioPorId
+      return {
+        cenarios: { ...cenariosResto, [destinoId]: atualizado },
+        caminhoCenarioPorId: caminhosResto,
+        // a ficha da origem não existe mais: se estava aberta, o usuário pousa no destino
+        cenarioAbertoId: s.cenarioAbertoId === origemId ? destinoId : s.cenarioAbertoId,
+        vinculos: novosVinculos,
+      }
+    })
+    await get().recarregarArvore()
+    await get().carregarCenarios()
   },
 
   abrirCenario(id) {
