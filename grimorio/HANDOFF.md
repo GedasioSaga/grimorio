@@ -6,8 +6,9 @@ Retrato para retomar sem contexto. **Código ganha de qualquer afirmação daqui
 
 - Suíte: **1638 PASS / 0 FAIL**. `npx tsc --noEmit` limpo. `npm run build` verde.
 - O `mapaComponentes.test.ts` **não era flaky por isolamento** — diagnóstico errado que circulou nesta sessão até ser conferido. Era TIMEOUT: o primeiro `import()` dele arrasta o subsistema de mapa inteiro (tldraw + 13 shapeUtils + ferramentas) e, sob a carga da suíte completa, passava dos 5s padrão. A falha aparecia como `Error: STACK_TRACE_ERROR` apontando para a linha de DECLARAÇÃO do teste, sem asserção nenhuma quebrada — é assim que timeout se disfarça de defeito de isolamento. Corrigido com `describe(..., { timeout: 30_000 }, ...)` só naquele arquivo; o resto da suíte segue em 5s, onde tempo ainda é sinal.
-- **Nada commitado nesta leva** — ~90 arquivos entre modificados e novos na árvore de trabalho.
-- Última versão publicada continua a **v0.9.1**. Os outros computadores ainda rodam código antigo.
+- **Commitado e PUBLICADO**: `9c13b41` levou as DUAS levas que estavam paradas na árvore de trabalho (83 arquivos) — a de ficha/acervo e a de mapa. Release **v0.10.0** no ar (run `31982422382`), com instalador, `.sig` e `latest.json` assinados. Os outros computadores recebem a atualização sozinhos.
+- Como conferir que uma release realmente chegou aos outros computadores (o passo que costuma ser presumido): o updater lê `releases/latest/download/latest.json`, e `/latest/` só resolve para release **não-rascunho** — enquanto estiver como Draft, ninguém vê. Verificação sem autenticação: `curl -sL .../releases/latest/download/latest.json` tem que devolver a versão nova COM assinatura, e um range request no `.exe` tem que voltar 206 com os bytes começando em `MZ`.
+- Ficaram de fora do commit, de propósito, ~22 capturas de tela soltas na raiz de `grimorio/` (`zoom1.png`, `apos-undo.png`…): são resto de verificação de sessões antigas, não código. Continuam untracked; apagar é decisão do usuário.
 - Grafo graphify em dia: 2869 nós, 7555 arestas.
 
 ## Leva mais recente — quatro queixas de mapa
