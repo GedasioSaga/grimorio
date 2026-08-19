@@ -1,6 +1,7 @@
 import { BaseBoxShapeUtil, SVGContainer, T, type RecordProps, type TLShape } from 'tldraw'
 import { desenharEscada } from '../lib/desenhoEscada'
 import { ESCADA_LARGURA_PADRAO, ESCADA_ALTURA_PADRAO } from '../lib/escadaMapa'
+import { atenderDuploClique } from '../lib/duploCliqueMapa'
 
 declare module '@tldraw/tlschema' {
   interface TLGlobalShapePropsMap {
@@ -29,6 +30,9 @@ export class EscadaMapaShapeUtil extends BaseBoxShapeUtil<EscadaMapaShapeType> {
   getDefaultProps(): EscadaMapaShapeType['props'] {
     return { w: ESCADA_LARGURA_PADRAO, h: ESCADA_ALTURA_PADRAO }
   }
+
+  /** Ver `atenderDuploClique`: sem isto, todo duplo clique nesta peça larga um texto vazio no mapa. */
+  override onDoubleClick = atenderDuploClique
 
   component(shape: EscadaMapaShapeType) {
     const { w, h } = shape.props

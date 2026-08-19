@@ -57,8 +57,22 @@ export interface AparenciaSala {
  * funcionam.
  */
 export const CONTORNO_SALA = '#9fa8b2'
-/** Espessura do contorno, igual ao `size: s` do tldraw. */
+/** Espessura do contorno, igual ao `size: s` do tldraw. Continua sendo o valor de nascença
+ * de toda sala e o que a migração escreve nas salas antigas — trocar a espessura é escolha
+ * do mestre por peça (`ESPESSURAS_SALA`), não um padrão novo. */
 export const ESPESSURA_CONTORNO_SALA = 2
+
+/**
+ * Espessuras de contorno oferecidas à sala, em px de página.
+ *
+ * MESMA lista que o retângulo do mapa usa (`PainelPropriedades.tsx`), de propósito: para
+ * quem desenha, "traço fino / médio / grosso" é uma escolha só, e duas listas diferentes
+ * fariam a mesma peça grossa parecer de espessura diferente do retângulo desenhado ao
+ * lado. Lista curta e fechada em vez de campo numérico livre porque a escolha é visual —
+ * e um campo livre convida ao contorno de 0,3px que some no zoom de leitura da mesa.
+ */
+export const ESPESSURAS_SALA = [1, 2, 4, 6, 10]
+
 const CONTORNO = CONTORNO_SALA
 
 /**
@@ -183,4 +197,131 @@ export function quebrarRotulo(rotulo: string, larguraPx: number, tamanhoFontePx:
   }
   if (atual) linhas.push(atual)
   return linhas
+}
+
+/* ------------------------------------------------------------------------- *
+ * Rótulo da sala: tamanho, posição e orientação
+ * ------------------------------------------------------------------------- */
+
+/** Corpo padrão do nome do cômodo, em px de página. Era constante local em cada arquivo
+ *  de desenho; virou a origem da lista abaixo quando o tamanho passou a ser escolha. */
+export const FONTE_ROTULO_PADRAO = 12
+
+/** Entrelinha proporcional ao corpo — 14/12 era o par fixo de antes, mantido como razão
+ *  para que o nome em 24px não saia com as linhas coladas. */
+const ENTRELINHA_FATOR = 14 / 12
+
+/**
+ * Corpos oferecidos ao nome do cômodo. Lista curta e fechada pelo mesmo motivo das
+ * espessuras: a escolha é visual ("cabe na sala / lê da outra ponta da mesa"), não
+ * numérica, e campo livre convida ao 7px que ninguém lê no zoom de jogo.
+ */
+export const TAMANHOS_ROTULO = [10, 12, 16, 20, 28]
+
+export type AncoraRotulo = 'topo' | 'centro' | 'base'
+
+export const ANCORAS_ROTULO: Array<{ id: AncoraRotulo; rotulo: string; icone: string }> = [
+  { id: 'topo', rotulo: 'Topo', icone: '⤒' },
+  { id: 'centro', rotulo: 'Centro', icone: '↕' },
+  { id: 'base', rotulo: 'Base', icone: '⤓' },
+]
+
+export function ehAncoraRotulo(valor: unknown): valor is AncoraRotulo {
+  return valor === 'topo' || valor === 'centro' || valor === 'base'
+}
+
+/** Caixa em que o rótulo é posicionado, em coordenadas LOCAIS do shape. */
+export interface CaixaRotulo {
+  x0: number
+  y0: number
+  w: number
+  h: number
+  /**
+   * Ponto usado como "meio" quando a âncora é `centro`. A sala retangular não passa nada
+   * (o meio da caixa serve); a sala em polígono passa o CENTROIDE, porque no cômodo em L
+   * o meio da caixa delimitadora cai no recorte, fora da peça.
+   */
+  centro?: { x: number; y: number }
+}
+
+export interface EstiloRotulo {
+  tamanho?: number
+  ancora?: string
+  vertical?: boolean
+}
+
+export interface LayoutRotulo {
+  linhas: string[]
+  /** centro horizontal do bloco de texto (todas as linhas usam `text-anchor: middle`) */
+  x: number
+  /** posição da PRIMEIRA linha */
+  y: number
+  entrelinha: number
+  fonte: number
+  /** `transform` do SVG; string vazia quando o texto é horizontal */
+  transform: string
+}
+
+/**
+ * Onde e como o nome do cômodo é desenhado — a MESMA conta para a sala retangular e para a
+ * em polígono, que antes tinham cada uma a sua cópia de `FONTE_ROTULO`/`ENTRELINHA` e do
+ * cálculo da primeira linha.
+ *
+ * As três escolhas do mestre (tamanho, posição, orientação) entram aqui e não no desenho
+ * porque são geometria pura: dá para testar sem montar editor, e as duas formas de sala
+ * não podem divergir na hora de posicionar o mesmo texto.
+ *
+ * **Vertical não é `writing-mode`**, é uma rotação de -90° do bloco inteiro em torno do
+ * próprio centro. `writing-mode` empilharia letra sobre letra (bom para CJK, ilegível para
+ * "Salão de Armas") e não roda junto com a exportação SVG. Rotacionar o bloco mantém a
+ * palavra inteira legível de baixo para cima, que é como planta de mapa escreve o nome de
+ * um corredor estreito.
+ *
+ * Quando vertical, a quebra de linha mede contra a ALTURA da sala, não contra a largura —
+ * o texto corre nesse eixo. Sem isso, "Salão de Armas" numa sala alta e estreita quebraria
+ * em quatro linhas para caber numa largura que ele nem usa.
+ */
+export function layoutDoRotulo(caixa: CaixaRotulo, rotulo: string, estilo: EstiloRotulo = {}): LayoutRotulo {
+  const { x0, y0, w, h, centro } = caixa
+  const vertical = estilo.vertical === true
+  const ancora: AncoraRotulo = ehAncoraRotulo(estilo.ancora) ? estilo.ancora : 'topo'
+  // `> 0` e não `??`: tamanho 0 vindo de prop corrompida some com o nome sem avisar
+  const fonte = estilo.tamanho && estilo.tamanho > 0 ? estilo.tamanho : FONTE_ROTULO_PADRAO
+  const entrelinha = fonte * ENTRELINHA_FATOR
+
+  const linhas = quebrarRotulo(rotulo, vertical ? h : w, fonte)
+  if (linhas.length === 0) {
+    return { linhas, x: x0, y: y0, entrelinha, fonte, transform: '' }
+  }
+
+  const blocoAltura = linhas.length * entrelinha
+  const meioX = centro?.x ?? x0 + w / 2
+  const meioY = centro?.y ?? y0 + h / 2
+
+  // o eixo que a âncora percorre é o PERPENDICULAR ao texto: horizontal desliza em Y,
+  // vertical desliza em X — em ambos, "topo" é a borda de onde o texto começa.
+  let cx: number
+  let cy: number
+  if (vertical) {
+    cy = meioY
+    if (ancora === 'centro') cx = meioX
+    else if (ancora === 'topo') cx = x0 + MARGEM_TOPO_ROTULO + blocoAltura / 2
+    else cx = x0 + w - MARGEM_TOPO_ROTULO - blocoAltura / 2
+  } else {
+    cx = meioX
+    if (ancora === 'centro') cy = meioY
+    else if (ancora === 'topo') cy = y0 + MARGEM_TOPO_ROTULO + blocoAltura / 2
+    else cy = y0 + h - MARGEM_TOPO_ROTULO - blocoAltura / 2
+  }
+
+  return {
+    linhas,
+    x: cx,
+    y: cy - ((linhas.length - 1) * entrelinha) / 2,
+    entrelinha,
+    fonte,
+    // -90° deixa o texto lido de baixo para cima, a convenção de planta; +90 sairia de
+    // cabeça para baixo para quem lê o mapa na mesa.
+    transform: vertical ? `rotate(-90 ${cx} ${cy})` : '',
+  }
 }

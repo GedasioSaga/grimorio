@@ -45,11 +45,13 @@ import { EscadaMapaShapeUtil } from '../components/EscadaMapaShape'
 import { MuralhaMapaShapeUtil } from '../components/MuralhaMapaShape'
 import { TorreMapaShapeUtil } from '../components/TorreMapaShape'
 import { BorrachaTrechoMapaTool } from '../components/BorrachaTrechoMapaTool'
+import { FERRAMENTAS_CAIXA_MAPA } from '../components/FerramentasCaixaMapa'
+import { SalaPoligonoMapaTool } from '../components/SalaPoligonoMapaTool'
 import { MapaToolbar } from '../components/MapaToolbar'
 import { ControleZoom } from '../components/ControleZoom'
 import { MedidasMapa } from '../components/MedidasMapa'
 import { ReguasMapa } from '../components/ReguasMapa'
-import { SelecaoPropriedadesBridge } from '../components/PainelPropriedades'
+import { SelecaoPropriedadesBridge, type EstiloRotuloPainel } from '../components/PainelPropriedades'
 import {
   bandaDoTipo,
   limitesParaNovaForma,
@@ -59,6 +61,7 @@ import {
 } from './ordemMapa'
 import { pecaDaFormaCriada } from './paletaMapa'
 import { COR_LINHA_PADRAO, corDeForma } from './coresLinha'
+import { ehTipoSala } from './tiposSala'
 import { CANTO_PADRAO, ehCantoMapa, type CantoMapa } from './cantosMapa'
 import { aplicarCanto, setCantoAtivo } from './cantoAtivo'
 import { QUADRADO_PX, quadradosParaPx } from './quadrados'
@@ -117,8 +120,22 @@ export const SHAPE_UTILS_DO_STORE_MAPA: TLAnyShapeUtilConstructor[] = (() => {
  * - `LinhaMapaTool` (`line`): clicar COLOCA um segmento em vez de deixar uma linha de
  *   comprimento zero grudada no cursor (ver `lib/linhaMapa.ts`).
  * - `RetanguloMapaTool` é ferramenta NOVA (id próprio), do retângulo do mapa.
+ * - `FERRAMENTAS_CAIXA_MAPA` + `SalaPoligonoMapaTool`: as peças de CONSTRUÇÃO passaram a ser
+ *   desenhadas no canvas em vez de nascerem no centro da viewport por um botão da gaveta —
+ *   o porquê inteiro está no cabeçalho de `FerramentasCaixaMapa.ts`.
+ *
+ * O `id` de cada uma é o próprio tipo do shape (`'sala-mapa'`, `'porta-mapa'`…), como o
+ * `RetanguloMapaTool` já fazia. Nenhum colide com ferramenta nativa do tldraw (select, hand,
+ * draw, eraser, arrow, text, note, line, frame, geo, laser, highlight, zoom), e o construtor
+ * do Editor recusa id duplicado em voz alta, então uma colisão futura aparece na hora.
  */
-export const TOOLS_CUSTOM_MAPA = [BorrachaTrechoMapaTool, LinhaMapaTool, RetanguloMapaTool]
+export const TOOLS_CUSTOM_MAPA = [
+  BorrachaTrechoMapaTool,
+  LinhaMapaTool,
+  RetanguloMapaTool,
+  ...FERRAMENTAS_CAIXA_MAPA,
+  SalaPoligonoMapaTool,
+]
 
 function MapaOverlayBase() {
   return (
@@ -335,6 +352,7 @@ export interface AcoesPainelPropriedadesMapa {
   aoTrocarCantos: (id: TLShapeId, canto: CantoMapa) => void
   aoTrocarEspessura: (id: TLShapeId, espessura: number) => void
   aoTrocarPreenchido: (id: TLShapeId, preenchido: boolean) => void
+  aoTrocarEstiloRotulo: (id: TLShapeId, estilo: EstiloRotuloPainel) => void
 }
 
 /**
@@ -347,24 +365,68 @@ export interface AcoesPainelPropriedadesMapa {
 export function usePainelPropriedadesMapa(editorRef: React.RefObject<Editor | null>): AcoesPainelPropriedadesMapa {
   const [pegandoCorParaId, setPegandoCorParaId] = useState<TLShapeId | null>(null)
 
-  function aoAplicarX(id: TLShapeId, quadrados: number) {
+  /**
+   * Abre um passo de histórico antes de escrever. **Toda** ação do painel passa por aqui.
+   *
+   * Sem isto, o tldraw junta escritas próximas no mesmo passo — e não só entre si: junta
+   * também com a CRIAÇÃO da peça. Medido: criar uma sala e fazer três ajustes no painel, um
+   * Ctrl+Z apagava a sala inteira. Para o mestre isso lê como "o desfazer está quebrado",
+   * então ele aperta de novo, e desmonta mais planta.
+   *
+   * `markHistoryStoppingPoint` não aparecia uma única vez no projeto.
+   *
+   * Preço conhecido, aceito: o `<input type="color">` do conta-gotas dispara `onChange`
+   * durante o arrasto, então escolher uma cor livre deixa vários passos no histórico em vez
+   * de um. Cada passo é um estado que o usuário de fato viu na tela; desfazer demais é
+   * chato, desfazer a planta inteira é perda. Se incomodar, o caminho é o padrão de slider
+   * do tldraw (marcar no pointer-down e comprimir até o pointer-up), não remover a marca.
+   */
+  function marcar(nome: string) {
+    editorRef.current?.markHistoryStoppingPoint(nome)
+  }
+
+  /**
+   * Mover pelos campos X/Y aplica um DESLOCAMENTO, não um destino absoluto.
+   *
+   * A versão anterior lia `getShapePageBounds` (a CAIXA da geometria) e gravava o resultado
+   * em `shape.x` (a ORIGEM). Nas peças em que a geometria local começa em (0,0) — sala
+   * retangular, corredor, muralha — as duas coordenadas coincidem e ninguém notava. Nas
+   * outras, não: arraste um vértice da sala em polígono para a esquerda e `minX` fica
+   * negativo; a partir daí, clicar no campo X e apertar Enter SEM MUDAR NADA empurrava a
+   * sala pela diferença, e cada Enter repetia o empurrão. O mesmo valia para uma divisória
+   * desenhada da direita para a esquerda, que já nasce com a origem fora da caixa.
+   *
+   * Pior: cada handler também regravava o OUTRO eixo a partir de `bounds`, então mexer em X
+   * arrastava a peça em Y quando `minY !== 0`. Aqui só o eixo pedido se move.
+   *
+   * O delta é calculado em espaço de PÁGINA (que é o que o campo mostra) e convertido para o
+   * espaço do pai na hora de gravar, porque `shape.x/y` é relativo ao pai — dentro de um
+   * grupo os dois não são a mesma coisa.
+   */
+  function moverEixo(id: TLShapeId, quadrados: number, eixo: 'x' | 'y') {
     const editor = editorRef.current
     if (!editor) return
     const shape = editor.getShape(id)
     const bounds = editor.getShapePageBounds(id)
-    if (!shape || !bounds) return
-    const local = editor.getPointInParentSpace(id, { x: quadradosParaPx(quadrados, QUADRADO_PX), y: bounds.y })
+    const transform = editor.getShapePageTransform(id)
+    if (!shape || !bounds || !transform) return
+
+    const delta = quadradosParaPx(quadrados, QUADRADO_PX) - bounds[eixo]
+    if (delta === 0) return
+
+    const origem = transform.applyToPoint({ x: 0, y: 0 })
+    const alvo = eixo === 'x' ? { x: origem.x + delta, y: origem.y } : { x: origem.x, y: origem.y + delta }
+    const local = editor.getPointInParentSpace(id, alvo)
+    marcar(`painel-mover-${eixo}`)
     editor.updateShape({ id, type: shape.type, x: local.x, y: local.y } as TLShapePartial)
   }
 
+  function aoAplicarX(id: TLShapeId, quadrados: number) {
+    moverEixo(id, quadrados, 'x')
+  }
+
   function aoAplicarY(id: TLShapeId, quadrados: number) {
-    const editor = editorRef.current
-    if (!editor) return
-    const shape = editor.getShape(id)
-    const bounds = editor.getShapePageBounds(id)
-    if (!shape || !bounds) return
-    const local = editor.getPointInParentSpace(id, { x: bounds.x, y: quadradosParaPx(quadrados, QUADRADO_PX) })
-    editor.updateShape({ id, type: shape.type, x: local.x, y: local.y } as TLShapePartial)
+    moverEixo(id, quadrados, 'y')
   }
 
   function aoAplicarL(id: TLShapeId, quadrados: number) {
@@ -373,6 +435,7 @@ export function usePainelPropriedadesMapa(editorRef: React.RefObject<Editor | nu
     const bounds = editor.getShapePageBounds(id)
     if (!bounds || bounds.w <= 0) return
     const larguraAlvoPx = quadradosParaPx(quadrados, QUADRADO_PX)
+    marcar('painel-largura')
     editor.resizeShape(id, { x: larguraAlvoPx / bounds.w, y: 1 }, { scaleOrigin: { x: bounds.x, y: bounds.y } })
   }
 
@@ -382,6 +445,7 @@ export function usePainelPropriedadesMapa(editorRef: React.RefObject<Editor | nu
     const bounds = editor.getShapePageBounds(id)
     if (!bounds || bounds.h <= 0) return
     const alturaAlvoPx = quadradosParaPx(quadrados, QUADRADO_PX)
+    marcar('painel-altura')
     editor.resizeShape(id, { x: 1, y: alturaAlvoPx / bounds.h }, { scaleOrigin: { x: bounds.x, y: bounds.y } })
   }
 
@@ -389,6 +453,7 @@ export function usePainelPropriedadesMapa(editorRef: React.RefObject<Editor | nu
     const editor = editorRef.current
     const shape = editor?.getShape(id)
     if (!editor || !shape) return
+    marcar('painel-estado')
     editor.updateShape({ id, type: shape.type, props: { estado } } as Parameters<typeof editor.updateShape>[0])
   }
 
@@ -396,21 +461,24 @@ export function usePainelPropriedadesMapa(editorRef: React.RefObject<Editor | nu
     const editor = editorRef.current
     const shape = editor?.getShape(id)
     if (!editor || !shape) return
-    if (shape.type !== 'sala-mapa' && shape.type !== 'simbolo-mapa') return
+    if (!ehTipoSala(shape.type) && shape.type !== 'simbolo-mapa') return
+    marcar('painel-nome')
     editor.updateShape({ id, type: shape.type, props: { rotulo: nome } } as Parameters<typeof editor.updateShape>[0])
   }
 
   function aoTrocarCor(id: TLShapeId, cor: string) {
     const editor = editorRef.current
     const shape = editor?.getShape(id)
-    if (!editor || !shape || shape.type !== 'sala-mapa') return
+    if (!editor || !shape || !ehTipoSala(shape.type)) return
+    marcar('painel-cor')
     editor.updateShape({ id, type: shape.type, props: { cor } } as Parameters<typeof editor.updateShape>[0])
   }
 
   function aoVincularCenario(id: TLShapeId, cenarioId: string) {
     const editor = editorRef.current
     const shape = editor?.getShape(id)
-    if (!editor || !shape || shape.type !== 'sala-mapa') return
+    if (!editor || !shape || !ehTipoSala(shape.type)) return
+    marcar('painel-cenario')
     editor.updateShape({ id, type: shape.type, props: { cenarioId } } as Parameters<typeof editor.updateShape>[0])
   }
 
@@ -425,10 +493,12 @@ export function usePainelPropriedadesMapa(editorRef: React.RefObject<Editor | nu
     const shape = editor?.getShape(id)
     if (!editor || !shape) return
     if (shape.type === 'line') {
+      marcar('painel-cor-linha')
       editor.updateShape({ id, type: shape.type, meta: { ...shape.meta, corPersonalizada: cor } } as TLShapePartial)
       return
     }
     if (shape.type === 'retangulo-mapa') {
+      marcar('painel-cor-traco')
       editor.updateShape({ id, type: shape.type, props: { cor } } as TLShapePartial)
     }
   }
@@ -437,23 +507,47 @@ export function usePainelPropriedadesMapa(editorRef: React.RefObject<Editor | nu
   function aoTrocarCantos(id: TLShapeId, canto: CantoMapa) {
     const editor = editorRef.current
     if (!editor) return
+    marcar('painel-cantos')
     aplicarCanto(editor, [id], canto)
     // a escolha do painel também vira o padrão das próximas peças — mesmo par de botões
     // que existe na barra, então as duas superfícies não podem discordar.
     setCantoAtivo(editor, canto)
   }
 
+  /** Espessura de traço: do retângulo, e do contorno das duas salas (ver `tiposSala.ts`). */
   function aoTrocarEspessura(id: TLShapeId, espessura: number) {
     const editor = editorRef.current
     const shape = editor?.getShape(id)
-    if (!editor || !shape || shape.type !== 'retangulo-mapa' || espessura <= 0) return
+    if (!editor || !shape || espessura <= 0) return
+    if (shape.type !== 'retangulo-mapa' && !ehTipoSala(shape.type)) return
+    marcar('painel-espessura')
     editor.updateShape({ id, type: shape.type, props: { espessura } } as TLShapePartial)
+  }
+
+  /**
+   * Corpo, posição e orientação do nome do cômodo. Recebe só as chaves que mudaram e
+   * escreve só elas: o painel manda `{ ancora: 'centro' }` sem saber o tamanho atual, e
+   * mandar um objeto completo daqui exigiria o painel reenviar valores que ele já mostra —
+   * o caminho por onde uma escolha antiga volta por cima da nova.
+   */
+  function aoTrocarEstiloRotulo(id: TLShapeId, estilo: EstiloRotuloPainel) {
+    const editor = editorRef.current
+    const shape = editor?.getShape(id)
+    if (!editor || !shape || !ehTipoSala(shape.type)) return
+    const props: Record<string, unknown> = {}
+    if (estilo.tamanho !== undefined && estilo.tamanho > 0) props.rotuloTamanho = estilo.tamanho
+    if (estilo.ancora !== undefined) props.rotuloAncora = estilo.ancora
+    if (estilo.vertical !== undefined) props.rotuloVertical = estilo.vertical
+    if (Object.keys(props).length === 0) return
+    marcar('painel-estilo-rotulo')
+    editor.updateShape({ id, type: shape.type, props } as TLShapePartial)
   }
 
   function aoTrocarPreenchido(id: TLShapeId, preenchido: boolean) {
     const editor = editorRef.current
     const shape = editor?.getShape(id)
     if (!editor || !shape || shape.type !== 'retangulo-mapa') return
+    marcar('painel-preenchido')
     editor.updateShape({ id, type: shape.type, props: { preenchido } } as TLShapePartial)
   }
 
@@ -502,6 +596,7 @@ export function usePainelPropriedadesMapa(editorRef: React.RefObject<Editor | nu
     aoTrocarCantos,
     aoTrocarEspessura,
     aoTrocarPreenchido,
+    aoTrocarEstiloRotulo,
   }
 }
 

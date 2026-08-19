@@ -12,6 +12,7 @@ interface ArvoreDeArquivos {
 }
 import { slugify, slugUnico } from './slug'
 import { VERSAO_CAMADAS } from './camadasMapa'
+import { ehTipoSala } from './tiposSala'
 import { normalizarFoco } from './focoRetrato'
 import { normalizarVinculos } from './vinculos'
 import { normalizarChat, type MensagemChat } from './chatIA'
@@ -712,7 +713,7 @@ export class VaultRepo {
     })
   }
 
-  /** Todo caminho de documento que PODE conter uma sala-mapa: sessão, canvas ou mapa (soltos ou de campanha). */
+  /** Todo caminho de documento que PODE conter uma sala: sessão, canvas ou mapa (soltos ou de campanha). */
   private caminhosCanvasDaArvore(tree: VaultTree): string[] {
     const out: string[] = []
     for (const i of tree.canvasesSoltos) if (!i.erro) out.push(i.caminho)
@@ -748,7 +749,7 @@ export class VaultRepo {
         let mudou = false
         for (const rec of Object.values(registros)) {
           const r = rec as { typeName?: string; type?: string; props?: Record<string, unknown> }
-          if (r?.typeName === 'shape' && r.type === 'sala-mapa' && r.props?.cenarioId === origemId) {
+          if (r?.typeName === 'shape' && ehTipoSala(r.type) && r.props?.cenarioId === origemId) {
             r.props.cenarioId = destinoId
             mudou = true
             total++

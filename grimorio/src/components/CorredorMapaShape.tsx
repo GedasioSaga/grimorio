@@ -1,5 +1,6 @@
 import { BaseBoxShapeUtil, SVGContainer, T, type RecordProps, type TLShape } from 'tldraw'
 import { desenharCorredor } from '../lib/desenhoCorredor'
+import { atenderDuploClique } from '../lib/duploCliqueMapa'
 
 declare module '@tldraw/tlschema' {
   interface TLGlobalShapePropsMap {
@@ -33,6 +34,9 @@ export class CorredorMapaShapeUtil extends BaseBoxShapeUtil<CorredorMapaShapeTyp
   getDefaultProps(): CorredorMapaShapeType['props'] {
     return { w: CORREDOR_LARGURA_PADRAO, h: CORREDOR_ALTURA_PADRAO }
   }
+
+  /** Ver `atenderDuploClique`: sem isto, todo duplo clique nesta peça larga um texto vazio no mapa. */
+  override onDoubleClick = atenderDuploClique
 
   component(shape: CorredorMapaShapeType) {
     const { w, h } = shape.props

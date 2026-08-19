@@ -12,6 +12,7 @@ import {
 import { pecasConversiveis, planoDeConversao } from '../lib/conversaoMapa'
 import { entradasDaLegenda, type EntradaLegenda } from '../lib/legendaMapa'
 import { ELEMENTOS_PALETA } from '../lib/paletaMapa'
+import { pontosDeRetangulo } from '../lib/salaPoligonoMapa'
 import { tamanhoDoSimbolo } from './SimboloMapaShape'
 
 /**
@@ -127,16 +128,26 @@ function converterSelecao(editor: Editor, pecaId: string, stylePropsPorNome: Rec
       // sem `parentId`, o símbolo nasceria solto e o grupo original se desfaria ao
       // perder o filho antigo (GroupShapeUtil.onChildrenChange desagrupa com 1 filho).
       const local = editor.getPointInParentSpace(id, { x: bounds.x, y: bounds.y })
+      // O cast existe porque `createShape` é sobrecarregado por tipo literal e `novoTipo` é
+      // uma união de três: o TS exige que UM conjunto de props sirva para os três, e não
+      // serve — a sala em polígono tem `pontos` onde as outras duas têm `w`/`h`. Quem
+      // garante o par certo é o `dimensionar` do plano, logo abaixo, coberto por teste.
       editor.createShape({
         id: novoId,
         type: plano.novoTipo,
         parentId: forma.parentId,
         x: local.x,
         y: local.y,
-        // a forma antiga pode ter qualquer tamanho; o símbolo assume o espaço dela
-        props: { w: bounds.w, h: bounds.h, ...plano.props },
+        // A forma antiga pode ter qualquer tamanho; a peça nova assume o espaço dela — mas
+        // por caminhos diferentes: caixa escreve w/h, polígono escreve os quatro cantos.
+        // Mandar `w` para um shape que não declara `w` é update RECUSADO pelo schema do
+        // tldraw, não prop ignorada — por isso quem decide é o plano, não este laço.
+        props:
+          plano.dimensionar === 'poligono'
+            ? { pontos: pontosDeRetangulo(bounds.w, bounds.h), ...plano.props }
+            : { w: bounds.w, h: bounds.h, ...plano.props },
         meta: { ...forma.meta, peca: plano.peca },
-      })
+      } as Parameters<typeof editor.createShape>[0])
       novas.push(novoId)
     }
     editor.deleteShapes(selecionadas)

@@ -1,6 +1,135 @@
-# HANDOFF — Grimório (16/08/2026)
+# HANDOFF — Grimório (19/08/2026)
 
 Retrato para retomar sem contexto. **Código ganha de qualquer afirmação daqui.**
+
+## Loop de construções — gauntlet contra Dungeon Scrawl
+
+Bar: **Dungeon Scrawl** (dungeonscrawl.com), com Dungeondraft/Inkarnate de apoio. Comparação
+cega em três lentes (construir / editar / legibilidade na mesa), rótulos removidos, ordem
+alternada por rodada. Escopo travado nas peças de CONSTRUÇÃO — nada de itens, fichas, camadas.
+
+Suíte: **1755 PASS / 0 FAIL**. `npx tsc --noEmit` limpo.
+
+### Rodada 1 — placar 0×3
+
+Gap eleito pelos três juízes: **a peça nascia no centro da viewport em vez de ser desenhada
+no canvas**. Custo medido: masmorra de oito salas ≈ 50 idas à gaveta, toda peça fora da grade
+(o centro da viewport é ponto fracionário e nada passava por `maybeSnapToGrid`), e todas
+nascendo no mesmo ponto, uma sobre a outra.
+
+**Fechado.** Toda construção virou ferramenta de desenho:
+
+- `src/components/FerramentasCaixaMapa.ts` — sala, corredor, muralha, torre, escada, porta.
+  Herdam `BaseBoxShapeTool`, que já dá clique-coloca-centrado, arrasto-desenha, encaixe na
+  grade, marca de histórico e volta ao select. `RetanguloMapaTool` já usava esse caminho
+  desde sempre; o que faltava era estendê-lo.
+- `src/components/SalaPoligonoMapaTool.ts` — ferramenta própria, porque a sala em polígono não
+  tem `w`/`h` e a base escreve `props: { w: 1, h: 1 }` ao começar o arrasto. O arrasto reescala
+  a silhueta em L a cada movimento (`escalarPontosPara`), então o que está sob o cursor já é a
+  peça final.
+- A toolbar não guarda mais tamanho de peça nenhum: o tamanho de nascença só existe em
+  `getDefaultProps`. Antes vivia nos dois lugares e o da barra vencia.
+
+Verificado na bancada com ponteiro real: **3 arrastos** = sala + corredor + sala, as três em
+múltiplo de 32px, ferramenta de volta no select.
+
+### Defeitos de construção corrigidos nesta leva
+
+Todos com prova negativa executada (reverter o fix → o teste falha):
+
+| Peça | Defeito |
+|---|---|
+| torre | Elipse com hitbox retangular. Ela existe para ficar sobreposta ao canto da muralha, então os 21% de canto morto caíam em cima da parede |
+| muralha | Cerco desenhado com `fill="none"` e hitbox cheia: clicar em qualquer chão dentro do cerco selecionava a muralha inteira |
+| 6 peças | Sem `onDoubleClick`, cada duplo clique largava um texto vazio invisível no mapa |
+| todas | `markHistoryStoppingPoint` tinha zero ocorrências no projeto: um Ctrl+Z apagava a peça inteira, não só a última edição |
+| sala, polígono | Toolbar forçava `estado: 'pendente'`, derrotando o default `'sem-info'` que o shape adotou justamente porque "o mapa saía todo vermelho" |
+| polígono | `getGeometry` com menos de 3 vértices lançava ao LER O DISCO e derrubava o mapa inteiro no `LimiteDeErro` |
+| todas | X/Y recusavam coordenada negativa em silêncio, embora o campo exibisse negativo |
+
+**A armadilha da muralha, que vale para a próxima peça oca:** `isFilled: false` parece a
+correção óbvia e quebra de outro jeito — `getShapeAtPoint` trata forma oca num ramo que começa
+pulando qualquer forma maior que a viewport, e muralha é sempre maior que a tela. Medido: a
+peça ficou inselecionável. A saída é `ignoreHit`, o mesmo gancho que o tldraw usa para pixel
+transparente de imagem: geometria continua preenchida (nada de ramo oco) e o acerto é recusado
+ponto a ponto no miolo. `Group2d` não serve — o construtor força `isFilled: false`.
+
+### Onde o Grimório já ganha da bar (não estragar)
+
+Medida em quadrados de verdade nos campos X/Y/L/A; chips de `L×A` e folga entre peças; réguas
+com passo adaptativo; alinhar (6) e distribuir (2); edição de vértice depois de criada (o
+Dungeon Scrawl não tem); borracha que abre vão no meio da parede sem apagá-la; estado da sala
+e da porta por cor; nome com contraste automático, âncora e direção; vínculo com ficha de
+Cenário; exportação fiel; migrações que não quebram mapa antigo.
+
+---
+
+## Leva de 19/08 — Sala Polígono inerte, 5 defeitos de construção, e o rótulo configurável
+
+Suíte: **1692 PASS / 0 FAIL**. `npx tsc --noEmit` limpo. Grafo regravado: 2869 nós, 7555 arestas, 144 comunidades.
+
+### 1. A Sala Polígono não aceitava alteração nenhuma
+
+Queixa: "não dá pra trocar a cor, nem a espessura, nem ligar num cenário". O alcance era maior que o relatado — **as quatro propriedades estavam inalcançáveis**, não três:
+
+| | antes | agora |
+|---|---|---|
+| Nome, Estado, Cor | props existiam, **nenhuma UI escrevia nelas** | painel escreve |
+| Vínculo com Cenário | prop nem existia | prop + migração + badge + duplo clique |
+| Espessura do contorno | não existia em sala nenhuma | nos DOIS formatos |
+| Campos L/A | aceitavam o número e **não faziam nada** | `onResize` escalando vértices |
+| Duplo clique | criava um **texto fantasma** no mapa | abre a ficha vinculada |
+| Conta-gotas, drop de cenário, faxina de vínculo no cofre | só sala retangular | os dois formatos |
+| Converter seleção ▸ Sala (polígono) | não aparecia no menu | aparece; a caixa vira 4 vértices |
+
+**Causa raiz única:** o literal `'sala-mapa'` escrito à mão em cinco arquivos. Ausência de um caso não dá erro de compilação. Agora quem decide "isto é uma sala" é **`src/lib/tiposSala.ts`**, um lugar só — o próximo formato de sala entra por ali e entra junto na suíte, porque `salaParidade.test.tsx` itera sobre `TIPOS_SALA` em vez de checar tipo por tipo.
+
+### 2. Cinco defeitos de construção, confirmados por auditoria multi-agente
+
+Todos com prova negativa executada (reverter o fix → o teste falha):
+
+| | Defeito | Arquivo | Estava |
+|---|---|---|---|
+| C1 | Retângulo **vazado capturava o clique** de tudo embaixo | `RetanguloMapaShape.tsx` | `BaseBoxShapeUtil` fixa `isFilled: true`; a peça cumpria "nasce vazada" no desenho e violava no hit-test. Uma moldura em volta de uma ala sequestrava a seleção da ala inteira |
+| C2 | X/Y **empurravam a peça a cada Enter** | `montagemMapa.tsx` | O painel exibia `getShapePageBounds` (a CAIXA) e o handler gravava `shape.x` (a ORIGEM). Peça com vértice negativo andava sozinha; e mexer em X arrastava Y junto |
+| C3 | **Escape não cancelava** X/Y/L/A | `PainelPropriedades.tsx` | `setEditando(false)` sem limpar o rascunho; o `onBlur` seguinte aplicava o valor abandonado |
+| C4 | Porta trocou `cor` por `estado` **sem migração** | `PortaShape.tsx` | Mapa com porta no formato velho abria como "arquivo com erro" — o documento INTEIRO, não a porta |
+| C5 | Sala ganhou `cor` (`da137af`) **sem migração** | `SalaMapaShape.tsx` | Idem. O teste que existia montava a sala antiga já COM `cor`, então passava sem tocar no buraco |
+
+**Armadilha das migrações C4/C5**, que vale para a próxima: quando um shape ganha a PRIMEIRA sequência de migração, todo documento já salvo conta como versão 0 e roda o degrau. Um `props.estado = 'livre'` cego teria **destrancado todas as portas do cofre** no primeiro abrir. Todo degrau novo aqui é guardado por `=== undefined`.
+
+Bônus de CSS: `.painel-opcoes-lado-a-lado` empatava em especificidade com `.painel-estado-opcoes { flex-direction: column }` do theme, e perdia por ordem de bundle. Cantos e Traço saíam **empilhados em coluna** havia tempo. Corrigido com o par de classes.
+
+### 3. Nome do cômodo: tamanho, posição e direção
+
+Pedido novo. Três props por sala (`rotuloTamanho`, `rotuloAncora`, `rotuloVertical`), um degrau de migração só, e **uma regra pura compartilhada** — `layoutDoRotulo` em `lib/salaMapa.ts` — no lugar das duas cópias de `FONTE_ROTULO`/`ENTRELINHA` que os dois arquivos de desenho tinham.
+
+- **Em pé é rotação de -90° do bloco**, não `writing-mode` (que empilha letra sobre letra e não sobrevive à exportação SVG).
+- Em pé, a quebra de linha mede contra a **altura** da sala, não a largura — é o eixo por onde o texto corre. É o que faz "Salão de Armas" caber inteiro num corredor estreito.
+- Padrão inalterado: topo, corpo 12, deitado. Mapa antigo reabre idêntico.
+
+### Onde olhar
+
+- `src/lib/tiposSala.ts` — o portão. Comece por aqui.
+- `src/lib/salaMapa.ts` — `layoutDoRotulo`, `ESPESSURAS_SALA`, `TAMANHOS_ROTULO`, `ANCORAS_ROTULO`.
+- `src/test/salaParidade.test.tsx` — matriz de paridade contra editor real.
+- `src/test/rotuloSala.test.ts` — as três escolhas do rótulo, independentes.
+- `src/test/migracaoSalaCenarioId.test.ts` — migrações das duas salas e da porta, com validação de schema.
+- `docs/diagrams/edicao-propriedades-mapa.html` — como uma edição chega ao shape.
+
+### Achados NÃO corrigidos (auditoria, plausíveis, sem refutação)
+
+Ficam registrados porque a auditoria os encontrou e o escopo desta leva não os cobriu. **Ordem sugerida de ataque**, todos em camadas/persistência:
+
+1. `Ctrl+A` seleciona peças de camada **oculta**; o Delete seguinte apaga o escondido sem sinal. Travar protege; esconder não protege nada.
+2. Borracha em CLIQUE apaga peça de camada oculta (o arrasto não) — `getCurrentPageShapesSorted` onde devia ser a variante `Rendering`.
+3. Esconder a camada ATIVA não move a ativa: as próximas peças nascem invisíveis, e a IA responde "inseri 14 salas" sem nada aparecer.
+4. Ordem por camada nunca é aplicada na abertura do mapa — a bancada chama `reordenarPelaPilha()` no `onMount`, o app real não.
+5. Sync baixa o mapa mas não relê as camadas; a próxima ação grava a lista velha por cima.
+6. Nenhuma ação do painel abre marca de histórico: cinco edições viram um Ctrl+Z só.
+7. Campos X/Y recusam coordenada negativa em silêncio (regex sem sinal), embora exibam negativo.
+
+---
 
 ## Estado
 

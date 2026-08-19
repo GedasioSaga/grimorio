@@ -1,7 +1,19 @@
-import { createContext, useContext, useEffect, useState } from 'react'
+import { createContext, useContext, useEffect, useState, type ReactNode } from 'react'
 import { useEditor, useValue, type TLShapeId } from 'tldraw'
 import { QUADRADO_PX, emQuadrados, parseQuadrados } from '../lib/quadrados'
-import { CORES_SALA, ESTADOS_SALA, aparenciaDaSala } from '../lib/salaMapa'
+import {
+  ANCORAS_ROTULO,
+  CORES_SALA,
+  ESPESSURAS_SALA,
+  ESPESSURA_CONTORNO_SALA,
+  ESTADOS_SALA,
+  FONTE_ROTULO_PADRAO,
+  TAMANHOS_ROTULO,
+  aparenciaDaSala,
+  ehAncoraRotulo,
+  type AncoraRotulo,
+} from '../lib/salaMapa'
+import { ehTipoSala } from '../lib/tiposSala'
 import { definicaoDoSimbolo } from '../lib/simbolosMapa'
 import { ESTADOS_PORTA, aparenciaDaPorta } from '../lib/portaMapa'
 import { opcoesDeCenario, resolverVinculoSala } from '../lib/vinculoSalaCenario'
@@ -46,15 +58,20 @@ export type SelecaoPropriedades =
       simbolo?: string
       /** cor escolhida à mão na sala; vazio = usa a cor do estado */
       cor?: string
-      /** id do Cenário vinculado à sala; vazio = sem vínculo (só faz sentido p/ sala-mapa) */
+      /** id do Cenário vinculado à sala; vazio = sem vínculo (só faz sentido p/ sala — ver tiposSala.ts) */
       cenarioId?: string
       /** cor da divisória (`meta.corPersonalizada`, não `props` — ver LinhaMapaColoridaShapeUtil.tsx) */
       corLinha?: string
       /** canto reto/arredondado: `meta.cantos` na linha, `props.cantos` no retângulo — ver cantosMapa.ts */
       cantos?: CantoMapa
-      /** só `retangulo-mapa`: espessura do traço em px e preenchimento ligado/desligado */
+      /** espessura do traço em px: contorno da sala (os dois formatos) ou traço do retângulo */
       espessura?: number
+      /** só `retangulo-mapa`: preenchimento ligado/desligado (sala é sempre preenchida) */
       preenchido?: boolean
+      /** corpo, posição e orientação do nome do cômodo — só sala (ver `layoutDoRotulo`) */
+      rotuloTamanho?: number
+      rotuloAncora?: AncoraRotulo
+      rotuloVertical?: boolean
       /** `meta.camada` da peça; vazio quando ela nunca foi carimbada (mapa antigo). */
       camadasDaSelecao: string[]
     }
@@ -162,6 +179,9 @@ export function SelecaoPropriedadesBridge() {
         cantos: ehCantoMapa(props.cantos) ? props.cantos : forma?.type === 'line' ? cantoDeMeta(meta) : undefined,
         espessura: typeof props.espessura === 'number' ? props.espessura : undefined,
         preenchido: typeof props.preenchido === 'boolean' ? props.preenchido : undefined,
+        rotuloTamanho: typeof props.rotuloTamanho === 'number' ? props.rotuloTamanho : undefined,
+        rotuloAncora: ehAncoraRotulo(props.rotuloAncora) ? props.rotuloAncora : undefined,
+        rotuloVertical: typeof props.rotuloVertical === 'boolean' ? props.rotuloVertical : undefined,
         camadasDaSelecao,
       }
     },
@@ -200,6 +220,7 @@ export function PainelPropriedades({
   aoTrocarCantos,
   aoTrocarEspessura,
   aoTrocarPreenchido,
+  aoTrocarEstiloRotulo,
 }: {
   selecao: SelecaoPropriedades
   aoAplicarX: (id: TLShapeId, quadrados: number) => void
@@ -219,6 +240,8 @@ export function PainelPropriedades({
   aoTrocarCantos: (id: TLShapeId, canto: CantoMapa) => void
   aoTrocarEspessura: (id: TLShapeId, espessura: number) => void
   aoTrocarPreenchido: (id: TLShapeId, preenchido: boolean) => void
+  /** corpo/posição/orientação do nome do cômodo; só as chaves que mudaram */
+  aoTrocarEstiloRotulo: (id: TLShapeId, estilo: EstiloRotuloPainel) => void
 }) {
   const [colapsado, setColapsado] = useState(false)
 
@@ -256,6 +279,14 @@ export function PainelPropriedades({
               onAplicar={(nome) => aoRenomearSala(selecao.id, nome)}
             />
           )}
+          {ehTipoSala(selecao.tipoShape) && (
+            <SeletorRotulo
+              tamanho={selecao.rotuloTamanho ?? FONTE_ROTULO_PADRAO}
+              ancora={selecao.rotuloAncora ?? 'topo'}
+              vertical={selecao.rotuloVertical ?? false}
+              onMudar={(estilo) => aoTrocarEstiloRotulo(selecao.id, estilo)}
+            />
+          )}
           {estadosDaPeca(selecao.tipoShape).length > 0 && (
             <SeletorEstado
               opcoes={estadosDaPeca(selecao.tipoShape)}
@@ -263,10 +294,18 @@ export function PainelPropriedades({
               onEscolher={(estado) => aoTrocarEstado(selecao.id, estado)}
             />
           )}
-          {selecao.tipoShape === 'sala-mapa' && (
+          {ehTipoSala(selecao.tipoShape) && (
             <SeletorCor atual={selecao.cor ?? ''} onEscolher={(cor) => aoTrocarCor(selecao.id, cor)} />
           )}
-          {selecao.tipoShape === 'sala-mapa' && (
+          {ehTipoSala(selecao.tipoShape) && (
+            <SeletorEspessura
+              titulo="Contorno"
+              opcoes={ESPESSURAS_SALA}
+              espessura={selecao.espessura ?? ESPESSURA_CONTORNO_SALA}
+              onEspessura={(px) => aoTrocarEspessura(selecao.id, px)}
+            />
+          )}
+          {ehTipoSala(selecao.tipoShape) && (
             <SeletorCenarioDaSala
               atual={selecao.cenarioId ?? ''}
               onEscolher={(cenarioId) => aoVincularCenario(selecao.id, cenarioId)}
@@ -308,6 +347,100 @@ export function PainelPropriedades({
           </div>
         </div>
       )}
+    </div>
+  )
+}
+
+/** Só as chaves que mudaram — o handler mescla no shape. */
+export interface EstiloRotuloPainel {
+  tamanho?: number
+  ancora?: AncoraRotulo
+  vertical?: boolean
+}
+
+/**
+ * Nome do cômodo: corpo, onde fica dentro da sala, e se corre deitado ou em pé.
+ *
+ * As três moram num bloco só porque são a MESMA decisão do mestre ("como esse nome aparece
+ * na planta"), tomada de uma vez enquanto ele olha para a sala. Espalhadas em três seções
+ * do painel, cada ajuste exigiria procurar a próxima.
+ *
+ * Em pé serve ao caso que o mapa cria sozinho: corredor e ala estreitos e altos, onde
+ * "Salão de Armas" deitado quebra em quatro linhas ou vaza pela parede. É rotação do bloco
+ * inteiro, não `writing-mode` — ver `layoutDoRotulo`.
+ */
+function SeletorRotulo({
+  tamanho,
+  ancora,
+  vertical,
+  onMudar,
+}: {
+  tamanho: number
+  ancora: AncoraRotulo
+  vertical: boolean
+  onMudar: (estilo: EstiloRotuloPainel) => void
+}) {
+  return (
+    <div className="painel-estado">
+      <span className="painel-propriedades-label">Nome — tamanho</span>
+      <div className="painel-estado-opcoes painel-opcoes-lado-a-lado">
+        {TAMANHOS_ROTULO.map((px) => (
+          <button
+            key={px}
+            type="button"
+            className={`painel-estado-opcao painel-opcao-tamanho-rotulo${tamanho === px ? ' ativo' : ''}`}
+            title={`Corpo ${px}px`}
+            aria-label={`Tamanho do nome: ${px} pixels`}
+            aria-pressed={tamanho === px}
+            onClick={() => onMudar({ tamanho: px })}
+          >
+            {/* a própria amostra usa o corpo que ela representa: escolher tamanho de texto
+                por um número exige imaginar o resultado; por uma amostra, não. */}
+            <span style={{ fontSize: Math.min(px, 16), lineHeight: 1 }}>A</span>
+          </button>
+        ))}
+      </div>
+
+      <span className="painel-propriedades-label painel-rotulo-sub">Posição</span>
+      <div className="painel-estado-opcoes painel-opcoes-lado-a-lado">
+        {ANCORAS_ROTULO.map((opcao) => (
+          <button
+            key={opcao.id}
+            type="button"
+            className={`painel-estado-opcao${ancora === opcao.id ? ' ativo' : ''}`}
+            title={`Nome no ${opcao.rotulo.toLowerCase()} da sala`}
+            aria-pressed={ancora === opcao.id}
+            onClick={() => onMudar({ ancora: opcao.id })}
+          >
+            <span aria-hidden="true">{opcao.icone}</span>
+            {opcao.rotulo}
+          </button>
+        ))}
+      </div>
+
+      <span className="painel-propriedades-label painel-rotulo-sub">Direção</span>
+      <div className="painel-estado-opcoes painel-opcoes-lado-a-lado">
+        <button
+          type="button"
+          className={`painel-estado-opcao${!vertical ? ' ativo' : ''}`}
+          title="Nome deitado"
+          aria-pressed={!vertical}
+          onClick={() => onMudar({ vertical: false })}
+        >
+          <span aria-hidden="true">→</span>
+          Deitado
+        </button>
+        <button
+          type="button"
+          className={`painel-estado-opcao${vertical ? ' ativo' : ''}`}
+          title="Nome em pé — para cômodo estreito e alto"
+          aria-pressed={vertical}
+          onClick={() => onMudar({ vertical: true })}
+        >
+          <span aria-hidden="true">↑</span>
+          Em pé
+        </button>
+      </div>
     </div>
   )
 }
@@ -356,7 +489,19 @@ function CampoQuadrado({
         onBlur={aplicar}
         onKeyDown={(e) => {
           if (e.key === 'Enter') (e.target as HTMLInputElement).blur()
-          if (e.key === 'Escape') setEditando(false)
+          /**
+           * Escape tem que descartar o RASCUNHO, não só sair do modo de edição.
+           *
+           * `setEditando(false)` sozinho fazia o campo voltar a MOSTRAR o valor certo, o que
+           * parecia cancelar — mas `rascunho` continuava com o texto abandonado, e o
+           * `onBlur` logo em seguida chama `aplicar()`, que lê `rascunho`. Digitar 999 em X,
+           * apertar Esc e clicar em qualquer outro lugar mandava a sala para 999 quadrados,
+           * fora da tela. `CampoNome`, no mesmo arquivo, sempre fez isto certo.
+           */
+          if (e.key === 'Escape') {
+            setRascunho(emQuadrados(valorPx, QUADRADO_PX))
+            setEditando(false)
+          }
         }}
       />
     </label>
@@ -369,7 +514,7 @@ function CampoQuadrado({
  * para o que está selecionado.
  */
 function estadosDaPeca(tipoShape: string): Array<{ id: string; rotulo: string; cor: string }> {
-  if (tipoShape === 'sala-mapa') {
+  if (ehTipoSala(tipoShape)) {
     return ESTADOS_SALA.map((estado) => {
       const a = aparenciaDaSala(estado)
       return { id: estado, rotulo: a.rotulo, cor: a.preenchimento }
@@ -423,14 +568,14 @@ function SeletorEstado({
  * andar ("1F") e o marcador (o número, que nasce automático mas pode ser corrigido).
  */
 function rotuloEditavel(tipoShape: string, simbolo: string | undefined): boolean {
-  if (tipoShape === 'sala-mapa') return true
+  if (ehTipoSala(tipoShape)) return true
   if (tipoShape !== 'simbolo-mapa' || !simbolo) return false
   const definicao = definicaoDoSimbolo(simbolo)
   return Boolean(definicao?.textoLivre || definicao?.numerado)
 }
 
 function tituloDoCampoTexto(tipoShape: string, simbolo: string | undefined): string {
-  if (tipoShape === 'sala-mapa') return 'Nome do cômodo'
+  if (ehTipoSala(tipoShape)) return 'Nome do cômodo'
   if (simbolo === 'andar') return 'Andar'
   if (simbolo === 'marcador') return 'Número'
   return 'Texto'
@@ -624,25 +769,56 @@ function SeletorTracoRetangulo({
   onPreenchido: (ligado: boolean) => void
 }) {
   return (
+    <SeletorEspessura titulo="Traço" opcoes={ESPESSURAS_RETANGULO} espessura={espessura} onEspessura={onEspessura}>
+      <label className="painel-propriedades-campo painel-retangulo-preenchido">
+        <input type="checkbox" checked={preenchido} onChange={(e) => onPreenchido(e.target.checked)} />
+        <span>Preencher</span>
+      </label>
+    </SeletorEspessura>
+  )
+}
+
+/**
+ * Fileira de espessuras, cada botão mostrando uma barra da própria altura — o mesmo
+ * controle serve ao traço do retângulo ("Traço") e ao contorno da sala ("Contorno").
+ *
+ * Compartilhado de propósito: o retângulo já tinha esta fileira, e desenhar uma diferente
+ * para a sala faria "grosso" na sala não bater com "grosso" no retângulo ao lado, num mapa
+ * onde as duas peças se encostam. `children` é o espaço para o que só uma delas tem — hoje,
+ * o "Preencher" do retângulo (a sala é sempre preenchida pela cor do estado).
+ */
+function SeletorEspessura({
+  titulo,
+  opcoes,
+  espessura,
+  onEspessura,
+  children,
+}: {
+  titulo: string
+  opcoes: number[]
+  espessura: number
+  onEspessura: (px: number) => void
+  children?: ReactNode
+}) {
+  return (
     <div className="painel-estado">
-      <span className="painel-propriedades-label">Traço</span>
+      <span className="painel-propriedades-label">{titulo}</span>
       <div className="painel-estado-opcoes painel-opcoes-lado-a-lado">
-        {ESPESSURAS_RETANGULO.map((px) => (
+        {opcoes.map((px) => (
           <button
             key={px}
             type="button"
             className={`painel-estado-opcao painel-opcao-espessura${espessura === px ? ' ativo' : ''}`}
             title={`Espessura ${px}px`}
+            aria-label={`Espessura ${px} pixels`}
+            aria-pressed={espessura === px}
             onClick={() => onEspessura(px)}
           >
             <span className="painel-amostra-espessura" style={{ height: px }} />
           </button>
         ))}
       </div>
-      <label className="painel-propriedades-campo painel-retangulo-preenchido">
-        <input type="checkbox" checked={preenchido} onChange={(e) => onPreenchido(e.target.checked)} />
-        <span>Preencher</span>
-      </label>
+      {children}
     </div>
   )
 }

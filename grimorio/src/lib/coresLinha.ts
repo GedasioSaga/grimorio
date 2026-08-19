@@ -1,4 +1,5 @@
 import { CONTORNO_SALA, CORES_SALA, aparenciaDaSala } from './salaMapa'
+import { ehTipoSala } from './tiposSala'
 
 /**
  * Cor da divisória (linha nativa do tldraw, tipo `line`) — pedido do usuário: paleta
@@ -54,7 +55,9 @@ export function corDeForma(forma: FormaParaConferirCor): string | null {
   const props = (forma.props ?? {}) as Record<string, unknown>
   const meta = (forma.meta ?? {}) as Record<string, unknown>
 
-  if (forma.type === 'sala-mapa') {
+  // os DOIS formatos de sala: mesma prop `cor`, mesma cor de estado — pingar cor de um
+  // cômodo em L tem que funcionar igual a pingar de um retangular (ver `tiposSala.ts`).
+  if (ehTipoSala(forma.type)) {
     const cor = props.cor
     if (typeof cor === 'string' && cor) return cor
     const estado = typeof props.estado === 'string' ? props.estado : 'sem-info'

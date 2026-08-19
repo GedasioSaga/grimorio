@@ -1,6 +1,7 @@
-import { BaseBoxShapeUtil, SVGContainer, T, type RecordProps, type TLShape } from 'tldraw'
+import { BaseBoxShapeUtil, Rectangle2d, SVGContainer, T, type RecordProps, type TLShape } from 'tldraw'
 import { CANTOS_MAPA, CANTO_PADRAO, raioDoCanto, type CantoMapa } from '../lib/cantosMapa'
 import { getCantoAtivo } from '../lib/cantoAtivo'
+import { atenderDuploClique } from '../lib/duploCliqueMapa'
 import {
   RETANGULO_ALTURA_PADRAO,
   RETANGULO_COR_PADRAO,
@@ -50,6 +51,32 @@ export class RetanguloMapaShapeUtil extends BaseBoxShapeUtil<RetanguloMapaShapeT
   }
 
   /**
+   * O miolo só é clicável quando o retângulo está PREENCHIDO — vazado, o clique atravessa
+   * e pega a peça de baixo.
+   *
+   * `BaseBoxShapeUtil.getGeometry` fixa `isFilled: true`
+   * (@tldraw/editor/src/lib/editor/shapes/BaseBoxShapeUtil.ts), e `getShapeAtPoint` devolve
+   * na hora qualquer geometria fechada e preenchida que contenha o ponto
+   * (`Editor.ts` — `getShapeAtPoint`). O efeito é que o retângulo cumpria a intenção de
+   * `lib/retanguloMapa.ts` ("nasce vazado para não esconder as salas") no desenho e a
+   * violava no clique: uma moldura desenhada em volta de uma ala inteira sequestrava a
+   * seleção de tudo que estava dentro dela. Como ele mora na MESMA banda das salas
+   * (`ordemMapa.ts`) e nasce por cima, quem desenha a moldura por último perde o acesso a
+   * tudo que ela cobre.
+   *
+   * `preenchido` já existe como prop e é a resposta certa: é a mesma regra que o `geo`
+   * nativo do tldraw usa (`fill !== 'none'`). Vazado, continua selecionável pela BORDA e
+   * pelo painel de camadas.
+   */
+  override getGeometry(shape: RetanguloMapaShapeType) {
+    return new Rectangle2d({
+      width: shape.props.w,
+      height: shape.props.h,
+      isFilled: shape.props.preenchido,
+    })
+  }
+
+  /**
    * O canto sai do que está escolhido na barra (`cantoAtivo`), não de uma constante: é o
    * mesmo lugar de onde o tldraw tira cor/tamanho das próprias formas (`getStyleForNextShape`).
    *
@@ -68,6 +95,9 @@ export class RetanguloMapaShapeUtil extends BaseBoxShapeUtil<RetanguloMapaShapeT
       preenchido: false,
     }
   }
+
+  /** Ver `atenderDuploClique`: sem isto, todo duplo clique nesta peça larga um texto vazio no mapa. */
+  override onDoubleClick = atenderDuploClique
 
   component(shape: RetanguloMapaShapeType) {
     return <SVGContainer>{desenharRetangulo(shape.props)}</SVGContainer>

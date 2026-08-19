@@ -1,5 +1,5 @@
 import type { VinculoSala } from './vinculoSalaCenario'
-import { ESPESSURA_CONTORNO_SALA, MARGEM_TOPO_ROTULO, aparenciaDaSala, quebrarRotulo } from './salaMapa'
+import { ESPESSURA_CONTORNO_SALA, aparenciaDaSala, layoutDoRotulo, type EstiloRotulo } from './salaMapa'
 
 /**
  * Miolo do desenho da sala, extraído de `SalaMapaShape.tsx` para função pura: sem
@@ -10,10 +10,6 @@ import { ESPESSURA_CONTORNO_SALA, MARGEM_TOPO_ROTULO, aparenciaDaSala, quebrarRo
  * Usada pelo `component()` do shape (que resolve o vínculo e repassa aqui) e pela página
  * de amostra (`.amostra/mapa.html`), para as duas nunca desenharem a sala de dois jeitos.
  */
-
-/** Corpo do nome do cômodo, em px de página. */
-const FONTE_ROTULO = 12
-const ENTRELINHA = 14
 
 /** Tamanho do badge de vínculo, no canto superior-direito da sala. */
 const BADGE_RAIO = 8
@@ -26,14 +22,21 @@ export interface DesenharCorpoSalaProps {
   rotulo: string
   cor: string
   vinculo: VinculoSala
+  /** espessura do contorno em px; ausente cai no padrão de sempre (sala de mapa antigo) */
+  espessura?: number
+  /** tamanho, posição e orientação do nome do cômodo — ver `layoutDoRotulo` */
+  estiloRotulo?: EstiloRotulo
 }
 
-export function desenharCorpoSala({ w, h, estado, rotulo, cor, vinculo }: DesenharCorpoSalaProps) {
+export function desenharCorpoSala({ w, h, estado, rotulo, cor, vinculo, espessura, estiloRotulo }: DesenharCorpoSalaProps) {
   const aparencia = aparenciaDaSala(estado, cor || undefined)
-  const linhas = quebrarRotulo(rotulo, w, FONTE_ROTULO)
-  // rótulo ancorado no TOPO, não centralizado — ver MARGEM_TOPO_ROTULO em salaMapa.ts
-  // (o porquê: deixar o miolo da sala livre para o ícone da peça largada dentro dela).
-  const primeiraLinhaY = MARGEM_TOPO_ROTULO + ENTRELINHA / 2
+  // `> 0` e não `??`: a prop chega como 0 se alguma migração/IA escrever lixo, e traço 0
+  // é uma sala sem contorno nenhum — indistinguível de "sumiu" num mapa escuro.
+  const tracoPx = espessura && espessura > 0 ? espessura : ESPESSURA_CONTORNO_SALA
+  // O padrão continua sendo o TOPO (ver MARGEM_TOPO_ROTULO em salaMapa.ts: deixa o miolo
+  // livre para o ícone da peça largada dentro da sala). O que mudou é que agora é padrão,
+  // não regra — o mestre escolhe posição, corpo e orientação no painel.
+  const texto = layoutDoRotulo({ x0: 0, y0: 0, w, h }, rotulo, estiloRotulo ?? {})
 
   const badgeCx = w - BADGE_MARGEM - BADGE_RAIO
   const badgeCy = BADGE_MARGEM + BADGE_RAIO
@@ -48,22 +51,24 @@ export function desenharCorpoSala({ w, h, estado, rotulo, cor, vinculo }: Desenh
         height={h}
         fill={aparencia.preenchimento}
         stroke={aparencia.contorno}
-        strokeWidth={ESPESSURA_CONTORNO_SALA}
+        strokeWidth={tracoPx}
       />
-      {linhas.map((linha, i) => (
-        <text
-          key={i}
-          x={w / 2}
-          y={primeiraLinhaY + i * ENTRELINHA}
-          fill={aparencia.texto}
-          fontSize={FONTE_ROTULO}
-          fontFamily="system-ui, sans-serif"
-          textAnchor="middle"
-          dominantBaseline="central"
-        >
-          {linha}
-        </text>
-      ))}
+      <g transform={texto.transform || undefined}>
+        {texto.linhas.map((linha, i) => (
+          <text
+            key={i}
+            x={texto.x}
+            y={texto.y + i * texto.entrelinha}
+            fill={aparencia.texto}
+            fontSize={texto.fonte}
+            fontFamily="system-ui, sans-serif"
+            textAnchor="middle"
+            dominantBaseline="central"
+          >
+            {linha}
+          </text>
+        ))}
+      </g>
       {/* `carregando` fica de fora: a sala tem vínculo, mas o cache de cenários ainda não
           chegou. Desenhar o ⚠ aqui acusaria estrago que não houve, e o aviso vira ruído. Assim
           que `carregarCenarios` termina, o zustand re-renderiza e o 🔗 aparece sozinho. */}

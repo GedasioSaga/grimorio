@@ -24,10 +24,25 @@ import { ELEMENTOS_PALETA, type ElementoPaleta, type PecaId } from './paletaMapa
  *   daria uma barra gigante sem parede embaixo.
  */
 
+/**
+ * Como o shape novo herda o ESPAÇO que a forma velha ocupava.
+ *
+ * `caixa` escreve `w`/`h`; `poligono` escreve `pontos` (os quatro cantos). Não é detalhe
+ * de apresentação: `props` de shape do tldraw é validado contra um schema, e mandar `w`
+ * para a sala em polígono — que não tem `w` — é update recusado, não campo ignorado.
+ */
+export type DimensionarConversao = 'caixa' | 'poligono'
+
 export type PlanoConversao =
   | { tipo: 'estilo'; peca: PecaId; geo?: string; estilos: Record<string, string> }
   /** troca a forma velha por um shape próprio, preservando posição e tamanho */
-  | { tipo: 'substituir'; peca: PecaId; novoTipo: 'simbolo-mapa' | 'sala-mapa'; props: Record<string, unknown> }
+  | {
+      tipo: 'substituir'
+      peca: PecaId
+      novoTipo: 'simbolo-mapa' | 'sala-mapa' | 'sala-poligono-mapa'
+      dimensionar: DimensionarConversao
+      props: Record<string, unknown>
+    }
   | { tipo: 'impossivel'; motivo: string }
 
 export function planoDeConversao(
@@ -42,6 +57,7 @@ export function planoDeConversao(
       tipo: 'substituir',
       peca: elemento.id,
       novoTipo: 'simbolo-mapa',
+      dimensionar: 'caixa',
       props: { simbolo: elemento.simbolo, rotulo: '' },
     }
   }
@@ -49,7 +65,27 @@ export function planoDeConversao(
   // sala é o caso que mais importa converter: é o que o mapa antigo tem de sobra.
   // Vira `sala-mapa` no estado "pendente" — o usuário troca depois no painel.
   if (elemento.id === 'sala') {
-    return { tipo: 'substituir', peca: 'sala', novoTipo: 'sala-mapa', props: { estado: 'pendente', rotulo: '', cor: '' } }
+    return {
+      tipo: 'substituir',
+      peca: 'sala',
+      novoTipo: 'sala-mapa',
+      dimensionar: 'caixa',
+      props: { estado: 'pendente', rotulo: '', cor: '' },
+    }
+  }
+
+  // Converter para o formato em polígono também precisa existir, senão os dois formatos de
+  // sala ficam desiguais justo no caminho do mapa ANTIGO — que é onde a conversão serve.
+  // A caixa velha vira os quatro cantos; puxar um deles para virar L é o passo seguinte,
+  // e é do usuário.
+  if (elemento.id === 'sala-poligono') {
+    return {
+      tipo: 'substituir',
+      peca: 'sala-poligono',
+      novoTipo: 'sala-poligono-mapa',
+      dimensionar: 'poligono',
+      props: { estado: 'pendente', rotulo: '', cor: '' },
+    }
   }
 
   if (elemento.tipo === 'geo' || elemento.tipo === 'texto') {

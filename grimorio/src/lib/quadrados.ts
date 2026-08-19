@@ -31,15 +31,29 @@ export function medidaDeCaixa(wPx: number, hPx: number, quadradoPx: number): str
 
 /**
  * Parseia o texto digitado no painel de propriedades (X/Y/L/A) para um número de
- * quadrados. Aceita vírgula ou ponto como separador decimal ("6", "6,5", "6.5").
- * Rejeita vazio, negativo e não-numérico devolvendo `null` — quem chama decide o
- * que fazer (reverter pro valor atual sem aplicar).
+ * quadrados. Aceita vírgula ou ponto como separador decimal ("6", "6,5", "6.5") e
+ * coordenada NEGATIVA ("-4", "−4"). Rejeita vazio e não-numérico devolvendo `null` —
+ * quem chama decide o que fazer (reverter pro valor atual sem aplicar).
+ *
+ * Negativo é aceito porque a origem do mapa não é o canto: é um ponto no meio do plano, e
+ * metade da planta costuma crescer para cima e para a esquerda dele. A regra anterior era
+ * `^\d+(\.\d+)?$`, sem sinal, enquanto `emQuadrados` formata negativo sem problema — então
+ * o campo EXIBIA `-5` e recusava `-4` de volta, calado. Round-trip quebrado: o usuário via
+ * o valor, digitava o vizinho e o campo voltava sozinho ao anterior, sem erro nenhum.
+ *
+ * Largura e altura continuam barradas em zero e negativo, mas não aqui — quem faz isso é o
+ * `minimoPositivo` do campo (`PainelPropriedades.tsx`), que sabe QUAL campo está sendo
+ * editado. Barrar o sinal aqui punia X e Y por uma regra que só vale para L e A.
+ *
+ * O `−` (U+2212, sinal de menos tipográfico) é normalizado para o hífen porque é o que
+ * chega ao colar um valor de fora — de uma nota, de uma planilha — e recusá-lo seria
+ * recusar o mesmo número por causa do byte.
  */
 export function parseQuadrados(texto: string): number | null {
   const limpo = texto.trim()
   if (limpo === '') return null
-  const normalizado = limpo.replace(',', '.')
-  if (!/^\d+(\.\d+)?$/.test(normalizado)) return null
+  const normalizado = limpo.replace('−', '-').replace(',', '.')
+  if (!/^-?\d+(\.\d+)?$/.test(normalizado)) return null
   const valor = Number(normalizado)
   if (!Number.isFinite(valor)) return null
   return valor

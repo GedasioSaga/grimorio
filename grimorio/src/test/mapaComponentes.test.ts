@@ -76,7 +76,18 @@ describe('shapes próprios do Mapa registram tipo e props', () => {
     const { SalaMapaShapeUtil } = await import('../components/SalaMapaShape')
     expect(SalaMapaShapeUtil.type).toBe('sala-mapa')
     // props precisam existir, senão o tldraw rejeita o shape ao carregar o arquivo
-    expect(Object.keys(SalaMapaShapeUtil.props)).toEqual(['w', 'h', 'estado', 'rotulo', 'cor', 'cenarioId'])
+    expect(Object.keys(SalaMapaShapeUtil.props)).toEqual([
+      'w',
+      'h',
+      'estado',
+      'rotulo',
+      'cor',
+      'cenarioId',
+      'espessura',
+      'rotuloTamanho',
+      'rotuloAncora',
+      'rotuloVertical',
+    ])
   })
 
   it('PortaShapeUtil', async () => {
@@ -100,7 +111,17 @@ describe('shapes próprios do Mapa registram tipo e props', () => {
   it('SalaPoligonoMapaShapeUtil', async () => {
     const { SalaPoligonoMapaShapeUtil } = await import('../components/SalaPoligonoMapaShape')
     expect(SalaPoligonoMapaShapeUtil.type).toBe('sala-poligono-mapa')
-    expect(Object.keys(SalaPoligonoMapaShapeUtil.props)).toEqual(['pontos', 'estado', 'rotulo', 'cor'])
+    expect(Object.keys(SalaPoligonoMapaShapeUtil.props)).toEqual([
+      'pontos',
+      'estado',
+      'rotulo',
+      'cor',
+      'cenarioId',
+      'espessura',
+      'rotuloTamanho',
+      'rotuloAncora',
+      'rotuloVertical',
+    ])
   })
 
   it('CorredorMapaShapeUtil', async () => {
@@ -143,5 +164,34 @@ describe('shapes próprios do Mapa registram tipo e props', () => {
       (await import('../components/ItemCardShape')).ItemCardShapeUtil.type,
     ]
     expect(new Set(tipos).size).toBe(tipos.length)
+  })
+})
+
+/**
+ * Tripwire de prop nova. As listas exatas acima já falham quando alguém acrescenta uma
+ * prop — de propósito, para forçar a pergunta "e a migração?". Mas elas não pegam o outro
+ * erro do mesmo par: prop declarada no schema e esquecida em `getDefaultProps`, que só
+ * aparece quando o usuário cria a peça e o tldraw recusa o shape.
+ */
+interface UtilDeForma {
+  props: Record<string, unknown>
+  new (): { getDefaultProps(): Record<string, unknown> }
+}
+
+describe('toda prop declarada nasce com valor', () => {
+  it.each([
+    ['sala-mapa', async () => (await import('../components/SalaMapaShape')).SalaMapaShapeUtil],
+    [
+      'sala-poligono-mapa',
+      async () => (await import('../components/SalaPoligonoMapaShape')).SalaPoligonoMapaShapeUtil,
+    ],
+    ['porta-mapa', async () => (await import('../components/PortaShape')).PortaShapeUtil],
+    ['retangulo-mapa', async () => (await import('../components/RetanguloMapaShape')).RetanguloMapaShapeUtil],
+  ])('%s', async (_tipo, carregar) => {
+    const Util = (await carregar()) as unknown as UtilDeForma
+    const padroes = new Util().getDefaultProps()
+    for (const chave of Object.keys(Util.props)) {
+      expect(padroes[chave], `getDefaultProps() nao define "${chave}"`).not.toBeUndefined()
+    }
   })
 })

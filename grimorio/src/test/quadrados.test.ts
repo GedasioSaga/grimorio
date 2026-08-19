@@ -106,8 +106,33 @@ describe('parseQuadrados', () => {
     expect(parseQuadrados('   ')).toBeNull()
   })
 
-  it('rejeita negativo', () => {
-    expect(parseQuadrados('-2')).toBeNull()
+  /**
+   * Este teste dizia o contrário — `expect(parseQuadrados('-2')).toBeNull()` — e estava
+   * fixando um defeito no lugar de uma regra. A origem do mapa fica no MEIO do plano, não
+   * num canto: metade da planta cresce para cima e para a esquerda dela, e `emQuadrados`
+   * sempre formatou negativo sem reclamar. O campo X exibia `-5` e recusava `-4` de volta,
+   * calado — o usuário via o número, digitava o vizinho, e o campo revertia sozinho.
+   *
+   * Largura e altura continuam sem aceitar zero ou negativo. Quem barra é o `minimoPositivo`
+   * do `CampoQuadrado`, que sabe qual campo está sendo editado; o parser, que serve aos
+   * quatro, não sabe e não deve chutar.
+   */
+  it('aceita coordenada negativa: X e Y existem dos dois lados da origem', () => {
+    expect(parseQuadrados('-2')).toBe(-2)
+    expect(parseQuadrados('-6,5')).toBe(-6.5)
+    expect(parseQuadrados('  -0.5 ')).toBe(-0.5)
+  })
+
+  it('aceita o menos tipográfico (−, U+2212), que é o que chega ao colar de fora', () => {
+    expect(parseQuadrados('−4')).toBe(-4)
+    expect(parseQuadrados('−6,5')).toBe(-6.5)
+  })
+
+  it('continua rejeitando sinal solto ou duplicado', () => {
+    expect(parseQuadrados('-')).toBeNull()
+    expect(parseQuadrados('--2')).toBeNull()
+    expect(parseQuadrados('2-')).toBeNull()
+    expect(parseQuadrados('+2')).toBeNull()
   })
 
   it('rejeita texto que não é número', () => {

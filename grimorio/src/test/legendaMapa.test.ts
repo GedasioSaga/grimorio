@@ -56,6 +56,26 @@ describe('planoDeConversao', () => {
     expect(plano.props.estado).toBe('pendente')
   })
 
+  // a sala RETANGULAR aceitava conversão desde sempre e a em polígono não — a última
+  // desigualdade entre os dois formatos, e justo no caminho do mapa antigo, que é onde
+  // converter serve para alguma coisa.
+  it('sala em polígono também é alvo de conversão, dimensionada por vértices', () => {
+    const plano = planoDeConversao('sala-poligono')
+    expect(plano.tipo).toBe('substituir')
+    if (plano.tipo !== 'substituir') throw new Error('tipo errado')
+    expect(plano.novoTipo).toBe('sala-poligono-mapa')
+    // `caixa` mandaria w/h para um shape que não declara w/h: o schema do tldraw RECUSA o
+    // update, não ignora o campo — a peça simplesmente não nasceria.
+    expect(plano.dimensionar).toBe('poligono')
+    expect(plano.props.estado).toBe('pendente')
+  })
+
+  it('os dois formatos de sala aparecem no menu "Converter em ▸"', () => {
+    const ids = pecasConversiveis().map((e) => e.id)
+    expect(ids).toContain('sala')
+    expect(ids).toContain('sala-poligono')
+  })
+
   it('peça desenhada troca a forma por um símbolo', () => {
     const plano = planoDeConversao('armadilha')
     expect(plano.tipo).toBe('substituir')

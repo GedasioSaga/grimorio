@@ -4,7 +4,7 @@
  * cards a `ligacoesCanvas.ts`.
  */
 import type React from 'react'
-import { AssetRecordType, createShapeId, type Editor } from 'tldraw'
+import { AssetRecordType, createShapeId, type Editor, type TLShape, type TLShapePartial } from 'tldraw'
 import { convertFileSrc } from '@tauri-apps/api/core'
 import { useApp } from '../state/store'
 import { caminhoAbsolutoImagem } from '../lib/caminhos'
@@ -13,7 +13,7 @@ import { CARD_ALTURA_PADRAO, CARD_LARGURA_PADRAO } from './CharacterCardShape'
 import { MIME_CENARIO } from './CenariosSoltos'
 import { MIME_ITEM } from './ItensSoltos'
 import { cardsPorEntidade, ligarCenarioNoCanvas, ligarRelacoesNoCanvas } from './ligacoesCanvas'
-import type { SalaMapaShapeType } from './SalaMapaShape'
+import { ehTipoSala } from '../lib/tiposSala'
 import { ITEM_MAPA_ALTURA_PADRAO, ITEM_MAPA_LARGURA_PADRAO } from './ItemMapaShape'
 
 const MIME_PERSONAGEM = 'application/x-grimorio-personagem'
@@ -86,9 +86,11 @@ async function soltarImagemNoMapa(
 }
 
 /**
- * Sala do mapa embaixo do ponto de solta, se houver. `getShapesAtPoint` devolve as
- * formas com a mais ao topo primeiro e já filtra as escondidas, então o primeiro
- * `sala-mapa` da lista é a sala que o usuário está vendo sob o cursor.
+ * Sala do mapa embaixo do ponto de solta, se houver — retangular OU em polígono, porque
+ * "solto o cenário em cima do cômodo e eles se ligam" não pode depender do formato do
+ * cômodo (ver `lib/tiposSala.ts`). `getShapesAtPoint` devolve as formas com a mais ao topo
+ * primeiro e já filtra as escondidas, então a primeira sala da lista é a que o usuário está
+ * vendo sob o cursor.
  *
  * Sala TRAVADA (por si ou pela camada) não conta. `editor.updateShape` recusa shape travado
  * **em silêncio** (`@tldraw/editor/src/lib/editor/Editor.ts`, o laço faz `continue` sem erro —
@@ -96,10 +98,8 @@ async function soltarImagemNoMapa(
  * sala travada aqui faria o drop não criar vínculo E não criar card: sumiria sem explicação.
  * Devolvendo `undefined`, o drop cai no caminho normal e vira card, que é visível e desfazível.
  */
-function salaSobPonto(editor: Editor, ponto: { x: number; y: number }): SalaMapaShapeType | undefined {
-  const sala = editor.getShapesAtPoint(ponto, { hitInside: true }).find((s) => s.type === 'sala-mapa') as
-    | SalaMapaShapeType
-    | undefined
+function salaSobPonto(editor: Editor, ponto: { x: number; y: number }): TLShape | undefined {
+  const sala = editor.getShapesAtPoint(ponto, { hitInside: true }).find((s) => ehTipoSala(s.type))
   return sala && !editor.isShapeOrAncestorLocked(sala) ? sala : undefined
 }
 
@@ -152,7 +152,7 @@ export function criarHandlersDeDrop(
         if (mime === MIME_CENARIO) {
           const sala = salaSobPonto(editor, ponto)
           if (sala) {
-            editor.updateShape<SalaMapaShapeType>({ id: sala.id, type: 'sala-mapa', props: { cenarioId: id } })
+            editor.updateShape({ id: sala.id, type: sala.type, props: { cenarioId: id } } as TLShapePartial)
             return
           }
         }

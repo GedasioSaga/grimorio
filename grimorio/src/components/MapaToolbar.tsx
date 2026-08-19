@@ -13,13 +13,9 @@ import { ELEMENTOS_PALETA, type ElementoPaleta } from '../lib/paletaMapa'
 import { GavetaPecas } from './GavetaPecas'
 import { ComandosMapa } from './ComandosMapa'
 import { AcoesMapaIA } from './AcoesMapaIA'
-import { PORTA_ESPESSURA_PADRAO, PORTA_LARGURA_PADRAO } from '../lib/portaMapa'
-import { SALA_ALTURA_PADRAO, SALA_LARGURA_PADRAO } from './SalaMapaShape'
-import { PONTOS_SALA_POLIGONO_PADRAO } from '../lib/salaPoligonoMapa'
-import { CORREDOR_ALTURA_PADRAO, CORREDOR_LARGURA_PADRAO } from './CorredorMapaShape'
-import { ESCADA_ALTURA_PADRAO, ESCADA_LARGURA_PADRAO } from '../lib/escadaMapa'
-import { MURALHA_ALTURA_PADRAO, MURALHA_LARGURA_PADRAO } from '../lib/muralhaMapa'
-import { TORRE_DIAMETRO_PADRAO } from '../lib/torreMapa'
+// A barra não importa mais nenhum tamanho de peça: desde que as construções passaram a ser
+// DESENHADAS (ver `FerramentasCaixaMapa.ts`), o tamanho de nascença mora só no
+// `getDefaultProps` de cada shapeUtil. Antes vivia nos dois lugares, e o da barra vencia.
 import { proximoNumero } from '../lib/portaMapa'
 import { definicaoDoSimbolo, type SimboloId } from '../lib/simbolosMapa'
 import { tamanhoDoSimbolo } from './SimboloMapaShape'
@@ -59,6 +55,38 @@ const DISTRIBUICOES = [
 ] as const
 
 const MINIMO_PARA_DISTRIBUIR = 3
+
+/**
+ * As peças de CONSTRUÇÃO não nascem mais prontas: elas armam uma ferramenta e o usuário
+ * DESENHA no canvas.
+ *
+ * Antes, cada uma tinha aqui a própria função `criar*` fazendo `editor.createShape` no
+ * centro da viewport. Sete funções quase idênticas, e as três coisas erradas que a
+ * comparação cega contra o Dungeon Scrawl cobrou: a peça nascia longe de onde o usuário
+ * queria (arrasto de reposicionamento obrigatório), nascia fora da grade (o centro da
+ * viewport é ponto fracionário e nada passava por `maybeSnapToGrid`), e todas nasciam no
+ * MESMO ponto, uma em cima da outra.
+ *
+ * Agora clicar no canvas coloca a peça no tamanho de nascença centrada no clique, e
+ * arrastar desenha do tamanho arrastado — as duas com encaixe na grade. Quem entrega isso
+ * é `FerramentasCaixaMapa.ts` (herdando `BaseBoxShapeTool`) e `SalaPoligonoMapaTool.ts`;
+ * o `id` de cada ferramenta é o próprio tipo do shape, então o mapeamento é direto e não
+ * precisa de tabela.
+ *
+ * Símbolo continua nascendo pronto (`criarSimbolo`, abaixo): ele é um ícone de tamanho
+ * fixo, não uma área que se desenha — arrastar para definir o tamanho de um baú não
+ * significa nada.
+ */
+const FERRAMENTA_DA_PECA: Partial<Record<string, string>> = {
+  sala: 'sala-mapa',
+  'sala-poligono': 'sala-poligono-mapa',
+  corredor: 'corredor-mapa',
+  muralha: 'muralha-mapa',
+  torre: 'torre-mapa',
+  escada: 'escada-mapa',
+  porta: 'porta-mapa',
+}
+
 
 /**
  * Toolbar própria do mapa, substituindo a do tldraw (slot `components.Toolbar`).
@@ -169,7 +197,23 @@ export function MapaToolbar() {
   const elementoPaletaAtivo = useValue(
     'mapa-toolbar-paleta-ativa',
     () => {
-      if (editor.getCurrentToolId() !== 'geo') return undefined
+      /**
+       * Peça de CONSTRUÇÃO agora arma uma ferramenta, e o botão dela tem que acender
+       * enquanto ela está armada — senão o usuário clica em "Sala", nada aparece na tela (o
+       * certo: ele ainda vai desenhar) e nada na interface diz que o próximo clique no canvas
+       * vira uma sala. Modo sem indicação lê como botão quebrado.
+       *
+       * O `id` da ferramenta é o tipo do shape (`sala-mapa`), e o `id` do elemento da paleta
+       * é o nome curto (`sala`) — `FERRAMENTA_DA_PECA` é a única tabela entre os dois, então
+       * a busca é por ela e não por uma segunda lista que poderia discordar.
+       */
+      const ferramentaAtual = editor.getCurrentToolId()
+      const pecaDesenhada = Object.keys(FERRAMENTA_DA_PECA).find(
+        (peca) => FERRAMENTA_DA_PECA[peca] === ferramentaAtual,
+      )
+      if (pecaDesenhada) return ELEMENTOS_PALETA.find((e) => e.id === pecaDesenhada)
+
+      if (ferramentaAtual !== 'geo') return undefined
       const geo = editor.getStyleForNextShape(GeoShapeGeoStyle)
       return ELEMENTOS_PALETA.find(
         (e) =>
@@ -213,13 +257,8 @@ export function MapaToolbar() {
 
   function aplicarElementoPaleta(elemento: ElementoPaleta) {
     if (elemento.tipo === 'acao') {
-      if (elemento.id === 'escada') criarEscada()
-      else if (elemento.id === 'muralha') criarMuralha()
-      else if (elemento.id === 'torre') criarTorre()
-      else if (elemento.id === 'sala') criarSala()
-      else if (elemento.id === 'sala-poligono') criarSalaPoligono()
-      else if (elemento.id === 'corredor') criarCorredor()
-      else if (elemento.id === 'porta') criarPorta()
+      const ferramenta = FERRAMENTA_DA_PECA[elemento.id]
+      if (ferramenta) editor.setCurrentTool(ferramenta)
       else if (elemento.simbolo) criarSimbolo(elemento.simbolo)
       return
     }
@@ -233,156 +272,6 @@ export function MapaToolbar() {
       const ferramenta =
         elemento.tipo === 'texto' ? 'text' : elemento.tipo === 'linha' ? 'line' : 'geo'
       editor.setCurrentTool(ferramenta)
-    })
-  }
-
-  /**
-   * Escada nasce no centro da tela, do tamanho de um trecho comum de corredor — o usuário
-   * redimensiona (arrasta as alças) para o comprimento real, e a hachura acompanha (ver
-   * `desenharEscada`). Shape próprio desde esta leva; antes era um grupo de retângulos
-   * nativos do tldraw (ver `lib/escadaMapa.ts` para o porquê da troca).
-   */
-  function criarEscada() {
-    const centro = editor.getViewportPageBounds().center
-    const id = createShapeId()
-    editor.run(() => {
-      editor.createShape({
-        id,
-        type: 'escada-mapa',
-        x: centro.x - ESCADA_LARGURA_PADRAO / 2,
-        y: centro.y - ESCADA_ALTURA_PADRAO / 2,
-        props: { w: ESCADA_LARGURA_PADRAO, h: ESCADA_ALTURA_PADRAO },
-      })
-      editor.setCurrentTool('select')
-      editor.setSelectedShapes([id])
-    })
-  }
-
-  /**
-   * Muralha nasce grande o bastante para já cercar uma planta pequena — o usuário arrasta
-   * as alças até encaixar no contorno real, e manda para trás (não é ação automática:
-   * quem decidiu a ordem de empilhamento é sempre o usuário) para não cobrir as salas.
-   */
-  function criarMuralha() {
-    const centro = editor.getViewportPageBounds().center
-    const id = createShapeId()
-    editor.run(() => {
-      editor.createShape({
-        id,
-        type: 'muralha-mapa',
-        x: centro.x - MURALHA_LARGURA_PADRAO / 2,
-        y: centro.y - MURALHA_ALTURA_PADRAO / 2,
-        props: { w: MURALHA_LARGURA_PADRAO, h: MURALHA_ALTURA_PADRAO },
-      })
-      editor.setCurrentTool('select')
-      editor.setSelectedShapes([id])
-    })
-  }
-
-  /**
-   * Torre nasce pequena, no centro da tela — o usuário arrasta até o canto da muralha
-   * (não há canto fixo para nascer encaixada: a muralha é livre e redimensionável).
-   */
-  function criarTorre() {
-    const centro = editor.getViewportPageBounds().center
-    const id = createShapeId()
-    editor.run(() => {
-      editor.createShape({
-        id,
-        type: 'torre-mapa',
-        x: centro.x - TORRE_DIAMETRO_PADRAO / 2,
-        y: centro.y - TORRE_DIAMETRO_PADRAO / 2,
-        props: { w: TORRE_DIAMETRO_PADRAO, h: TORRE_DIAMETRO_PADRAO },
-      })
-      editor.setCurrentTool('select')
-      editor.setSelectedShapes([id])
-    })
-  }
-
-  /**
-   * Sala nasce no centro da tela, no estado "pendente" (vermelha) — que é como um cômodo
-   * começa: você ainda não vasculhou. O nome se escreve no painel de propriedades.
-   */
-  function criarSala() {
-    const centro = editor.getViewportPageBounds().center
-    const id = createShapeId()
-    editor.run(() => {
-      editor.createShape({
-        id,
-        type: 'sala-mapa',
-        x: centro.x - SALA_LARGURA_PADRAO / 2,
-        y: centro.y - SALA_ALTURA_PADRAO / 2,
-        props: { w: SALA_LARGURA_PADRAO, h: SALA_ALTURA_PADRAO, estado: 'pendente', rotulo: '', cor: '' },
-      })
-      editor.setCurrentTool('select')
-      editor.setSelectedShapes([id])
-    })
-  }
-
-  /**
-   * Sala em polígono nasce com os vértices de nascença (cômodo em L, `PONTOS_SALA_POLIGONO_PADRAO`)
-   * centrada na tela — mesmo estado/cor inicial da sala retangular ("pendente"). O usuário
-   * reforma a silhueta arrastando os vértices depois (ver `getHandles`/`onHandleDrag` em
-   * `SalaPoligonoMapaShape.tsx`).
-   */
-  function criarSalaPoligono() {
-    const centro = editor.getViewportPageBounds().center
-    const largura = Math.max(...PONTOS_SALA_POLIGONO_PADRAO.map((p) => p.x))
-    const altura = Math.max(...PONTOS_SALA_POLIGONO_PADRAO.map((p) => p.y))
-    const id = createShapeId()
-    editor.run(() => {
-      editor.createShape({
-        id,
-        type: 'sala-poligono-mapa',
-        x: centro.x - largura / 2,
-        y: centro.y - altura / 2,
-        props: { pontos: PONTOS_SALA_POLIGONO_PADRAO, estado: 'pendente', rotulo: '', cor: '' },
-      })
-      editor.setCurrentTool('select')
-      editor.setSelectedShapes([id])
-    })
-  }
-
-  /**
-   * Corredor nasce no centro da tela — o usuário redimensiona (arrasta as alças, é uma
-   * caixa comum) até o comprimento e a largura do caminho real, e encosta as pontas nas
-   * salas que ele liga.
-   */
-  function criarCorredor() {
-    const centro = editor.getViewportPageBounds().center
-    const id = createShapeId()
-    editor.run(() => {
-      editor.createShape({
-        id,
-        type: 'corredor-mapa',
-        x: centro.x - CORREDOR_LARGURA_PADRAO / 2,
-        y: centro.y - CORREDOR_ALTURA_PADRAO / 2,
-        props: { w: CORREDOR_LARGURA_PADRAO, h: CORREDOR_ALTURA_PADRAO },
-      })
-      editor.setCurrentTool('select')
-      editor.setSelectedShapes([id])
-    })
-  }
-
-  /**
-   * Porta nasce no centro da tela, livre (azul), para o usuário arrastar até a parede.
-   * Fica à frente da estrutura por CONSTRUÇÃO — o `registerBeforeCreateHandler` do
-   * `MapaView` (banda "abertura" de `lib/ordemMapa.ts`) já garante isso sempre, não só
-   * neste instante; não precisa mais de `bringToFront` aqui.
-   */
-  function criarPorta() {
-    const centro = editor.getViewportPageBounds().center
-    const id = createShapeId()
-    editor.run(() => {
-      editor.createShape({
-        id,
-        type: 'porta-mapa',
-        x: centro.x - PORTA_LARGURA_PADRAO / 2,
-        y: centro.y - PORTA_ESPESSURA_PADRAO / 2,
-        props: { w: PORTA_LARGURA_PADRAO, h: PORTA_ESPESSURA_PADRAO, estado: 'livre' },
-      })
-      editor.setCurrentTool('select')
-      editor.setSelectedShapes([id])
     })
   }
 

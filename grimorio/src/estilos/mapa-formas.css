@@ -18,8 +18,16 @@
 /* `.painel-estado-opcoes` é COLUNA no theme, e com razão: o estado da sala/porta é uma
    frase ("Já limpei", "Precisa de algo") que só cabe em linha cheia. Cantos e espessura são
    escolhas curtas — em coluna, cinco espessuras comiam metade da altura do painel e
-   empurravam X/Y/L/A para fora da vista. Lado a lado elas cabem numa fileira. */
-.painel-opcoes-lado-a-lado {
+   empurravam X/Y/L/A para fora da vista. Lado a lado elas cabem numa fileira.
+
+   O seletor precisa das DUAS classes. `.painel-opcoes-lado-a-lado` sozinho empata em
+   especificidade com `.painel-estado-opcoes { flex-direction: column }` do theme.css, e
+   empate se decide por ordem de folha — que aqui não é nossa: o theme entra pelo `main.tsx`
+   e este arquivo entra por um import dentro de um componente, então o bundler decide a
+   ordem final. Estava perdendo: Cantos e Traço saíam empilhados em coluna, cada botão com
+   30px de largura numa coluna de 196px. A regra parecia certa lendo o CSS e estava morta na
+   tela — por isso o par de classes, que ganha por especificidade em qualquer ordem. */
+.painel-estado-opcoes.painel-opcoes-lado-a-lado {
   flex-direction: row;
   flex-wrap: wrap;
   gap: 4px;
@@ -163,4 +171,21 @@
 
 .mapa-coluna-esq .painel-camadas-item.arrastando .painel-camadas-linha-nome {
   cursor: grabbing;
+}
+
+/* Sub-rótulos dentro do bloco do nome ("Posição", "Direção"): o bloco tem três fileiras e
+   um cabeçalho só ficaria ambíguo — mas cada fileira também não merece uma seção inteira,
+   porque as três são a mesma decisão. Recuo pequeno em vez de separador. */
+.painel-rotulo-sub {
+  margin-top: 6px;
+}
+
+/* A amostra de tamanho mostra a letra no corpo que ela representa; o botão precisa de
+   altura fixa para a fileira não pular de altura conforme o corpo escolhido. */
+.painel-opcao-tamanho-rotulo {
+  width: 30px;
+  height: 26px;
+  justify-content: center;
+  align-items: center;
+  padding: 2px;
 }
