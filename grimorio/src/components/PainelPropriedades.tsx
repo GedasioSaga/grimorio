@@ -14,6 +14,7 @@ import {
   type AncoraRotulo,
 } from '../lib/salaMapa'
 import { ehTipoSala } from '../lib/tiposSala'
+import { aceitaContorno, aceitaCor } from '../lib/pecasComAparencia'
 import { definicaoDoSimbolo } from '../lib/simbolosMapa'
 import { ESTADOS_PORTA, aparenciaDaPorta } from '../lib/portaMapa'
 import { opcoesDeCenario, resolverVinculoSala } from '../lib/vinculoSalaCenario'
@@ -403,8 +404,23 @@ export function PainelPropriedades({
               onEscolher={(estado) => aoTrocarEstado(selecao.id, estado)}
             />
           )}
-          {ehTipoSala(selecao.tipoShape) && (
+          {aceitaCor(selecao.tipoShape) && (
             <SeletorCor atual={selecao.cor ?? ''} onEscolher={(cor) => aoTrocarCor(selecao.id, cor)} />
+          )}
+          {aceitaContorno(selecao.tipoShape) && !ehTipoSala(selecao.tipoShape) && (
+            /* corredor, torre e escada não têm espessura própria — só a escolha de ter ou não
+               a linha. Oferecer uma fileira de grossuras que não faz nada seria pior que
+               não oferecer nada. */
+            <SeletorEspessura
+              titulo="Contorno"
+              opcoes={[]}
+              espessura={0}
+              onEspessura={() => {}}
+              desligado={selecao.contorno === false}
+              onDesligar={() =>
+                aoTrocarContorno(selecao.id, selecao.contorno === false)
+              }
+            />
           )}
           {ehTipoSala(selecao.tipoShape) && (
             <SeletorEspessura

@@ -1,4 +1,7 @@
-import { BaseBoxShapeUtil, Rectangle2d, type VecLike, SVGContainer, T, type RecordProps, type TLShape } from 'tldraw'
+import {
+  BaseBoxShapeUtil,
+  createShapePropsMigrationIds,
+  createShapePropsMigrationSequence, Rectangle2d, type VecLike, SVGContainer, T, type RecordProps, type TLShape } from 'tldraw'
 import { desenharMuralha } from '../lib/desenhoMuralha'
 import {
   ESPESSURA_CONTORNO_MURALHA,
@@ -12,6 +15,8 @@ declare module '@tldraw/tlschema' {
     'muralha-mapa': {
       w: number
       h: number
+      /** cor escolhida à mão; vazio = a cor padrão da peça */
+      cor: string
     }
   }
 }
@@ -51,16 +56,41 @@ class AneisDaMuralha extends Rectangle2d {
   }
 }
 
+
+/**
+ * A peça nasceu sem propriedade nenhuma e ganhou cor depois — sem migração o tldraw
+ * recusa o documento INTEIRO ao validar mapa antigo contra o schema novo.
+ */
+const versoes = createShapePropsMigrationIds('muralha-mapa', {
+  AdicionaAparencia: 1,
+})
+
 export class MuralhaMapaShapeUtil extends BaseBoxShapeUtil<MuralhaMapaShapeType> {
   static override type = 'muralha-mapa' as const
 
   static override props: RecordProps<MuralhaMapaShapeType> = {
     w: T.positiveNumber,
     h: T.positiveNumber,
+    cor: T.string,
   }
 
+  static override migrations = createShapePropsMigrationSequence({
+    sequence: [
+      {
+        // sobe com o padrão que a peça SEMPRE desenhou: mapa antigo reabre idêntico.
+        id: versoes.AdicionaAparencia,
+        up(props) {
+          if (props.cor === undefined) props.cor = ''
+        },
+        down(props) {
+          delete props.cor
+        },
+      },
+    ],
+  })
+
   getDefaultProps(): MuralhaMapaShapeType['props'] {
-    return { w: MURALHA_LARGURA_PADRAO, h: MURALHA_ALTURA_PADRAO }
+    return { w: MURALHA_LARGURA_PADRAO, h: MURALHA_ALTURA_PADRAO, cor: '' }
   }
 
   /**
@@ -98,8 +128,8 @@ export class MuralhaMapaShapeUtil extends BaseBoxShapeUtil<MuralhaMapaShapeType>
   override onDoubleClick = atenderDuploClique
 
   component(shape: MuralhaMapaShapeType) {
-    const { w, h } = shape.props
-    return <SVGContainer>{desenharMuralha({ w, h })}</SVGContainer>
+    const { w, h, cor } = shape.props
+    return <SVGContainer>{desenharMuralha({ w, h, cor })}</SVGContainer>
   }
 
   indicator(shape: MuralhaMapaShapeType) {

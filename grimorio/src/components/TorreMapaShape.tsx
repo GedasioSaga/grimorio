@@ -1,4 +1,7 @@
-import { BaseBoxShapeUtil, Ellipse2d, SVGContainer, T, type RecordProps, type TLShape } from 'tldraw'
+import {
+  BaseBoxShapeUtil,
+  createShapePropsMigrationIds,
+  createShapePropsMigrationSequence, Ellipse2d, SVGContainer, T, type RecordProps, type TLShape } from 'tldraw'
 import { desenharTorre } from '../lib/desenhoTorre'
 import { TORRE_DIAMETRO_PADRAO } from '../lib/torreMapa'
 import { atenderDuploClique } from '../lib/duploCliqueMapa'
@@ -8,6 +11,10 @@ declare module '@tldraw/tlschema' {
     'torre-mapa': {
       w: number
       h: number
+      /** cor escolhida à mão; vazio = a cor padrão da peça */
+      cor: string
+      /** desenha a linha de contorno? */
+      contorno: boolean
     }
   }
 }
@@ -19,16 +26,44 @@ export type TorreMapaShapeType = TLShape<'torre-mapa'>
  * pequena, no canto da viewport; o usuário arrasta e sobrepõe ao canto da muralha (a
  * muralha é redimensionável e livre, então não há canto fixo para nascer encaixada).
  */
+
+/**
+ * A peça nasceu sem propriedade nenhuma e ganhou cor e contorno depois — sem migração o tldraw
+ * recusa o documento INTEIRO ao validar mapa antigo contra o schema novo.
+ */
+const versoes = createShapePropsMigrationIds('torre-mapa', {
+  AdicionaAparencia: 1,
+})
+
 export class TorreMapaShapeUtil extends BaseBoxShapeUtil<TorreMapaShapeType> {
   static override type = 'torre-mapa' as const
 
   static override props: RecordProps<TorreMapaShapeType> = {
     w: T.positiveNumber,
     h: T.positiveNumber,
+    cor: T.string,
+    contorno: T.boolean,
   }
 
+  static override migrations = createShapePropsMigrationSequence({
+    sequence: [
+      {
+        // sobe com o padrão que a peça SEMPRE desenhou: mapa antigo reabre idêntico.
+        id: versoes.AdicionaAparencia,
+        up(props) {
+          if (props.cor === undefined) props.cor = ''
+          if (props.contorno === undefined) props.contorno = true
+        },
+        down(props) {
+          delete props.cor
+          delete props.contorno
+        },
+      },
+    ],
+  })
+
   getDefaultProps(): TorreMapaShapeType['props'] {
-    return { w: TORRE_DIAMETRO_PADRAO, h: TORRE_DIAMETRO_PADRAO }
+    return { w: TORRE_DIAMETRO_PADRAO, h: TORRE_DIAMETRO_PADRAO, cor: '', contorno: true }
   }
 
   /**
@@ -56,8 +91,8 @@ export class TorreMapaShapeUtil extends BaseBoxShapeUtil<TorreMapaShapeType> {
   override onDoubleClick = atenderDuploClique
 
   component(shape: TorreMapaShapeType) {
-    const { w, h } = shape.props
-    return <SVGContainer>{desenharTorre({ w, h })}</SVGContainer>
+    const { w, h, cor, contorno } = shape.props
+    return <SVGContainer>{desenharTorre({ w, h, cor, contorno })}</SVGContainer>
   }
 
   // o contorno de seleção segue a peça: um retângulo em volta de um círculo dizia ao

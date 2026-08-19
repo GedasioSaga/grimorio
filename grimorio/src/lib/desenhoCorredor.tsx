@@ -10,18 +10,22 @@ import { COR_CORREDOR, CONTORNO_CORREDOR } from './corredorMapa'
 export interface DesenharCorredorProps {
   w: number
   h: number
+  /** cor de preenchimento escolhida à mão; vazio = a cor padrão da peça */
+  cor?: string
+  /** desenha a linha de contorno? ausente conta como SIM */
+  contorno?: boolean
 }
 
-export function desenharCorredor({ w, h }: DesenharCorredorProps) {
+export function desenharCorredor({ w, h, cor, contorno = true }: DesenharCorredorProps) {
   return (
     <rect
       x={0}
       y={0}
       width={w}
       height={h}
-      fill={COR_CORREDOR}
-      stroke={CONTORNO_CORREDOR}
-      strokeWidth={ESPESSURA_CONTORNO_SALA}
+      fill={cor || COR_CORREDOR}
+      stroke={contorno ? CONTORNO_CORREDOR : 'none'}
+      strokeWidth={contorno ? ESPESSURA_CONTORNO_SALA : 0}
     />
   )
 }

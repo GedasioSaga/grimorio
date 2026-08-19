@@ -657,3 +657,55 @@ describe('editar várias peças de uma vez', () => {
     expect(props(editor, porta).cor).toBeUndefined()
   })
 })
+
+describe('corredor, muralha, torre e escada deixam de ser inertes', () => {
+  /**
+   * As quatro nasceram sem propriedade nenhuma: mesma cor fixa em todo mapa, e nenhum jeito
+   * de tirar o traço duplo que aparece quando o corredor encosta na sala. Um juiz cego citou
+   * isso duas rodadas seguidas.
+   */
+  const COM_COR = ['corredor-mapa', 'muralha-mapa', 'torre-mapa', 'escada-mapa'] as const
+  const COM_CONTORNO = ['corredor-mapa', 'torre-mapa', 'escada-mapa'] as const
+
+  it.each(COM_COR)('%s aceita cor à mão, e volta ao padrão com vazio', (tipo) => {
+    const editor = criarEditorDeTeste()
+    const acoes = montarAcoes(editor)
+    const id = criarSala(editor, tipo)
+
+    expect(props(editor, id).cor).toBe('')
+    act(() => acoes.atual.aoTrocarCor(id, '#8a4340'))
+    expect(props(editor, id).cor).toBe('#8a4340')
+    act(() => acoes.atual.aoTrocarCor(id, ''))
+    expect(props(editor, id).cor).toBe('')
+  })
+
+  it.each(COM_CONTORNO)('%s liga e desliga o contorno', (tipo) => {
+    const editor = criarEditorDeTeste()
+    const acoes = montarAcoes(editor)
+    const id = criarSala(editor, tipo)
+
+    expect(props(editor, id).contorno).toBe(true)
+    act(() => acoes.atual.aoTrocarContorno(id, false))
+    expect(props(editor, id).contorno).toBe(false)
+  })
+
+  it('muralha NÃO tem contorno desligável — ela é só contorno', () => {
+    // desligar apagaria a peça em vez de simplificá-la; quem quer a muralha sumindo apaga a
+    // muralha.
+    const editor = criarEditorDeTeste()
+    const acoes = montarAcoes(editor)
+    const id = criarSala(editor, 'muralha-mapa')
+
+    expect(props(editor, id).contorno).toBeUndefined()
+    act(() => acoes.atual.aoTrocarContorno(id, false))
+    expect(props(editor, id).contorno).toBeUndefined()
+  })
+
+  it('peça sem cor continua recusando o handler', () => {
+    const editor = criarEditorDeTeste()
+    const acoes = montarAcoes(editor)
+    const id = criarSala(editor, 'porta-mapa')
+    act(() => acoes.atual.aoTrocarCor(id, '#8a4340'))
+    expect(props(editor, id).cor).toBeUndefined()
+  })
+})

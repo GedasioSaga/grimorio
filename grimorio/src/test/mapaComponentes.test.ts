@@ -129,25 +129,25 @@ describe('shapes próprios do Mapa registram tipo e props', () => {
   it('CorredorMapaShapeUtil', async () => {
     const { CorredorMapaShapeUtil } = await import('../components/CorredorMapaShape')
     expect(CorredorMapaShapeUtil.type).toBe('corredor-mapa')
-    expect(Object.keys(CorredorMapaShapeUtil.props)).toEqual(['w', 'h'])
+    expect(Object.keys(CorredorMapaShapeUtil.props)).toEqual(['w', 'h', 'cor', 'contorno'])
   })
 
   it('EscadaMapaShapeUtil', async () => {
     const { EscadaMapaShapeUtil } = await import('../components/EscadaMapaShape')
     expect(EscadaMapaShapeUtil.type).toBe('escada-mapa')
-    expect(Object.keys(EscadaMapaShapeUtil.props)).toEqual(['w', 'h'])
+    expect(Object.keys(EscadaMapaShapeUtil.props)).toEqual(['w', 'h', 'cor', 'contorno'])
   })
 
   it('MuralhaMapaShapeUtil', async () => {
     const { MuralhaMapaShapeUtil } = await import('../components/MuralhaMapaShape')
     expect(MuralhaMapaShapeUtil.type).toBe('muralha-mapa')
-    expect(Object.keys(MuralhaMapaShapeUtil.props)).toEqual(['w', 'h'])
+    expect(Object.keys(MuralhaMapaShapeUtil.props)).toEqual(['w', 'h', 'cor'])
   })
 
   it('TorreMapaShapeUtil', async () => {
     const { TorreMapaShapeUtil } = await import('../components/TorreMapaShape')
     expect(TorreMapaShapeUtil.type).toBe('torre-mapa')
-    expect(Object.keys(TorreMapaShapeUtil.props)).toEqual(['w', 'h'])
+    expect(Object.keys(TorreMapaShapeUtil.props)).toEqual(['w', 'h', 'cor', 'contorno'])
   })
 
   it('cada shape próprio tem um tipo distinto — tipo repetido derruba o editor inteiro', async () => {
@@ -189,6 +189,10 @@ describe('toda prop declarada nasce com valor', () => {
     ],
     ['porta-mapa', async () => (await import('../components/PortaShape')).PortaShapeUtil],
     ['retangulo-mapa', async () => (await import('../components/RetanguloMapaShape')).RetanguloMapaShapeUtil],
+    ['corredor-mapa', async () => (await import('../components/CorredorMapaShape')).CorredorMapaShapeUtil],
+    ['muralha-mapa', async () => (await import('../components/MuralhaMapaShape')).MuralhaMapaShapeUtil],
+    ['torre-mapa', async () => (await import('../components/TorreMapaShape')).TorreMapaShapeUtil],
+    ['escada-mapa', async () => (await import('../components/EscadaMapaShape')).EscadaMapaShapeUtil],
   ])('%s', async (_tipo, carregar) => {
     const Util = (await carregar()) as unknown as UtilDeForma
     const padroes = new Util().getDefaultProps()

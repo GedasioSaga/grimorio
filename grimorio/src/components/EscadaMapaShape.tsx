@@ -1,4 +1,7 @@
-import { BaseBoxShapeUtil, SVGContainer, T, type RecordProps, type TLShape } from 'tldraw'
+import {
+  BaseBoxShapeUtil,
+  createShapePropsMigrationIds,
+  createShapePropsMigrationSequence, SVGContainer, T, type RecordProps, type TLShape } from 'tldraw'
 import { desenharEscada } from '../lib/desenhoEscada'
 import { ESCADA_LARGURA_PADRAO, ESCADA_ALTURA_PADRAO } from '../lib/escadaMapa'
 import { atenderDuploClique } from '../lib/duploCliqueMapa'
@@ -8,6 +11,10 @@ declare module '@tldraw/tlschema' {
     'escada-mapa': {
       w: number
       h: number
+      /** cor escolhida à mão; vazio = a cor padrão da peça */
+      cor: string
+      /** desenha a linha de contorno? */
+      contorno: boolean
     }
   }
 }
@@ -19,24 +26,52 @@ export type EscadaMapaShapeType = TLShape<'escada-mapa'>
  * sem estado nem rótulo. Substitui a versão anterior (grupo de retângulos `geo` nativos
  * criado por `criarEscada` em `MapaToolbar.tsx`): ver `lib/escadaMapa.ts` para o porquê.
  */
+
+/**
+ * A peça nasceu sem propriedade nenhuma e ganhou cor e contorno depois — sem migração o tldraw
+ * recusa o documento INTEIRO ao validar mapa antigo contra o schema novo.
+ */
+const versoes = createShapePropsMigrationIds('escada-mapa', {
+  AdicionaAparencia: 1,
+})
+
 export class EscadaMapaShapeUtil extends BaseBoxShapeUtil<EscadaMapaShapeType> {
   static override type = 'escada-mapa' as const
 
   static override props: RecordProps<EscadaMapaShapeType> = {
     w: T.positiveNumber,
     h: T.positiveNumber,
+    cor: T.string,
+    contorno: T.boolean,
   }
 
+  static override migrations = createShapePropsMigrationSequence({
+    sequence: [
+      {
+        // sobe com o padrão que a peça SEMPRE desenhou: mapa antigo reabre idêntico.
+        id: versoes.AdicionaAparencia,
+        up(props) {
+          if (props.cor === undefined) props.cor = ''
+          if (props.contorno === undefined) props.contorno = true
+        },
+        down(props) {
+          delete props.cor
+          delete props.contorno
+        },
+      },
+    ],
+  })
+
   getDefaultProps(): EscadaMapaShapeType['props'] {
-    return { w: ESCADA_LARGURA_PADRAO, h: ESCADA_ALTURA_PADRAO }
+    return { w: ESCADA_LARGURA_PADRAO, h: ESCADA_ALTURA_PADRAO, cor: '', contorno: true }
   }
 
   /** Ver `atenderDuploClique`: sem isto, todo duplo clique nesta peça larga um texto vazio no mapa. */
   override onDoubleClick = atenderDuploClique
 
   component(shape: EscadaMapaShapeType) {
-    const { w, h } = shape.props
-    return <SVGContainer>{desenharEscada({ w, h })}</SVGContainer>
+    const { w, h, cor, contorno } = shape.props
+    return <SVGContainer>{desenharEscada({ w, h, cor, contorno })}</SVGContainer>
   }
 
   indicator(shape: EscadaMapaShapeType) {

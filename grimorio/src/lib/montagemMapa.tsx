@@ -62,6 +62,7 @@ import {
 import { pecaDaFormaCriada } from './paletaMapa'
 import { COR_LINHA_PADRAO, corDeForma } from './coresLinha'
 import { ehTipoSala } from './tiposSala'
+import { aceitaContorno, aceitaCor } from './pecasComAparencia'
 import { CANTO_PADRAO, ehCantoMapa, type CantoMapa } from './cantosMapa'
 import { aplicarCanto, setCantoAtivo } from './cantoAtivo'
 import { QUADRADO_PX, quadradosParaPx } from './quadrados'
@@ -503,7 +504,7 @@ export function usePainelPropriedadesMapa(editorRef: React.RefObject<Editor | nu
   function aoTrocarCor(id: TLShapeId, cor: string) {
     const editor = editorRef.current
     const shape = editor?.getShape(id)
-    if (!editor || !shape || !ehTipoSala(shape.type)) return
+    if (!editor || !shape || !aceitaCor(shape.type)) return
     marcar('painel-cor')
     editor.updateShape({ id, type: shape.type, props: { cor } } as Parameters<typeof editor.updateShape>[0])
   }
@@ -589,7 +590,7 @@ export function usePainelPropriedadesMapa(editorRef: React.RefObject<Editor | nu
   function aoTrocarContorno(id: TLShapeId, ligado: boolean) {
     const editor = editorRef.current
     const shape = editor?.getShape(id)
-    if (!editor || !shape || !ehTipoSala(shape.type)) return
+    if (!editor || !shape || !aceitaContorno(shape.type)) return
     marcar('painel-contorno')
     editor.updateShape({ id, type: shape.type, props: { contorno: ligado } } as TLShapePartial)
   }

@@ -24,9 +24,13 @@ import {
 export interface DesenharEscadaProps {
   w: number
   h: number
+  /** cor de preenchimento escolhida à mão; vazio = a cor padrão da peça */
+  cor?: string
+  /** desenha a linha de contorno? ausente conta como SIM */
+  contorno?: boolean
 }
 
-export function desenharEscada({ w, h }: DesenharEscadaProps) {
+export function desenharEscada({ w, h, cor, contorno = true }: DesenharEscadaProps) {
   const horizontal = w >= h
   const comprimento = horizontal ? w : h
   const qtdDegraus = Math.max(1, Math.floor((comprimento - ESCADA_MARGEM_DEGRAU * 2) / ESCADA_ESPACO_DEGRAU) + 1)
@@ -47,9 +51,9 @@ export function desenharEscada({ w, h }: DesenharEscadaProps) {
         y={0}
         width={w}
         height={h}
-        fill={ESCADA_COR_FUNDO}
-        stroke={ESCADA_COR_CONTORNO}
-        strokeWidth={ESPESSURA_CONTORNO_SALA}
+        fill={cor || ESCADA_COR_FUNDO}
+        stroke={contorno ? ESCADA_COR_CONTORNO : 'none'}
+        strokeWidth={contorno ? ESPESSURA_CONTORNO_SALA : 0}
       />
       {degraus}
     </>

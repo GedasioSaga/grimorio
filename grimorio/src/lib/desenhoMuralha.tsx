@@ -13,9 +13,15 @@ import { MURALHA_COR_CONTORNO, ESPESSURA_CONTORNO_MURALHA } from './muralhaMapa'
 export interface DesenharMuralhaProps {
   w: number
   h: number
+  /** cor da linha do cerco; vazio = a cor padrão */
+  cor?: string
+  /**
+   * Sem `contorno` aqui: a muralha É só contorno (`fill="none"`), então desligá-la apagaria a
+   * peça inteira em vez de simplificá-la. Quem quer a muralha sumindo apaga a muralha.
+   */
 }
 
-export function desenharMuralha({ w, h }: DesenharMuralhaProps) {
+export function desenharMuralha({ w, h, cor }: DesenharMuralhaProps) {
   const meia = ESPESSURA_CONTORNO_MURALHA / 2
   return (
     <rect
@@ -24,7 +30,7 @@ export function desenharMuralha({ w, h }: DesenharMuralhaProps) {
       width={Math.max(0, w - ESPESSURA_CONTORNO_MURALHA)}
       height={Math.max(0, h - ESPESSURA_CONTORNO_MURALHA)}
       fill="none"
-      stroke={MURALHA_COR_CONTORNO}
+      stroke={cor || MURALHA_COR_CONTORNO}
       strokeWidth={ESPESSURA_CONTORNO_MURALHA}
     />
   )
