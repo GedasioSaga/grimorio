@@ -73,6 +73,9 @@ describe('migração da sala retangular', () => {
     expect(props.espessura).toBe(ESPESSURA_CONTORNO_SALA)
     expect(props.rotulo).toBe('Cozinha')
     expect(props.estado).toBe('pendente')
+    // mapa antigo reabre COM a linha: migração que apaga contorno de todo cômodo do cofre
+    // seria edição em massa que ninguém pediu
+    expect(props.contorno).toBe(true)
   })
 })
 
@@ -151,6 +154,7 @@ describe('migração da sala em polígono', () => {
     expect(props.espessura).toBe(ESPESSURA_CONTORNO_SALA)
     expect(props.pontos).toEqual(pontos)
     expect(props.cor).toBe('#8a4340')
+    expect(props.contorno).toBe(true)
   })
 })
 

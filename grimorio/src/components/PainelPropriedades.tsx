@@ -72,6 +72,8 @@ export type SelecaoPropriedades =
       rotuloTamanho?: number
       rotuloAncora?: AncoraRotulo
       rotuloVertical?: boolean
+      /** contorno da sala ligado/desligado */
+      contorno?: boolean
       /** `meta.camada` da peça; vazio quando ela nunca foi carimbada (mapa antigo). */
       camadasDaSelecao: string[]
     }
@@ -182,6 +184,7 @@ export function SelecaoPropriedadesBridge() {
         rotuloTamanho: typeof props.rotuloTamanho === 'number' ? props.rotuloTamanho : undefined,
         rotuloAncora: ehAncoraRotulo(props.rotuloAncora) ? props.rotuloAncora : undefined,
         rotuloVertical: typeof props.rotuloVertical === 'boolean' ? props.rotuloVertical : undefined,
+        contorno: typeof props.contorno === 'boolean' ? props.contorno : undefined,
         camadasDaSelecao,
       }
     },
@@ -221,6 +224,7 @@ export function PainelPropriedades({
   aoTrocarEspessura,
   aoTrocarPreenchido,
   aoTrocarEstiloRotulo,
+  aoTrocarContorno,
 }: {
   selecao: SelecaoPropriedades
   aoAplicarX: (id: TLShapeId, quadrados: number) => void
@@ -242,6 +246,8 @@ export function PainelPropriedades({
   aoTrocarPreenchido: (id: TLShapeId, preenchido: boolean) => void
   /** corpo/posição/orientação do nome do cômodo; só as chaves que mudaram */
   aoTrocarEstiloRotulo: (id: TLShapeId, estilo: EstiloRotuloPainel) => void
+  /** liga/desliga a linha de contorno da sala */
+  aoTrocarContorno: (id: TLShapeId, ligado: boolean) => void
 }) {
   const [colapsado, setColapsado] = useState(false)
 
@@ -302,7 +308,14 @@ export function PainelPropriedades({
               titulo="Contorno"
               opcoes={ESPESSURAS_SALA}
               espessura={selecao.espessura ?? ESPESSURA_CONTORNO_SALA}
-              onEspessura={(px) => aoTrocarEspessura(selecao.id, px)}
+              onEspessura={(px) => {
+                // escolher uma espessura RELIGA o contorno: quem clica numa grossura está
+                // pedindo para ver a linha, e exigir dois cliques para isso seria pegadinha.
+                aoTrocarContorno(selecao.id, true)
+                aoTrocarEspessura(selecao.id, px)
+              }}
+              desligado={selecao.contorno === false}
+              onDesligar={() => aoTrocarContorno(selecao.id, false)}
             />
           )}
           {ehTipoSala(selecao.tipoShape) && (
@@ -792,26 +805,52 @@ function SeletorEspessura({
   opcoes,
   espessura,
   onEspessura,
+  desligado,
+  onDesligar,
   children,
 }: {
   titulo: string
   opcoes: number[]
   espessura: number
   onEspessura: (px: number) => void
+  /** só a sala: contorno pode ser removido de vez, não só afinado */
+  desligado?: boolean
+  onDesligar?: () => void
   children?: ReactNode
 }) {
   return (
     <div className="painel-estado">
       <span className="painel-propriedades-label">{titulo}</span>
       <div className="painel-estado-opcoes painel-opcoes-lado-a-lado">
+        {onDesligar && (
+          /**
+           * "sem" vem PRIMEIRO, no mesmo lugar em que o seletor de cor põe o "auto": as duas
+           * são a opção de não escolher, e o olho procura no mesmo canto.
+           *
+           * Existe porque compor planta com salas sobrepostas — um salão de fundo com cômodos
+           * por cima — deixa traço duplo em cada encosto. Apagar o contorno de quem está atrás
+           * resolve, e sem isso a única saída era não sobrepor.
+           */
+          <button
+            type="button"
+            className={`painel-cor-auto${desligado ? ' ativo' : ''}`}
+            title="Sem contorno — só a mancha de piso"
+            aria-pressed={desligado}
+            onClick={onDesligar}
+          >
+            sem
+          </button>
+        )}
         {opcoes.map((px) => (
           <button
             key={px}
             type="button"
-            className={`painel-estado-opcao painel-opcao-espessura${espessura === px ? ' ativo' : ''}`}
+            className={`painel-estado-opcao painel-opcao-espessura${
+              espessura === px && !desligado ? ' ativo' : ''
+            }`}
             title={`Espessura ${px}px`}
             aria-label={`Espessura ${px} pixels`}
-            aria-pressed={espessura === px}
+            aria-pressed={espessura === px && !desligado}
             onClick={() => onEspessura(px)}
           >
             <span className="painel-amostra-espessura" style={{ height: px }} />

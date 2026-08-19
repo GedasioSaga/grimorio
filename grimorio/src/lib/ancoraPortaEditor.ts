@@ -10,7 +10,6 @@ import {
   type Ponto,
 } from './ancoraPorta'
 import { pontosSeguros } from './salaPoligonoMapa'
-import { TIPOS_MASSA, trechosCobertos } from './fusaoParedes'
 
 /**
  * A metade que conversa com o editor: quais peças podem hospedar porta, como extrair as
@@ -254,64 +253,4 @@ export function registrarAncoraDePortas(editor: Editor): () => void {
       })
     }
   })
-}
-
-/**
- * Vãos do contorno de uma peça: os das PORTAS ancoradas mais os das peças de massa
- * encostadas nela.
- *
- * As duas fontes entram na mesma lista de propósito. Do ponto de vista do desenho são a mesma
- * coisa — pedaço de parede que não deve existir —, e tratá-las separadamente faria uma porta
- * na junção de dois cômodos ser recortada duas vezes, com o traço entre os dois recortes
- * saindo de comprimento negativo. `fundirIntervalos` resolve, mas só se as duas chegarem
- * juntas.
- *
- * O filtro por caixa antes da geometria não é otimização prematura: sem ele, cada sala testa
- * clipping de polígono contra TODAS as peças da página a cada render, e o custo cresce com o
- * quadrado do tamanho do mapa. Comparar duas caixas é barato e descarta quase tudo.
- */
-export function vaosDoContorno(
-  editor: Editor,
-  pecaId: TLShapeId,
-): Map<number, Array<{ inicio: number; fim: number }>> {
-  const vaos = vaosPorAresta(editor, pecaId)
-
-  const peca = editor.getShape(pecaId)
-  const caixa = editor.getShapePageBounds(pecaId)
-  if (!peca || !caixa || !TIPOS_MASSA.has(peca.type)) return vaos
-
-  const arestas = arestasEmPagina(editor, peca)
-  if (arestas.length === 0) return vaos
-
-  for (const vizinha of editor.getCurrentPageShapes()) {
-    if (vizinha.id === pecaId) continue
-    if (!TIPOS_MASSA.has(vizinha.type)) continue
-    // peça escondida não deve dissolver parede: some da tela e leva a parede junto,
-    // deixando o cômodo aberto para um vizinho que ninguém está vendo.
-    if (editor.isShapeHidden(vizinha)) continue
-
-    const caixaVizinha = editor.getShapePageBounds(vizinha.id)
-    // sobreposição de caixas com 1px de folga — a folga é o que faz "encostada" contar,
-    // já que duas paredes coladas têm caixas que se tocam sem se invadir.
-    if (
-      !caixaVizinha ||
-      caixaVizinha.x > caixa.x + caixa.w + 1 ||
-      caixaVizinha.x + caixaVizinha.w < caixa.x - 1 ||
-      caixaVizinha.y > caixa.y + caixa.h + 1 ||
-      caixaVizinha.y + caixaVizinha.h < caixa.y - 1
-    ) {
-      continue
-    }
-
-    const contorno = arestasEmPagina(editor, vizinha).map((a) => a.a)
-    if (contorno.length < 3) continue
-
-    arestas.forEach((aresta, indice) => {
-      const cobertos = trechosCobertos(aresta, contorno)
-      if (cobertos.length === 0) return
-      vaos.set(indice, [...(vaos.get(indice) ?? []), ...cobertos])
-    })
-  }
-
-  return vaos
 }

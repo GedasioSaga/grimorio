@@ -28,6 +28,16 @@ export interface DesenharCorpoSalaProps {
   /** tamanho, posição e orientação do nome do cômodo — ver `layoutDoRotulo` */
   estiloRotulo?: EstiloRotulo
   /**
+   * Desenha a linha de contorno? Ausente conta como SIM — é o que a sala sempre fez, e o que
+   * um mapa antigo espera ao reabrir.
+   *
+   * Desligar deixa só a mancha de piso. Serve para compor: um salão grande de fundo com
+   * cômodos menores desenhados por cima fica com traço duplo em cada encosto, e apagar o
+   * contorno de quem está atrás resolve sem inventar fusão automática de parede — que foi
+   * tentada e dissolvia o contorno de plantas legítimas.
+   */
+  contorno?: boolean
+  /**
    * Vãos abertos pelas portas ancoradas, por índice de aresta (0 topo, 1 direita, 2 base,
    * 3 esquerda), cada um em fração do comprimento da aresta. Ver `vaosPorAresta`.
    */

@@ -9,7 +9,7 @@ import {
   type RecordProps,
   type TLShape,
 } from 'tldraw'
-import { vaosDoContorno } from '../lib/ancoraPortaEditor'
+import { vaosPorAresta } from '../lib/ancoraPortaEditor'
 import { useApp } from '../state/store'
 import { desenharCorpoSala } from '../lib/desenhoSala'
 import { ESPESSURA_CONTORNO_SALA, FONTE_ROTULO_PADRAO } from '../lib/salaMapa'
@@ -36,6 +36,8 @@ declare module '@tldraw/tlschema' {
       rotuloAncora: string
       /** nome escrito de baixo para cima, para cômodo estreito e alto */
       rotuloVertical: boolean
+      /** desenha a linha de contorno? desligado deixa só a mancha de piso */
+      contorno: boolean
     }
   }
 }
@@ -66,6 +68,7 @@ const versoes = createShapePropsMigrationIds('sala-mapa', {
   AdicionaEspessura: 2,
   AdicionaCor: 3,
   AdicionaEstiloRotulo: 4,
+  AdicionaContorno: 5,
 })
 
 export class SalaMapaShapeUtil extends BaseBoxShapeUtil<SalaMapaShapeType> {
@@ -82,6 +85,7 @@ export class SalaMapaShapeUtil extends BaseBoxShapeUtil<SalaMapaShapeType> {
     rotuloTamanho: T.positiveNumber,
     rotuloAncora: T.string,
     rotuloVertical: T.boolean,
+    contorno: T.boolean,
   }
 
   static override migrations = createShapePropsMigrationSequence({
@@ -155,6 +159,20 @@ export class SalaMapaShapeUtil extends BaseBoxShapeUtil<SalaMapaShapeType> {
           delete props.rotuloVertical
         },
       },
+      {
+        /**
+         * Contorno ligado/desligado. Sobe LIGADO em todo mapa antigo: é o que a sala sempre
+         * desenhou, e uma migração que apaga a linha de todo cômodo do cofre seria uma
+         * edição em massa que ninguém pediu.
+         */
+        id: versoes.AdicionaContorno,
+        up(props) {
+          if (props.contorno === undefined) props.contorno = true
+        },
+        down(props) {
+          delete props.contorno
+        },
+      },
     ],
   })
 
@@ -173,6 +191,7 @@ export class SalaMapaShapeUtil extends BaseBoxShapeUtil<SalaMapaShapeType> {
       rotuloTamanho: FONTE_ROTULO_PADRAO,
       rotuloAncora: 'topo',
       rotuloVertical: false,
+      contorno: true,
     }
   }
 
@@ -217,12 +236,12 @@ export class SalaMapaShapeUtil extends BaseBoxShapeUtil<SalaMapaShapeType> {
 }
 
 function CorpoSala({ shape }: { shape: SalaMapaShapeType }) {
-  const { w, h, estado, rotulo, cor, cenarioId, espessura, rotuloTamanho, rotuloAncora, rotuloVertical } =
+  const { w, h, estado, rotulo, cor, cenarioId, espessura, rotuloTamanho, rotuloAncora, rotuloVertical, contorno } =
     shape.props
   // nome do cenário vinculado (se existir) é o bastante pro resolvedor puro decidir
   // vinculado/quebrado/sem-vínculo
   /**
-   * Vãos do contorno: os das portas ancoradas MAIS os das peças de massa encostadas.
+   * Vãos que as portas ancoradas abrem no contorno desta sala.
    *
    * Lido aqui, e não passado por prop, porque a relação é da PORTA para a sala: a sala não
    * guarda lista de portas (isso duplicaria o vínculo em dois lugares e os dois divergiriam
@@ -230,7 +249,7 @@ function CorpoSala({ shape }: { shape: SalaMapaShapeType }) {
    * porta, então o vão aparece e some sozinho.
    */
   const editor = useEditor()
-  const vaos = useValue('sala-vaos-contorno', () => vaosDoContorno(editor, shape.id), [editor, shape.id])
+  const vaos = useValue('sala-vaos-de-porta', () => vaosPorAresta(editor, shape.id), [editor, shape.id])
 
   const nomeCenario = useApp((s) => (cenarioId ? s.cenarios[cenarioId]?.nome : undefined))
   // `carregando` separa "cenário sumiu" de "ainda não li os cenários" — as duas chegam como
@@ -254,6 +273,7 @@ function CorpoSala({ shape }: { shape: SalaMapaShapeType }) {
         vinculo,
         espessura,
         estiloRotulo: { tamanho: rotuloTamanho, ancora: rotuloAncora, vertical: rotuloVertical },
+        contorno,
         vaos,
       })}
     </SVGContainer>

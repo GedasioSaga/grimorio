@@ -353,6 +353,7 @@ export interface AcoesPainelPropriedadesMapa {
   aoTrocarEspessura: (id: TLShapeId, espessura: number) => void
   aoTrocarPreenchido: (id: TLShapeId, preenchido: boolean) => void
   aoTrocarEstiloRotulo: (id: TLShapeId, estilo: EstiloRotuloPainel) => void
+  aoTrocarContorno: (id: TLShapeId, ligado: boolean) => void
 }
 
 /**
@@ -543,6 +544,23 @@ export function usePainelPropriedadesMapa(editorRef: React.RefObject<Editor | nu
     editor.updateShape({ id, type: shape.type, props } as TLShapePartial)
   }
 
+  /**
+   * Liga/desliga a linha de contorno da sala.
+   *
+   * Existe porque compor planta com salas SOBREPOSTAS é legítimo — um salão grande de fundo
+   * com cômodos menores desenhados por cima — e cada encosto deixava traço duplo. A tentativa
+   * anterior foi dissolver a parede automaticamente onde duas peças de massa se tocavam, e
+   * ela apagou o contorno de plantas inteiras em que a sobreposição era de propósito. Quem
+   * sabe qual linha sobra é o mestre, não a heurística.
+   */
+  function aoTrocarContorno(id: TLShapeId, ligado: boolean) {
+    const editor = editorRef.current
+    const shape = editor?.getShape(id)
+    if (!editor || !shape || !ehTipoSala(shape.type)) return
+    marcar('painel-contorno')
+    editor.updateShape({ id, type: shape.type, props: { contorno: ligado } } as TLShapePartial)
+  }
+
   function aoTrocarPreenchido(id: TLShapeId, preenchido: boolean) {
     const editor = editorRef.current
     const shape = editor?.getShape(id)
@@ -597,6 +615,7 @@ export function usePainelPropriedadesMapa(editorRef: React.RefObject<Editor | nu
     aoTrocarEspessura,
     aoTrocarPreenchido,
     aoTrocarEstiloRotulo,
+    aoTrocarContorno,
   }
 }
 

@@ -228,6 +228,7 @@ describe('painel desenha os mesmos controles para os dois formatos', () => {
           aoTrocarEspessura={vazio}
           aoTrocarPreenchido={vazio}
           aoTrocarEstiloRotulo={vazio}
+          aoTrocarContorno={vazio}
         />,
       ),
     )
@@ -524,5 +525,69 @@ describe('desfazer edição do painel', () => {
 
     expect(p().cor).toBe('#8a4340')
     expect(p().estado).toBe('limpa')
+  })
+})
+
+describe('contorno da sala pode ser desligado', () => {
+  /**
+   * Compor planta com salas SOBREPOSTAS é legítimo — salão grande de fundo, cômodos por cima
+   * — e cada encosto deixava traço duplo. A tentativa anterior foi dissolver a parede
+   * automaticamente onde duas peças de massa se tocavam; ela apagou o contorno de plantas
+   * inteiras em que a sobreposição era de propósito, e foi revertida. Quem decide qual linha
+   * sobra é o mestre.
+   */
+  it.each(TIPOS_SALA)('%s nasce COM contorno', (tipo) => {
+    const editor = criarEditorDeTeste()
+    const id = criarSala(editor, tipo)
+    expect(props(editor, id).contorno).toBe(true)
+  })
+
+  it.each(TIPOS_SALA)('%s liga e desliga pelo painel', (tipo) => {
+    const editor = criarEditorDeTeste()
+    const acoes = montarAcoes(editor)
+    const id = criarSala(editor, tipo)
+
+    act(() => acoes.atual.aoTrocarContorno(id, false))
+    expect(props(editor, id).contorno).toBe(false)
+
+    act(() => acoes.atual.aoTrocarContorno(id, true))
+    expect(props(editor, id).contorno).toBe(true)
+  })
+
+  it('desligado, o SVG sai sem traço — e o piso continua lá', () => {
+    const comLinha = renderParaSvg(
+      desenharCorpoSalaPoligono({ pontos: PONTOS_SALA_POLIGONO_PADRAO, estado: 'sem-info', rotulo: '', cor: '' }),
+    )
+    expect(comLinha).toContain('stroke-width="2"')
+
+    const semLinha = renderParaSvg(
+      desenharCorpoSalaPoligono({
+        pontos: PONTOS_SALA_POLIGONO_PADRAO,
+        estado: 'sem-info',
+        rotulo: '',
+        cor: '',
+        contorno: false,
+      }),
+    )
+    expect(semLinha).toContain('stroke-width="0"')
+    // a mancha de piso é o que sobra: sem ela a peça sumiria da tela
+    expect(semLinha).toContain('<polygon')
+    expect(semLinha).toContain('fill=')
+  })
+
+  it('escolher uma espessura RELIGA o contorno', () => {
+    // exigir dois cliques para voltar a ver a linha seria pegadinha
+    const editor = criarEditorDeTeste()
+    const acoes = montarAcoes(editor)
+    const id = criarSala(editor, 'sala-mapa')
+
+    act(() => acoes.atual.aoTrocarContorno(id, false))
+    act(() => {
+      acoes.atual.aoTrocarContorno(id, true)
+      acoes.atual.aoTrocarEspessura(id, 6)
+    })
+
+    expect(props(editor, id).contorno).toBe(true)
+    expect(props(editor, id).espessura).toBe(6)
   })
 })

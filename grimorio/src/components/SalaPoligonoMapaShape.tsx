@@ -48,6 +48,8 @@ declare module '@tldraw/tlschema' {
       rotuloAncora: string
       /** nome escrito de baixo para cima, para cômodo estreito e alto */
       rotuloVertical: boolean
+      /** desenha a linha de contorno? desligado deixa só a mancha de piso */
+      contorno: boolean
     }
   }
 }
@@ -94,6 +96,7 @@ const versoes = createShapePropsMigrationIds('sala-poligono-mapa', {
   AdicionaCenarioId: 1,
   AdicionaEspessura: 2,
   AdicionaEstiloRotulo: 3,
+  AdicionaContorno: 4,
 })
 
 export class SalaPoligonoMapaShapeUtil extends ShapeUtil<SalaPoligonoMapaShapeType> {
@@ -109,6 +112,7 @@ export class SalaPoligonoMapaShapeUtil extends ShapeUtil<SalaPoligonoMapaShapeTy
     rotuloTamanho: T.positiveNumber,
     rotuloAncora: T.string,
     rotuloVertical: T.boolean,
+    contorno: T.boolean,
   }
 
   static override migrations = createShapePropsMigrationSequence({
@@ -156,6 +160,20 @@ export class SalaPoligonoMapaShapeUtil extends ShapeUtil<SalaPoligonoMapaShapeTy
           delete props.rotuloVertical
         },
       },
+      {
+        /**
+         * Contorno ligado/desligado. Sobe LIGADO em todo mapa antigo: é o que a sala sempre
+         * desenhou, e uma migração que apaga a linha de todo cômodo do cofre seria uma
+         * edição em massa que ninguém pediu.
+         */
+        id: versoes.AdicionaContorno,
+        up(props) {
+          if (props.contorno === undefined) props.contorno = true
+        },
+        down(props) {
+          delete props.contorno
+        },
+      },
     ],
   })
 
@@ -170,6 +188,7 @@ export class SalaPoligonoMapaShapeUtil extends ShapeUtil<SalaPoligonoMapaShapeTy
       rotuloTamanho: FONTE_ROTULO_PADRAO,
       rotuloAncora: 'topo',
       rotuloVertical: false,
+      contorno: true,
     }
   }
 
@@ -360,7 +379,7 @@ export class SalaPoligonoMapaShapeUtil extends ShapeUtil<SalaPoligonoMapaShapeTy
  * "ainda não li os cenários" — o porquê inteiro está em `resolverVinculoSala`.
  */
 function CorpoSalaPoligono({ shape }: { shape: SalaPoligonoMapaShapeType }) {
-  const { pontos, estado, rotulo, cor, cenarioId, espessura, rotuloTamanho, rotuloAncora, rotuloVertical } =
+  const { pontos, estado, rotulo, cor, cenarioId, espessura, rotuloTamanho, rotuloAncora, rotuloVertical, contorno } =
     shape.props
   const nomeCenario = useApp((s) => (cenarioId ? s.cenarios[cenarioId]?.nome : undefined))
   const carregando = useApp((s) => s.carregando)
@@ -380,6 +399,7 @@ function CorpoSalaPoligono({ shape }: { shape: SalaPoligonoMapaShapeType }) {
         espessura,
         vinculo,
         estiloRotulo: { tamanho: rotuloTamanho, ancora: rotuloAncora, vertical: rotuloVertical },
+        contorno,
       })}
     </SVGContainer>
   )

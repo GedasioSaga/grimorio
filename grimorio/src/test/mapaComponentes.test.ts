@@ -87,6 +87,7 @@ describe('shapes próprios do Mapa registram tipo e props', () => {
       'rotuloTamanho',
       'rotuloAncora',
       'rotuloVertical',
+      'contorno',
     ])
   })
 
@@ -121,6 +122,7 @@ describe('shapes próprios do Mapa registram tipo e props', () => {
       'rotuloTamanho',
       'rotuloAncora',
       'rotuloVertical',
+      'contorno',
     ])
   })
 

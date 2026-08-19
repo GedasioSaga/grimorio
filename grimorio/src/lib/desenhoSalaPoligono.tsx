@@ -28,6 +28,8 @@ export interface DesenharCorpoSalaPoligonoProps {
   vinculo?: VinculoSala
   /** tamanho, posição e orientação do nome do cômodo — ver `layoutDoRotulo` */
   estiloRotulo?: EstiloRotulo
+  /** desenha a linha de contorno? ausente conta como SIM — ver `desenhoSala.tsx` */
+  contorno?: boolean
 }
 
 export function desenharCorpoSalaPoligono({
@@ -38,6 +40,7 @@ export function desenharCorpoSalaPoligono({
   espessura,
   vinculo,
   estiloRotulo,
+  contorno = true,
 }: DesenharCorpoSalaPoligonoProps) {
   const aparencia = aparenciaDaSala(estado, cor || undefined)
   // `> 0` e não `??`: traço 0 é uma sala sem contorno, indistinguível de "sumiu" no escuro.
@@ -65,8 +68,8 @@ export function desenharCorpoSalaPoligono({
       <polygon
         points={pontosSvg}
         fill={aparencia.preenchimento}
-        stroke={aparencia.contorno}
-        strokeWidth={tracoPx}
+        stroke={contorno ? aparencia.contorno : 'none'}
+        strokeWidth={contorno ? tracoPx : 0}
         strokeLinejoin="round"
       />
       <g transform={texto.transform || undefined}>
