@@ -9,7 +9,7 @@ import {
   type RecordProps,
   type TLShape,
 } from 'tldraw'
-import { vaosPorAresta } from '../lib/ancoraPortaEditor'
+import { vaosDoContorno } from '../lib/ancoraPortaEditor'
 import { useApp } from '../state/store'
 import { desenharCorpoSala } from '../lib/desenhoSala'
 import { ESPESSURA_CONTORNO_SALA, FONTE_ROTULO_PADRAO } from '../lib/salaMapa'
@@ -222,7 +222,7 @@ function CorpoSala({ shape }: { shape: SalaMapaShapeType }) {
   // nome do cenário vinculado (se existir) é o bastante pro resolvedor puro decidir
   // vinculado/quebrado/sem-vínculo
   /**
-   * Vãos que as portas ancoradas abrem no contorno desta sala.
+   * Vãos do contorno: os das portas ancoradas MAIS os das peças de massa encostadas.
    *
    * Lido aqui, e não passado por prop, porque a relação é da PORTA para a sala: a sala não
    * guarda lista de portas (isso duplicaria o vínculo em dois lugares e os dois divergiriam
@@ -230,7 +230,7 @@ function CorpoSala({ shape }: { shape: SalaMapaShapeType }) {
    * porta, então o vão aparece e some sozinho.
    */
   const editor = useEditor()
-  const vaos = useValue('sala-vaos-de-porta', () => vaosPorAresta(editor, shape.id), [editor, shape.id])
+  const vaos = useValue('sala-vaos-contorno', () => vaosDoContorno(editor, shape.id), [editor, shape.id])
 
   const nomeCenario = useApp((s) => (cenarioId ? s.cenarios[cenarioId]?.nome : undefined))
   // `carregando` separa "cenário sumiu" de "ainda não li os cenários" — as duas chegam como

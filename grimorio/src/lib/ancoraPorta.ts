@@ -183,21 +183,8 @@ export function reprojetarAncora(
 export function trechosSemVao(
   vaos: Array<{ inicio: number; fim: number }>,
 ): Array<{ inicio: number; fim: number }> {
-  const limpos = vaos
-    .map((v) => ({ inicio: Math.max(0, Math.min(v.inicio, v.fim)), fim: Math.min(1, Math.max(v.inicio, v.fim)) }))
-    .filter((v) => v.fim > v.inicio)
-    .sort((x, y) => x.inicio - y.inicio)
-
-  if (limpos.length === 0) return [{ inicio: 0, fim: 1 }]
-
-  // funde os que se tocam antes de recortar: dois vãos sobrepostos recortados em sequência
-  // deixariam um traço fantasma de comprimento negativo entre eles.
-  const fundidos: Array<{ inicio: number; fim: number }> = [limpos[0]]
-  for (const v of limpos.slice(1)) {
-    const ultimo = fundidos[fundidos.length - 1]
-    if (v.inicio <= ultimo.fim) ultimo.fim = Math.max(ultimo.fim, v.fim)
-    else fundidos.push({ ...v })
-  }
+  const fundidos = fundirIntervalos(vaos)
+  if (fundidos.length === 0) return [{ inicio: 0, fim: 1 }]
 
   const trechos: Array<{ inicio: number; fim: number }> = []
   let cursor = 0
@@ -207,4 +194,34 @@ export function trechosSemVao(
   }
   if (cursor < 1) trechos.push({ inicio: cursor, fim: 1 })
   return trechos
+}
+
+/**
+ * Normaliza uma lista de intervalos 0..1: limita à faixa, descarta os vazios, ordena e FUNDE
+ * os que se tocam.
+ *
+ * Fundir antes de qualquer conta é o que impede duas fontes de vão de contarem o mesmo pedaço
+ * duas vezes — a porta e a parede vizinha frequentemente cobrem o mesmo trecho, e sem a fusão
+ * a soma dá o dobro e o recorte deixa um traço de comprimento negativo entre eles.
+ */
+export function fundirIntervalos(
+  intervalos: Array<{ inicio: number; fim: number }>,
+): Array<{ inicio: number; fim: number }> {
+  const limpos = intervalos
+    .map((v) => ({
+      inicio: Math.max(0, Math.min(v.inicio, v.fim)),
+      fim: Math.min(1, Math.max(v.inicio, v.fim)),
+    }))
+    .filter((v) => v.fim > v.inicio)
+    .sort((x, y) => x.inicio - y.inicio)
+
+  if (limpos.length === 0) return []
+
+  const fundidos: Array<{ inicio: number; fim: number }> = [limpos[0]]
+  for (const v of limpos.slice(1)) {
+    const ultimo = fundidos[fundidos.length - 1]
+    if (v.inicio <= ultimo.fim) ultimo.fim = Math.max(ultimo.fim, v.fim)
+    else fundidos.push({ ...v })
+  }
+  return fundidos
 }
