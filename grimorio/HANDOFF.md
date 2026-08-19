@@ -5,62 +5,72 @@ Retrato para retomar sem contexto. **Código ganha de qualquer afirmação daqui
 ## Loop de construções — gauntlet contra Dungeon Scrawl
 
 Bar: **Dungeon Scrawl** (dungeonscrawl.com), com Dungeondraft/Inkarnate de apoio. Comparação
-cega em três lentes (construir / editar / legibilidade na mesa), rótulos removidos, ordem
-alternada por rodada. Escopo travado nas peças de CONSTRUÇÃO — nada de itens, fichas, camadas.
+cega em três lentes (construir / editar / legibilidade na mesa), rótulos removidos, ordem A/B
+alternada a cada rodada para nenhum juiz ver a mesma letra duas vezes seguidas. Escopo travado
+nas peças de CONSTRUÇÃO.
 
-Suíte: **1755 PASS / 0 FAIL**. `npx tsc --noEmit` limpo.
+**Placar: 0×3 → 0×3 → 1×3 → 2×3.** Publicado como v0.12.0.
+Suíte: **1821 PASS / 0 FAIL**. `tsc` e `npm run build` limpos.
 
-### Rodada 1 — placar 0×3
+| Rodada | Placar | Gap eleito | Estado |
+|---|---|---|---|
+| 1 | 0×3 | Peça nascia no centro da viewport em vez de ser desenhada no canvas | fechado |
+| 2 | 0×3 | Inserir e remover vértice na sala em polígono | fechado |
+| 3 | 1×3 | Porta que se ancora na parede e abre vão nela | fechado |
+| 4 | 2×3 | Parede dupla entre cômodos encostados | fechado |
 
-Gap eleito pelos três juízes: **a peça nascia no centro da viewport em vez de ser desenhada
-no canvas**. Custo medido: masmorra de oito salas ≈ 50 idas à gaveta, toda peça fora da grade
-(o centro da viewport é ponto fracionário e nada passava por `maybeSnapToGrid`), e todas
-nascendo no mesmo ponto, uma sobre a outra.
+### O que cada rodada entregou
 
-**Fechado.** Toda construção virou ferramenta de desenho:
+**R1 — construção se desenha.** Todas as peças viraram ferramenta (`FerramentasCaixaMapa.ts`,
+`SalaPoligonoMapaTool.ts`): clique coloca centrado no ponto, arrasto desenha do tamanho
+arrastado, os dois com encaixe na grade. Antes cada peça nascia no centro da viewport por um
+botão da gaveta — masmorra de oito salas passava de cinquenta idas à gaveta, e nada passava
+por `maybeSnapToGrid`.
 
-- `src/components/FerramentasCaixaMapa.ts` — sala, corredor, muralha, torre, escada, porta.
-  Herdam `BaseBoxShapeTool`, que já dá clique-coloca-centrado, arrasto-desenha, encaixe na
-  grade, marca de histórico e volta ao select. `RetanguloMapaTool` já usava esse caminho
-  desde sempre; o que faltava era estendê-lo.
-- `src/components/SalaPoligonoMapaTool.ts` — ferramenta própria, porque a sala em polígono não
-  tem `w`/`h` e a base escreve `props: { w: 1, h: 1 }` ao começar o arrasto. O arrasto reescala
-  a silhueta em L a cada movimento (`escalarPontosPara`), então o que está sob o cursor já é a
-  peça final.
-- A toolbar não guarda mais tamanho de peça nenhum: o tamanho de nascença só existe em
-  `getDefaultProps`. Antes vivia nos dois lugares e o da barra vencia.
+**R2 — reformar o polígono.** Alça `create` no meio de cada aresta (inclusive a de fechamento)
+insere canto; Delete perto de um canto remove, com piso de 3. Reformar preserva nome, estado,
+cor, espessura e cenarioId.
 
-Verificado na bancada com ponteiro real: **3 arrastos** = sala + corredor + sala, as três em
-múltiplo de 32px, ferramenta de volta no select.
+**R3 — porta ancorada.** Gruda na parede, assume o ângulo dela, guarda `meta.ancora` com
+`{ hospedeiroId, indiceAresta, t }`, e SEGUE a parede quando ela move, estica ou é reformada.
+Alt mantém solta. Apagar o hospedeiro DESANCORA, nunca apaga a porta. E abre vão no contorno.
 
-### Defeitos de construção corrigidos nesta leva
+**R4 — parede interna some.** Peças de massa encostadas param de desenhar a parede da junção.
 
-Todos com prova negativa executada (reverter o fix → o teste falha):
+### Armadilhas que custaram tempo e vale registrar
 
-| Peça | Defeito |
-|---|---|
-| torre | Elipse com hitbox retangular. Ela existe para ficar sobreposta ao canto da muralha, então os 21% de canto morto caíam em cima da parede |
-| muralha | Cerco desenhado com `fill="none"` e hitbox cheia: clicar em qualquer chão dentro do cerco selecionava a muralha inteira |
-| 6 peças | Sem `onDoubleClick`, cada duplo clique largava um texto vazio invisível no mapa |
-| todas | `markHistoryStoppingPoint` tinha zero ocorrências no projeto: um Ctrl+Z apagava a peça inteira, não só a última edição |
-| sala, polígono | Toolbar forçava `estado: 'pendente'`, derrotando o default `'sem-info'` que o shape adotou justamente porque "o mapa saía todo vermelho" |
-| polígono | `getGeometry` com menos de 3 vértices lançava ao LER O DISCO e derrubava o mapa inteiro no `LimiteDeErro` |
-| todas | X/Y recusavam coordenada negativa em silêncio, embora o campo exibisse negativo |
+- **`isFilled: false` não é a correção de forma oca.** `getShapeAtPoint` trata forma oca num
+  ramo que começa pulando qualquer forma maior que a viewport — e muralha é sempre maior que a
+  tela. Medido: a peça ficou inselecionável. A saída é `ignoreHit`, o gancho que o tldraw usa
+  para pixel transparente. `Group2d` não serve: o construtor força `isFilled: false`.
+- **`updateShape` FUNDE o `meta`.** Omitir uma chave não a apaga — desancorar precisa gravar
+  `ancora: null`. Descoberto por teste, não por leitura.
+- **Migração nova é perigosa quando é a PRIMEIRA do shape.** Documento salvo antes de existir
+  sequência conta como versão 0 e roda o degrau; um `props.estado = 'livre'` cego teria
+  destrancado todas as portas do cofre. Todo degrau é guardado por `=== undefined`.
+- **`editor.dispatch` quer ponto em espaço de TELA.** Em vitest passa despercebido porque a
+  câmera está em 0,0 com zoom 1 e os dois espaços coincidem.
+- **Alça emite evento com `target: 'handle'`.** Evento de ponteiro em `.tl-canvas` não exercita
+  o caminho de alça.
+- **A bancada precisa montar o app INTEIRO.** Ela não registrava atalhos de teclado nem o side
+  effect de âncora; superfície de verificação que monta menos que o app real mente sobre ele.
 
-**A armadilha da muralha, que vale para a próxima peça oca:** `isFilled: false` parece a
-correção óbvia e quebra de outro jeito — `getShapeAtPoint` trata forma oca num ramo que começa
-pulando qualquer forma maior que a viewport, e muralha é sempre maior que a tela. Medido: a
-peça ficou inselecionável. A saída é `ignoreHit`, o mesmo gancho que o tldraw usa para pixel
-transparente de imagem: geometria continua preenchida (nada de ramo oco) e o acerto é recusado
-ponto a ponto no miolo. `Group2d` não serve — o construtor força `isFilled: false`.
+### Fila (não fechado)
 
-### Onde o Grimório já ganha da bar (não estragar)
+1. União booleana de verdade: duas salas encostadas ainda são duas peças, e não há subtração
+   de área (nicho, poço, pilar). O que foi resolvido é a parede dupla, não o modelo.
+2. Corredor não tem vínculo com a sala que ele liga.
+3. Peças de construção sem atalho de teclado; `r` arma a peça errada.
+4. Rotação não tem campo em lugar nenhum.
+5. Corredor, muralha, torre e escada sem nenhuma propriedade (cor, nome, estado, espessura).
+6. Seleção múltipla não edita nada no painel.
+7. Hachura da escada deriva de `w >= h`: em escada quadrada o critério vira sorte.
 
-Medida em quadrados de verdade nos campos X/Y/L/A; chips de `L×A` e folga entre peças; réguas
-com passo adaptativo; alinhar (6) e distribuir (2); edição de vértice depois de criada (o
-Dungeon Scrawl não tem); borracha que abre vão no meio da parede sem apagá-la; estado da sala
-e da porta por cor; nome com contraste automático, âncora e direção; vínculo com ficha de
-Cenário; exportação fiel; migrações que não quebram mapa antigo.
+### Custos colaterais registrados, ainda não pagos
+
+Ambos na lente `edicao`, que já ganhamos — vigiar se ela cair: a rotação do polígono ficou
+indescobrível (as alças agora são de vértice e `hideResizeHandles` está ligado), e remover
+canto depende de três condições invisíveis, onde errar a mira apaga o cômodo inteiro.
 
 ---
 
