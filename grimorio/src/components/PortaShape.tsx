@@ -6,11 +6,13 @@ import {
   createShapePropsMigrationSequence,
   type RecordProps,
   type TLShape,
+  type TLShapePartial,
 } from 'tldraw'
 // estado e cor da porta vivem na lib pura, como os da sala — ver o cabeçalho de portaMapa.ts
 import { PORTA_ESPESSURA_PADRAO, PORTA_LARGURA_PADRAO } from '../lib/portaMapa'
 import { desenharPorta } from '../lib/desenhoPorta'
 import { atenderDuploClique } from '../lib/duploCliqueMapa'
+import { ancoraParaPorta, poseDaAncora } from '../lib/ancoraPortaEditor'
 
 declare module '@tldraw/tlschema' {
   interface TLGlobalShapePropsMap {
@@ -87,6 +89,74 @@ export class PortaShapeUtil extends BaseBoxShapeUtil<PortaShapeType> {
 
   getDefaultProps(): PortaShapeType['props'] {
     return { w: PORTA_LARGURA_PADRAO, h: PORTA_ESPESSURA_PADRAO, estado: 'livre' }
+  }
+
+  /**
+   * A porta GRUDA na parede mais próxima enquanto é arrastada, e assume o ângulo dela.
+   *
+   * Antes era um retângulo colorido pousado por cima da planta: o mestre arrastava até perto,
+   * girava à mão para acertar o eixo numa parede vertical, e ajustava o encosto. Três gestos
+   * por porta — numa planta de doze cômodos com quinze portas, quarenta e cinco gestos que só
+   * existem porque a peça não sabe onde mora.
+   *
+   * O encaixe acontece no `onTranslate` (durante o arrasto) e não só no fim, para o mestre
+   * VER a porta saltar para a parede antes de soltar: encaixe que só aparece depois do gesto
+   * parece que a peça pulou sozinha.
+   *
+   * `Alt` segura a ancoragem: com ele pressionado a porta fica solta e livre, para os casos
+   * que a convenção não cobre (porta no meio de um salão, marcação de passagem secreta). Sem
+   * escape, um encaixe automático vira camisa de força.
+   *
+   * O vínculo em si é gravado no `onTranslateEnd` — durante o arrasto só a POSE muda. Gravar
+   * `meta` a cada frame encheria o histórico e faria o autosave escrever no cofre a cada
+   * pixel de movimento.
+   */
+  override onTranslate(_inicial: PortaShapeType, atual: PortaShapeType) {
+    if (this.editor.inputs.getAltKey()) return
+    const ancora = ancoraParaPorta(this.editor, atual)
+    if (!ancora) return
+    const pose = poseDaAncora(this.editor, atual, ancora)
+    if (!pose) return
+    return { id: atual.id, type: atual.type, ...pose }
+  }
+
+  /**
+   * Fim do arrasto: grava (ou apaga) o vínculo em `meta.ancora`.
+   *
+   * Soltar a porta longe de qualquer parede LIMPA o vínculo — sem isso, uma porta arrastada
+   * para longe continuaria "pertencendo" à parede antiga e voltaria para lá no primeiro
+   * redimensionamento do cômodo, parecendo teleporte.
+   */
+  override onTranslateEnd(_inicial: PortaShapeType, atual: PortaShapeType) {
+    /**
+     * Desancorar grava `ancora: null` em vez de OMITIR a chave.
+     *
+     * `updateShape` funde o `meta` com o que já existe (shallow merge), então mandar um
+     * objeto sem a chave não apaga nada — a ancoragem antiga sobrevive à fusão e a porta
+     * continua "pertencendo" à parede de onde acabou de sair. Medido por teste: soltar a
+     * porta longe mantinha o vínculo. `null` é a única forma de dizer "não tem".
+     */
+    const solta = {
+      id: atual.id,
+      type: atual.type,
+      meta: { ...atual.meta, ancora: null },
+    } as TLShapePartial<PortaShapeType>
+
+    if (this.editor.inputs.getAltKey()) return solta
+
+    const ancora = ancoraParaPorta(this.editor, atual)
+    if (!ancora) return solta
+
+    const pose = poseDaAncora(this.editor, atual, ancora)
+    return {
+      id: atual.id,
+      type: atual.type,
+      ...(pose ?? {}),
+      meta: {
+        ...atual.meta,
+        ancora: { hospedeiroId: ancora.hospedeiroId, indiceAresta: ancora.indiceAresta, t: ancora.t },
+      },
+    } as TLShapePartial<PortaShapeType>
   }
 
   /** Ver `atenderDuploClique`: sem isto, todo duplo clique nesta peça larga um texto vazio no mapa. */

@@ -1,4 +1,15 @@
-import { BaseBoxShapeUtil, SVGContainer, T, createShapePropsMigrationIds, createShapePropsMigrationSequence, type RecordProps, type TLShape } from 'tldraw'
+import {
+  BaseBoxShapeUtil,
+  SVGContainer,
+  T,
+  createShapePropsMigrationIds,
+  createShapePropsMigrationSequence,
+  useEditor,
+  useValue,
+  type RecordProps,
+  type TLShape,
+} from 'tldraw'
+import { vaosPorAresta } from '../lib/ancoraPortaEditor'
 import { useApp } from '../state/store'
 import { desenharCorpoSala } from '../lib/desenhoSala'
 import { ESPESSURA_CONTORNO_SALA, FONTE_ROTULO_PADRAO } from '../lib/salaMapa'
@@ -210,6 +221,17 @@ function CorpoSala({ shape }: { shape: SalaMapaShapeType }) {
     shape.props
   // nome do cenário vinculado (se existir) é o bastante pro resolvedor puro decidir
   // vinculado/quebrado/sem-vínculo
+  /**
+   * Vãos que as portas ancoradas abrem no contorno desta sala.
+   *
+   * Lido aqui, e não passado por prop, porque a relação é da PORTA para a sala: a sala não
+   * guarda lista de portas (isso duplicaria o vínculo em dois lugares e os dois divergiriam
+   * na primeira vez que uma porta fosse apagada). `useValue` reage a criar, mover e apagar
+   * porta, então o vão aparece e some sozinho.
+   */
+  const editor = useEditor()
+  const vaos = useValue('sala-vaos-de-porta', () => vaosPorAresta(editor, shape.id), [editor, shape.id])
+
   const nomeCenario = useApp((s) => (cenarioId ? s.cenarios[cenarioId]?.nome : undefined))
   // `carregando` separa "cenário sumiu" de "ainda não li os cenários" — as duas chegam como
   // chave ausente, e confundi-las faria toda sala ligada piscar o aviso de quebrado ao abrir
@@ -232,6 +254,7 @@ function CorpoSala({ shape }: { shape: SalaMapaShapeType }) {
         vinculo,
         espessura,
         estiloRotulo: { tamanho: rotuloTamanho, ancora: rotuloAncora, vertical: rotuloVertical },
+        vaos,
       })}
     </SVGContainer>
   )

@@ -21,6 +21,7 @@ import type { CamadaMapa } from '../lib/types'
 import { VERSAO_CAMADAS } from '../lib/camadasMapa'
 import { PLANTA_EXEMPLO_JSON } from './dadosFalsos'
 import { registrarAtalhos } from '../components/atalhosCanvas'
+import { registrarAncoraDePortas } from '../lib/ancoraPortaEditor'
 
 /**
  * Divisória interna — ferramenta NATIVA `line` do tldraw (cor/traço cinza, tamanho 's'),
@@ -161,6 +162,8 @@ export function CenaMapa() {
              *
              * Os avisos de cópia caem no vazio de propósito: a bancada não tem banner.
              */
+            // mesma ancoragem de porta do app real — a bancada tem que montar a peça inteira
+            const cancelarAncoras = registrarAncoraDePortas(editor)
             const cancelarAtalhos = registrarAtalhos(editor, {
               aoCopiar() {},
               aoFalharCopia(erro) {
@@ -173,6 +176,7 @@ export function CenaMapa() {
             return () => {
               cancelarSideEffect()
               cancelarAtalhos()
+              cancelarAncoras()
             }
           }}
         />

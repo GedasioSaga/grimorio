@@ -6,6 +6,7 @@ import { useDocumentoTldraw } from './canvasDoc'
 import { criarHandlersDeDrop } from './dropsDeEntidade'
 import { exportarCanvas } from './exportarCanvas'
 import { registrarAtalhos } from './atalhosCanvas'
+import { registrarAncoraDePortas } from '../lib/ancoraPortaEditor'
 import { PainelCamadas } from './PainelCamadas'
 import { PainelPropriedades, ProvedorContagemCamadas, ProvedorSelecaoPropriedades, type SelecaoPropriedades } from './PainelPropriedades'
 import { registrarEditor, desregistrarEditor } from '../lib/canvasAtivo'
@@ -139,6 +140,12 @@ export function MapaView({ caminho, nome }: { caminho: string; nome: string }) {
            */
           editor.updateInstanceState({ isGridMode: false })
           editor.updateDocumentSettings({ gridSize: QUADRADO_PX })
+          /**
+           * Portas ancoradas seguem a parede quando ela se move, cresce ou é reformada — ver
+           * `registrarAncoraDePortas`. Sem isto o encaixe seria cosmético: bonito no drop e
+           * desalinhado no primeiro gesto seguinte.
+           */
+          const cancelarAncoras = registrarAncoraDePortas(editor)
           const cancelarAtalhos = registrarAtalhos(editor, {
             aoCopiar() {
               setCopiaOk(true)
@@ -194,6 +201,7 @@ export function MapaView({ caminho, nome }: { caminho: string; nome: string }) {
           return () => {
             desregistrarEditor(editor)
             cancelarAtalhos()
+            cancelarAncoras()
             cancelarSideEffect()
           }
         }}
