@@ -2,75 +2,87 @@
 
 Retrato para retomar sem contexto. **Código ganha de qualquer afirmação daqui.**
 
+## v0.12.1 — conserto de regressão da v0.12.0
+
+**A v0.12.0 saiu com um bug visual sério e a v0.12.1 é o conserto.** Se alguém relatar mapa
+sem contorno nenhum, é v0.12.0 — mande atualizar.
+
+O que quebrou: a fusão automática de parede (`9efdd40`) dissolvia o contorno onde duas peças
+de massa se tocavam. A premissa estava errada — compor planta com salas SOBREPOSTAS é
+legítimo (salão grande de piso ao fundo, cômodos menores por cima), e nessa composição, que é
+comum, a regra apagou o contorno de tudo: o mapa virou uma mancha cinza.
+
+**A lição, para não repetir:** heurística não distingue "encostei duas salas para virar um
+ambiente só" de "desenhei um cômodo dentro do salão". Quem sabe é quem está desenhando. O erro
+não foi de implementação — os testes passavam e a geometria estava certa —, foi de escopo.
+
+No lugar entraram duas coisas:
+
+- **`contorno: boolean` na sala** (retangular e polígono), com botão "sem" na fileira Contorno
+  do painel, no mesmo canto em que o seletor de cor põe o "auto". Desligado sobra a mancha de
+  piso, que resolve o traço duplo em planta sobreposta — por escolha, não por adivinhação.
+  Escolher uma espessura RELIGA. Migração sobe LIGADO em todo mapa antigo.
+- **Seleção múltipla edita.** O painel só mexia numa peça; com o contorno virando opção, ligar
+  e desligar um a um em dezenas de cômodos era inutilizável. Agora estado, cor, contorno e
+  estilo do nome valem para a seleção inteira, num único Ctrl+Z (`aoAplicarEmLote`).
+
+Regras da edição em lote que valem para quem for mexer:
+- controle só acende com valor COMUM a todas; sem acordo, nada aceso (mostrar o valor da
+  primeira seria mentira)
+- estados são a INTERSEÇÃO dos tipos, não a união
+- o lote REUSA os handlers de uma peça — versão em lote com regra própria é como toolbar e
+  `getDefaultProps` divergiram e o mapa nasceu todo vermelho
+
 ## Loop de construções — gauntlet contra Dungeon Scrawl
 
-Bar: **Dungeon Scrawl** (dungeonscrawl.com), com Dungeondraft/Inkarnate de apoio. Comparação
-cega em três lentes (construir / editar / legibilidade na mesa), rótulos removidos, ordem A/B
-alternada a cada rodada para nenhum juiz ver a mesma letra duas vezes seguidas. Escopo travado
-nas peças de CONSTRUÇÃO.
+Bar: **Dungeon Scrawl**, com Dungeondraft/Inkarnate de apoio. Comparação cega em três lentes
+(construir / editar / legibilidade na mesa), rótulos removidos, ordem A/B alternada a cada
+rodada. Escopo travado nas peças de CONSTRUÇÃO.
 
-**Placar: 0×3 → 0×3 → 1×3 → 2×3.** Publicado como v0.12.0.
-Suíte: **1821 PASS / 0 FAIL**. `tsc` e `npm run build` limpos.
+**Placar: 0×3 → 0×3 → 1×3 → 2×3.** Suíte: **1822 PASS / 0 FAIL**.
 
-| Rodada | Placar | Gap eleito | Estado |
-|---|---|---|---|
-| 1 | 0×3 | Peça nascia no centro da viewport em vez de ser desenhada no canvas | fechado |
-| 2 | 0×3 | Inserir e remover vértice na sala em polígono | fechado |
-| 3 | 1×3 | Porta que se ancora na parede e abre vão nela | fechado |
-| 4 | 2×3 | Parede dupla entre cômodos encostados | fechado |
+| Rodada | Gap eleito | Estado |
+|---|---|---|
+| 1 | Peça nascia no centro da viewport em vez de ser desenhada no canvas | fechado |
+| 2 | Inserir e remover vértice na sala em polígono | fechado |
+| 3 | Porta que se ancora na parede e abre vão nela | fechado |
+| 4 | Parede dupla entre cômodos encostados | **revertido** — ver acima |
 
-### O que cada rodada entregou
+**O gap "união booleana" está MORTO como estava formulado.** Ele era dissolver parede
+automaticamente; o usuário rejeitou. Se voltar ao assunto, tem que ser união EXPLÍCITA — o
+mestre seleciona duas salas e manda unir —, nunca por proximidade.
 
-**R1 — construção se desenha.** Todas as peças viraram ferramenta (`FerramentasCaixaMapa.ts`,
-`SalaPoligonoMapaTool.ts`): clique coloca centrado no ponto, arrasto desenha do tamanho
-arrastado, os dois com encaixe na grade. Antes cada peça nascia no centro da viewport por um
-botão da gaveta — masmorra de oito salas passava de cinquenta idas à gaveta, e nada passava
-por `maybeSnapToGrid`.
-
-**R2 — reformar o polígono.** Alça `create` no meio de cada aresta (inclusive a de fechamento)
-insere canto; Delete perto de um canto remove, com piso de 3. Reformar preserva nome, estado,
-cor, espessura e cenarioId.
-
-**R3 — porta ancorada.** Gruda na parede, assume o ângulo dela, guarda `meta.ancora` com
-`{ hospedeiroId, indiceAresta, t }`, e SEGUE a parede quando ela move, estica ou é reformada.
-Alt mantém solta. Apagar o hospedeiro DESANCORA, nunca apaga a porta. E abre vão no contorno.
-
-**R4 — parede interna some.** Peças de massa encostadas param de desenhar a parede da junção.
-
-### Armadilhas que custaram tempo e vale registrar
+### Armadilhas que custaram tempo
 
 - **`isFilled: false` não é a correção de forma oca.** `getShapeAtPoint` trata forma oca num
   ramo que começa pulando qualquer forma maior que a viewport — e muralha é sempre maior que a
-  tela. Medido: a peça ficou inselecionável. A saída é `ignoreHit`, o gancho que o tldraw usa
-  para pixel transparente. `Group2d` não serve: o construtor força `isFilled: false`.
-- **`updateShape` FUNDE o `meta`.** Omitir uma chave não a apaga — desancorar precisa gravar
-  `ancora: null`. Descoberto por teste, não por leitura.
-- **Migração nova é perigosa quando é a PRIMEIRA do shape.** Documento salvo antes de existir
-  sequência conta como versão 0 e roda o degrau; um `props.estado = 'livre'` cego teria
-  destrancado todas as portas do cofre. Todo degrau é guardado por `=== undefined`.
-- **`editor.dispatch` quer ponto em espaço de TELA.** Em vitest passa despercebido porque a
-  câmera está em 0,0 com zoom 1 e os dois espaços coincidem.
-- **Alça emite evento com `target: 'handle'`.** Evento de ponteiro em `.tl-canvas` não exercita
-  o caminho de alça.
-- **A bancada precisa montar o app INTEIRO.** Ela não registrava atalhos de teclado nem o side
-  effect de âncora; superfície de verificação que monta menos que o app real mente sobre ele.
+  tela. Medido: a peça ficou inselecionável. A saída é `ignoreHit`. `Group2d` não serve: o
+  construtor força `isFilled: false`.
+- **`updateShape` FUNDE o `meta`.** Omitir chave não apaga — desancorar porta grava
+  `ancora: null`.
+- **Primeira migração de um shape roda em TODO documento salvo** (sem sequência = versão 0).
+  Um `props.estado = 'livre'` cego teria destrancado todas as portas do cofre. Todo degrau é
+  guardado por `=== undefined`.
+- **`editor.dispatch` quer ponto em espaço de TELA.** Em vitest passa despercebido: câmera em
+  0,0 com zoom 1 faz os dois espaços coincidirem.
+- **Alça emite evento com `target: 'handle'`** — ponteiro em `.tl-canvas` não exercita alça.
+- **A bancada precisa montar o app INTEIRO** (atalhos, side effects). Ela já reprovou um
+  painel por não montar.
 
-### Fila (não fechado)
+### Fila
 
-1. União booleana de verdade: duas salas encostadas ainda são duas peças, e não há subtração
-   de área (nicho, poço, pilar). O que foi resolvido é a parede dupla, não o modelo.
-2. Corredor não tem vínculo com a sala que ele liga.
+1. Corredor não tem vínculo com a sala que ele liga.
+2. União EXPLÍCITA de salas (seleção + comando), e subtração de área.
 3. Peças de construção sem atalho de teclado; `r` arma a peça errada.
 4. Rotação não tem campo em lugar nenhum.
-5. Corredor, muralha, torre e escada sem nenhuma propriedade (cor, nome, estado, espessura).
-6. Seleção múltipla não edita nada no painel.
-7. Hachura da escada deriva de `w >= h`: em escada quadrada o critério vira sorte.
+5. Corredor, muralha, torre e escada sem nenhuma propriedade.
+6. Hachura da escada deriva de `w >= h`: em escada quadrada o critério vira sorte.
 
-### Custos colaterais registrados, ainda não pagos
+### Custos colaterais registrados, não pagos
 
-Ambos na lente `edicao`, que já ganhamos — vigiar se ela cair: a rotação do polígono ficou
-indescobrível (as alças agora são de vértice e `hideResizeHandles` está ligado), e remover
-canto depende de três condições invisíveis, onde errar a mira apaga o cômodo inteiro.
+Na lente `edicao`, que já ganhamos — vigiar se cair: rotação do polígono ficou indescobrível
+(alças agora são de vértice, `hideResizeHandles` ligado), e remover canto depende de três
+condições invisíveis, onde errar a mira apaga o cômodo inteiro.
 
 ---
 
