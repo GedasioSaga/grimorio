@@ -229,6 +229,7 @@ describe('painel desenha os mesmos controles para os dois formatos', () => {
           aoTrocarPreenchido={vazio}
           aoTrocarEstiloRotulo={vazio}
           aoTrocarContorno={vazio}
+          aoAplicarEmLote={vazio}
         />,
       ),
     )
@@ -589,5 +590,70 @@ describe('contorno da sala pode ser desligado', () => {
 
     expect(props(editor, id).contorno).toBe(true)
     expect(props(editor, id).espessura).toBe(6)
+  })
+})
+
+describe('editar várias peças de uma vez', () => {
+  /**
+   * O painel só editava UMA peça. Numa planta de dezenas de cômodos, qualquer ajuste em massa
+   * — tirar o contorno, uniformizar o corpo do nome, marcar uma ala como limpa — era clique a
+   * clique, e o gesto simplesmente não existia.
+   */
+  function tresSalas(editor: Editor) {
+    return [criarSala(editor, 'sala-mapa'), criarSala(editor, 'sala-mapa'), criarSala(editor, 'sala-poligono-mapa')]
+  }
+
+  it('aplica em todas as peças da seleção', () => {
+    const editor = criarEditorDeTeste()
+    const acoes = montarAcoes(editor)
+    const ids = tresSalas(editor)
+
+    act(() => acoes.atual.aoAplicarEmLote(ids, (id) => acoes.atual.aoTrocarContorno(id, false)))
+
+    for (const id of ids) expect(props(editor, id).contorno, id).toBe(false)
+  })
+
+  it('o lote inteiro é UM Ctrl+Z', () => {
+    // sem isto, desligar o contorno de quarenta cômodos custaria quarenta desfazeres
+    const editor = criarEditorDeTeste()
+    const acoes = montarAcoes(editor)
+    const ids = tresSalas(editor)
+
+    act(() => acoes.atual.aoAplicarEmLote(ids, (id) => acoes.atual.aoTrocarCor(id, '#8a4340')))
+    for (const id of ids) expect(props(editor, id).cor).toBe('#8a4340')
+
+    act(() => void editor.undo())
+    for (const id of ids) expect(props(editor, id).cor, id).toBe('')
+  })
+
+  it('lote vazio não abre passo de histórico', () => {
+    const editor = criarEditorDeTeste()
+    const acoes = montarAcoes(editor)
+    const id = criarSala(editor, 'sala-mapa')
+    act(() => acoes.atual.aoTrocarCor(id, '#8a4340'))
+
+    act(() => acoes.atual.aoAplicarEmLote([], () => {}))
+    act(() => void editor.undo())
+
+    // o undo tem que desfazer a COR, não um passo vazio
+    expect(props(editor, id).cor).toBe('')
+  })
+
+  it('respeita os guards de tipo das ações de uma peça', () => {
+    // reusar os handlers de uma peça é o que garante isto: a versão em lote não pode ter
+    // regra própria, senão as duas divergem — foi o que aconteceu entre a toolbar e o
+    // getDefaultProps, e o mapa nasceu todo vermelho.
+    const editor = criarEditorDeTeste()
+    const acoes = montarAcoes(editor)
+    const sala = criarSala(editor, 'sala-mapa')
+    const porta = createShapeId()
+    editor.createShape({ id: porta, type: 'porta-mapa', x: 0, y: 0 } as Parameters<
+      typeof editor.createShape
+    >[0])
+
+    act(() => acoes.atual.aoAplicarEmLote([sala, porta], (id) => acoes.atual.aoTrocarCor(id, '#8a4340')))
+
+    expect(props(editor, sala).cor).toBe('#8a4340')
+    expect(props(editor, porta).cor).toBeUndefined()
   })
 })

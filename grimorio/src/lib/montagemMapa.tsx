@@ -354,6 +354,7 @@ export interface AcoesPainelPropriedadesMapa {
   aoTrocarPreenchido: (id: TLShapeId, preenchido: boolean) => void
   aoTrocarEstiloRotulo: (id: TLShapeId, estilo: EstiloRotuloPainel) => void
   aoTrocarContorno: (id: TLShapeId, ligado: boolean) => void
+  aoAplicarEmLote: (ids: TLShapeId[], aplicar: (id: TLShapeId) => void) => void
 }
 
 /**
@@ -365,6 +366,8 @@ export interface AcoesPainelPropriedadesMapa {
  */
 export function usePainelPropriedadesMapa(editorRef: React.RefObject<Editor | null>): AcoesPainelPropriedadesMapa {
   const [pegandoCorParaId, setPegandoCorParaId] = useState<TLShapeId | null>(null)
+  /** ligado enquanto `aoAplicarEmLote` roda — ver `marcar` */
+  const emLoteRef = useRef(false)
 
   /**
    * Abre um passo de histórico antes de escrever. **Toda** ação do painel passa por aqui.
@@ -383,7 +386,37 @@ export function usePainelPropriedadesMapa(editorRef: React.RefObject<Editor | nu
    * do tldraw (marcar no pointer-down e comprimir até o pointer-up), não remover a marca.
    */
   function marcar(nome: string) {
+    // dentro de um lote a marca já foi aberta por `aoAplicarEmLote`: deixar cada peça abrir a
+    // sua faria um clique em 40 cômodos custar 40 Ctrl+Z para desfazer.
+    if (emLoteRef.current) return
     editorRef.current?.markHistoryStoppingPoint(nome)
+  }
+
+  /**
+   * Aplica a MESMA ação em várias peças como um gesto só.
+   *
+   * Existe porque o painel só editava uma peça por vez, e numa planta de dezenas de cômodos
+   * qualquer ajuste em massa — tirar o contorno, uniformizar o corpo do nome, marcar uma ala
+   * inteira como limpa — era clique a clique. Era o item "seleção múltipla não edita nada" da
+   * fila, e ele aparece na prática assim que a planta cresce.
+   *
+   * Reusa os handlers de uma peça em vez de duplicá-los em versão de lote: assim não existe a
+   * chance de a versão em lote e a de uma peça divergirem numa regra (o guard de tipo, o
+   * mínimo de espessura, o religar do contorno) — divergir é o que aconteceu com a toolbar e
+   * o `getDefaultProps`, e custou o mapa nascer todo vermelho.
+   */
+  function aoAplicarEmLote(ids: TLShapeId[], aplicar: (id: TLShapeId) => void) {
+    const editor = editorRef.current
+    if (!editor || ids.length === 0) return
+    editor.markHistoryStoppingPoint('painel-lote')
+    emLoteRef.current = true
+    try {
+      editor.run(() => {
+        for (const id of ids) aplicar(id)
+      })
+    } finally {
+      emLoteRef.current = false
+    }
   }
 
   /**
@@ -616,6 +649,7 @@ export function usePainelPropriedadesMapa(editorRef: React.RefObject<Editor | nu
     aoTrocarPreenchido,
     aoTrocarEstiloRotulo,
     aoTrocarContorno,
+    aoAplicarEmLote,
   }
 }
 

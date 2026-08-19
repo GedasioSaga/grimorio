@@ -77,7 +77,30 @@ export type SelecaoPropriedades =
       /** `meta.camada` da peça; vazio quando ela nunca foi carimbada (mapa antigo). */
       camadasDaSelecao: string[]
     }
-  | { tipo: 'multi'; w: number; h: number; camadasDaSelecao: string[] }
+  | {
+      tipo: 'multi'
+      w: number
+      h: number
+      /** ids selecionados, para as ações em lote */
+      ids: TLShapeId[]
+      /** tipos distintos na seleção; uma só entrada = seleção homogênea */
+      tiposShape: string[]
+      /**
+       * Valor comum a TODAS as peças selecionadas, ou `undefined` quando elas discordam.
+       *
+       * Mostrar o valor da primeira peça seria mentira: o usuário veria "azul" com metade da
+       * seleção vermelha e concluiria que já está tudo azul. `undefined` deixa o controle sem
+       * opção acesa, que é a verdade — "não há um valor, escolha um".
+       */
+      estado?: string
+      cor?: string
+      espessura?: number
+      contorno?: boolean
+      rotuloTamanho?: number
+      rotuloAncora?: AncoraRotulo
+      rotuloVertical?: boolean
+      camadasDaSelecao: string[]
+    }
   | null
 
 /**
@@ -155,7 +178,35 @@ export function SelecaoPropriedadesBridge() {
       if (ids.length > 1) {
         const bounds = editor.getSelectionPageBounds()
         if (!bounds) return null
-        return { tipo: 'multi', w: bounds.w, h: bounds.h, camadasDaSelecao }
+        const formas = ids.map((sid) => editor.getShape(sid)).filter((f): f is NonNullable<typeof f> => !!f)
+
+        /** Valor da prop quando TODAS concordam; `undefined` quando discordam. */
+        function comum<T>(ler: (p: Record<string, unknown>) => T | undefined): T | undefined {
+          let visto: T | undefined
+          for (const forma of formas) {
+            const v = ler(forma.props as Record<string, unknown>)
+            if (v === undefined) return undefined
+            if (visto === undefined) visto = v
+            else if (visto !== v) return undefined
+          }
+          return visto
+        }
+
+        return {
+          tipo: 'multi',
+          w: bounds.w,
+          h: bounds.h,
+          ids,
+          tiposShape: [...new Set(formas.map((f) => f.type))],
+          estado: comum((p) => (typeof p.estado === 'string' ? p.estado : undefined)),
+          cor: comum((p) => (typeof p.cor === 'string' ? p.cor : undefined)),
+          espessura: comum((p) => (typeof p.espessura === 'number' ? p.espessura : undefined)),
+          contorno: comum((p) => (typeof p.contorno === 'boolean' ? p.contorno : undefined)),
+          rotuloTamanho: comum((p) => (typeof p.rotuloTamanho === 'number' ? p.rotuloTamanho : undefined)),
+          rotuloAncora: comum((p) => (ehAncoraRotulo(p.rotuloAncora) ? p.rotuloAncora : undefined)),
+          rotuloVertical: comum((p) => (typeof p.rotuloVertical === 'boolean' ? p.rotuloVertical : undefined)),
+          camadasDaSelecao,
+        }
       }
       const id = ids[0]
       const bounds = editor.getShapePageBounds(id)
@@ -225,6 +276,7 @@ export function PainelPropriedades({
   aoTrocarPreenchido,
   aoTrocarEstiloRotulo,
   aoTrocarContorno,
+  aoAplicarEmLote,
 }: {
   selecao: SelecaoPropriedades
   aoAplicarX: (id: TLShapeId, quadrados: number) => void
@@ -248,6 +300,8 @@ export function PainelPropriedades({
   aoTrocarEstiloRotulo: (id: TLShapeId, estilo: EstiloRotuloPainel) => void
   /** liga/desliga a linha de contorno da sala */
   aoTrocarContorno: (id: TLShapeId, ligado: boolean) => void
+  /** roda a mesma ação em várias peças como um gesto só (um Ctrl+Z) */
+  aoAplicarEmLote: (ids: TLShapeId[], aplicar: (id: TLShapeId) => void) => void
 }) {
   const [colapsado, setColapsado] = useState(false)
 
@@ -273,7 +327,56 @@ export function PainelPropriedades({
         <button type="button" className="btn-icon" title="Esconder painel" onClick={() => setColapsado(true)}>»</button>
       </div>
       {selecao.tipo === 'multi' ? (
-        <div className="painel-propriedades-multi">{medidaMulti(selecao.w, selecao.h)}</div>
+        <>
+          <div className="painel-propriedades-multi">
+            {selecao.ids.length} peças · {medidaMulti(selecao.w, selecao.h)}
+          </div>
+          {(() => {
+            const lote = (aplicar: (id: TLShapeId) => void) => aoAplicarEmLote(selecao.ids, aplicar)
+            const soSalas = selecao.tiposShape.every((t) => ehTipoSala(t))
+            const estados = estadosComunsDaSelecao(selecao.tiposShape)
+            return (
+              <>
+                {estados.length > 0 && (
+                  <SeletorEstado
+                    opcoes={estados}
+                    atual={selecao.estado}
+                    onEscolher={(estado) => lote((id) => aoTrocarEstado(id, estado))}
+                  />
+                )}
+                {soSalas && (
+                  <SeletorCor
+                    atual={selecao.cor ?? ''}
+                    onEscolher={(cor) => lote((id) => aoTrocarCor(id, cor))}
+                  />
+                )}
+                {soSalas && (
+                  <SeletorEspessura
+                    titulo="Contorno"
+                    opcoes={ESPESSURAS_SALA}
+                    espessura={selecao.espessura ?? ESPESSURA_CONTORNO_SALA}
+                    onEspessura={(px) =>
+                      lote((id) => {
+                        aoTrocarContorno(id, true)
+                        aoTrocarEspessura(id, px)
+                      })
+                    }
+                    desligado={selecao.contorno === false}
+                    onDesligar={() => lote((id) => aoTrocarContorno(id, false))}
+                  />
+                )}
+                {soSalas && (
+                  <SeletorRotulo
+                    tamanho={selecao.rotuloTamanho ?? FONTE_ROTULO_PADRAO}
+                    ancora={selecao.rotuloAncora ?? 'topo'}
+                    vertical={selecao.rotuloVertical ?? false}
+                    onMudar={(estilo) => lote((id) => aoTrocarEstiloRotulo(id, estilo))}
+                  />
+                )}
+              </>
+            )
+          })()}
+        </>
       ) : (
         // key = id da forma: força remount ao trocar de seleção, descartando rascunho
         // de edição em andamento de uma forma que deixou de ser a selecionada.
@@ -519,6 +622,21 @@ function CampoQuadrado({
       />
     </label>
   )
+}
+
+/**
+ * Estados que TODOS os tipos da seleção aceitam.
+ *
+ * Interseção e não união: oferecer "trancada" com uma sala na seleção deixaria o clique sem
+ * efeito em metade das peças, e um controle que às vezes não faz nada é pior que um controle
+ * ausente. Tipos sem estado em comum devolvem lista vazia e o seletor some.
+ */
+function estadosComunsDaSelecao(tipos: string[]): Array<{ id: string; rotulo: string; cor: string }> {
+  if (tipos.length === 0) return []
+  const listas = tipos.map((t) => estadosDaPeca(t))
+  if (listas.some((l) => l.length === 0)) return []
+  const [primeira, ...resto] = listas
+  return primeira.filter((op) => resto.every((l) => l.some((o) => o.id === op.id)))
 }
 
 /**
