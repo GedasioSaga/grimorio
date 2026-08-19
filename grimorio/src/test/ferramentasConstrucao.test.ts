@@ -2,6 +2,7 @@
 import { describe, expect, it } from 'vitest'
 import { createShapeId, type Editor } from 'tldraw'
 import { arrastar, clicar, criarEditorDeTeste } from './ajudaEditorMapa'
+import { registrarAtalhos } from '../components/atalhosCanvas'
 import { QUADRADO_PX } from '../lib/quadrados'
 import { limitesDoPoligono, PONTOS_SALA_POLIGONO_PADRAO } from '../lib/salaPoligonoMapa'
 
@@ -206,5 +207,234 @@ describe('muralha é um anel, não um bloco', () => {
     ]) {
       expect(clique(editor, x, y), `borda ${x},${y}`).toBe(muralha)
     }
+  })
+})
+
+describe('reformar a sala em polígono pelas alças', () => {
+  function poligono(editor: Editor, pontos: Array<{ x: number; y: number }>) {
+    const id = createShapeId()
+    editor.createShape({ id, type: 'sala-poligono-mapa', x: 0, y: 0, props: { pontos } } as Parameters<
+      typeof editor.createShape
+    >[0])
+    return id
+  }
+  const pontosDe = (editor: Editor, id: ReturnType<typeof createShapeId>) =>
+    (editor.getShape(id)!.props as { pontos: Array<{ x: number; y: number }> }).pontos
+
+  it('há uma alça `create` por ARESTA, incluindo a de fechamento', () => {
+    const editor = criarEditorDeTeste()
+    const id = poligono(editor, [
+      { x: 0, y: 0 },
+      { x: 100, y: 0 },
+      { x: 100, y: 100 },
+      { x: 0, y: 100 },
+    ])
+    const alcas = editor.getShapeHandles(id)!
+    expect(alcas.filter((h) => h.type === 'vertex')).toHaveLength(4)
+    expect(alcas.filter((h) => h.type === 'create')).toHaveLength(4)
+  })
+
+  it('arrastar a alça do meio INSERE um canto, e o arrasto continua nele', () => {
+    const editor = criarEditorDeTeste()
+    const id = poligono(editor, [
+      { x: 0, y: 0 },
+      { x: 100, y: 0 },
+      { x: 100, y: 100 },
+      { x: 0, y: 100 },
+    ])
+    const forma = editor.getShape(id)!
+    const util = editor.getShapeUtil(forma) as {
+      onHandleDragStart?: (s: typeof forma, i: unknown) => unknown
+      onHandleDrag?: (s: typeof forma, i: unknown) => unknown
+    }
+    const alcaCriar = editor.getShapeHandles(id)!.find((h) => h.type === 'create' && h.id === 'criar-0')!
+
+    // o start insere UMA vez
+    const depoisStart = util.onHandleDragStart!(forma, { handle: { ...alcaCriar } }) as {
+      props: { pontos: Array<{ x: number; y: number }> }
+    }
+    expect(depoisStart.props.pontos).toHaveLength(5)
+
+    // e os movimentos seguintes movem o canto novo em vez de inserir outro. `DraggingHandle`
+    // reenvia o MESMO id o gesto inteiro, então inserir no drag empilharia dezenas de cantos.
+    editor.updateShape({ id, type: 'sala-poligono-mapa', props: depoisStart.props } as Parameters<
+      typeof editor.updateShape
+    >[0])
+    let atual = editor.getShape(id)!
+    for (const y of [-20, -40, -60]) {
+      const mudanca = util.onHandleDrag!(atual, { handle: { ...alcaCriar, x: 50, y } }) as {
+        props: { pontos: Array<{ x: number; y: number }> }
+      }
+      editor.updateShape({ id, type: 'sala-poligono-mapa', props: mudanca.props } as Parameters<
+        typeof editor.updateShape
+      >[0])
+      atual = editor.getShape(id)!
+    }
+    expect(pontosDe(editor, id)).toHaveLength(5)
+    expect(pontosDe(editor, id)[1]).toEqual({ x: 50, y: -60 })
+  })
+
+  it('reformar NÃO apaga nome, estado, cor nem vínculo — é reformar, não refazer', () => {
+    const editor = criarEditorDeTeste()
+    const id = poligono(editor, [
+      { x: 0, y: 0 },
+      { x: 100, y: 0 },
+      { x: 100, y: 100 },
+      { x: 0, y: 100 },
+    ])
+    editor.updateShape({
+      id,
+      type: 'sala-poligono-mapa',
+      props: { rotulo: 'Capela', estado: 'limpa', cor: '#8a4340', cenarioId: 'cen-9', espessura: 6 },
+    } as Parameters<typeof editor.updateShape>[0])
+
+    const forma = editor.getShape(id)!
+    const util = editor.getShapeUtil(forma) as { onHandleDragStart?: (s: typeof forma, i: unknown) => unknown }
+    const alca = editor.getShapeHandles(id)!.find((h) => h.id === 'criar-1')!
+    const mudanca = util.onHandleDragStart!(forma, { handle: { ...alca } }) as {
+      props: { pontos: Array<{ x: number; y: number }> }
+    }
+    editor.updateShape({ id, type: 'sala-poligono-mapa', props: mudanca.props } as Parameters<
+      typeof editor.updateShape
+    >[0])
+
+    const p = editor.getShape(id)!.props as Record<string, unknown>
+    expect(p.pontos).toHaveLength(5)
+    expect([p.rotulo, p.estado, p.cor, p.cenarioId, p.espessura]).toEqual([
+      'Capela',
+      'limpa',
+      '#8a4340',
+      'cen-9',
+      6,
+    ])
+  })
+
+  it('a hitbox acompanha o canto novo', () => {
+    const editor = criarEditorDeTeste()
+    const id = poligono(editor, [
+      { x: 0, y: 0 },
+      { x: 100, y: 0 },
+      { x: 100, y: 100 },
+      { x: 0, y: 100 },
+    ])
+    // (150,50) está fora do quadrado
+    expect(editor.getShapeAtPoint({ x: 150, y: 50 }, { hitInside: true })?.id).not.toBe(id)
+
+    editor.updateShape({
+      id,
+      type: 'sala-poligono-mapa',
+      props: {
+        pontos: [
+          { x: 0, y: 0 },
+          { x: 200, y: 0 },
+          { x: 200, y: 100 },
+          { x: 0, y: 100 },
+        ],
+      },
+    } as Parameters<typeof editor.updateShape>[0])
+
+    expect(editor.getShapeAtPoint({ x: 150, y: 50 }, { hitInside: true })?.id).toBe(id)
+  })
+})
+
+describe('Delete remove o canto sob o cursor', () => {
+  /**
+   * O par da alça `create`. Testado com `registrarAtalhos` de verdade montado, porque é ele
+   * que escuta a tecla — `ShapeUtil` não recebe evento de teclado.
+   *
+   * A bancada NÃO registrava os atalhos, então este comportamento era invisível lá. Foi
+   * corrigido junto (`src/amostra/CenaMapa.tsx`): superfície de verificação que monta menos
+   * que o app real mente sobre o app real.
+   */
+  function comAtalhos() {
+    const editor = criarEditorDeTeste()
+    const cancelar = registrarAtalhos(editor, { aoCopiar() {}, aoFalharCopia() {} })
+    const id = createShapeId()
+    editor.createShape({
+      id,
+      type: 'sala-poligono-mapa',
+      x: 0,
+      y: 0,
+      props: {
+        pontos: [
+          { x: 0, y: 0 },
+          { x: 200, y: 0 },
+          { x: 200, y: 100 },
+          { x: 100, y: 100 },
+          { x: 100, y: 200 },
+          { x: 0, y: 200 },
+        ],
+      },
+    } as Parameters<typeof editor.createShape>[0])
+    editor.setSelectedShapes([id])
+    return { editor, id, cancelar }
+  }
+
+  const contar = (editor: Editor, id: ReturnType<typeof createShapeId>) =>
+    (editor.getShape(id)!.props as { pontos: unknown[] }).pontos.length
+
+  function apertarDelete(editor: Editor, pagina: { x: number; y: number }) {
+    editor.dispatch({
+      type: 'pointer',
+      name: 'pointer_move',
+      target: 'canvas',
+      pointerId: 1,
+      point: pagina,
+      shiftKey: false,
+      ctrlKey: false,
+      altKey: false,
+      metaKey: false,
+      accelKey: false,
+      button: 0,
+      isPen: false,
+    } as Parameters<typeof editor.dispatch>[0])
+    editor.emit('tick', 16)
+    editor
+      .getContainer()
+      .dispatchEvent(new KeyboardEvent('keydown', { key: 'Delete', bubbles: true, cancelable: true }))
+  }
+
+  it('cursor EM CIMA de um canto: remove aquele canto', () => {
+    const { editor, id, cancelar } = comAtalhos()
+    expect(contar(editor, id)).toBe(6)
+    apertarDelete(editor, { x: 200, y: 100 })
+    expect(contar(editor, id)).toBe(5)
+    cancelar()
+  })
+
+  it('cursor LONGE de canto: não trata, e o Delete do tldraw segue seu curso', () => {
+    // trocar "apagar a peça" por "apagar um canto" em toda a área da sala tiraria do
+    // usuário um gesto que ele já tem.
+    const { editor, id, cancelar } = comAtalhos()
+    apertarDelete(editor, { x: 40, y: 40 })
+    expect(contar(editor, id)).toBe(6)
+    cancelar()
+  })
+
+  it('para no piso de 3 cantos', () => {
+    const { editor, id, cancelar } = comAtalhos()
+    for (const p of [
+      { x: 200, y: 100 },
+      { x: 100, y: 100 },
+      { x: 100, y: 200 },
+      { x: 0, y: 200 },
+    ]) {
+      apertarDelete(editor, p)
+    }
+    // abaixo de 3, `new Polygon2d` lança dentro do getGeometry — que roda ao LER o disco
+    expect(contar(editor, id)).toBe(3)
+    cancelar()
+  })
+
+  it('cada remoção é um Ctrl+Z', () => {
+    const { editor, id, cancelar } = comAtalhos()
+    apertarDelete(editor, { x: 200, y: 100 })
+    apertarDelete(editor, { x: 100, y: 100 })
+    expect(contar(editor, id)).toBe(4)
+    editor.undo()
+    expect(contar(editor, id)).toBe(5)
+    editor.undo()
+    expect(contar(editor, id)).toBe(6)
+    cancelar()
   })
 })

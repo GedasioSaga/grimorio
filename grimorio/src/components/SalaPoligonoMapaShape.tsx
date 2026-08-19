@@ -18,7 +18,14 @@ import {
 import { useApp } from '../state/store'
 import { desenharCorpoSalaPoligono } from '../lib/desenhoSalaPoligono'
 import { ESPESSURA_CONTORNO_SALA, FONTE_ROTULO_PADRAO } from '../lib/salaMapa'
-import { PONTOS_SALA_POLIGONO_PADRAO, pontosSeguros, type PontoPoligono } from '../lib/salaPoligonoMapa'
+import {
+  PONTOS_SALA_POLIGONO_PADRAO,
+  inserirVertice,
+  meiosDasArestas,
+  pontosSeguros,
+  removerVertice,
+  type PontoPoligono,
+} from '../lib/salaPoligonoMapa'
 import { resolverVinculoSala } from '../lib/vinculoSalaCenario'
 
 declare module '@tldraw/tlschema' {
@@ -193,29 +200,116 @@ export class SalaPoligonoMapaShapeUtil extends ShapeUtil<SalaPoligonoMapaShapeTy
     })
   }
 
+  /**
+   * Duas famílias de alça: `vertice-<i>` move um canto que existe; `criar-<i>` fica no meio
+   * da aresta `i` e CRIA um canto novo ao ser arrastada.
+   *
+   * O `create` é o que transforma "polígono de 6 cantos fixos" em "reforme o cômodo": sem
+   * ele, converter uma sala retangular em polígono entregava 4 vértices e nenhum caminho
+   * para virar um L, T ou cruciforme — a conversão que o menu anuncia era meia promessa.
+   * A linha nativa do tldraw já faz isso (`LineShapeUtil.getHandles`); aqui a diferença é a
+   * aresta de FECHAMENTO, que uma linha aberta não tem e um cômodo tem.
+   *
+   * Índices fracionários intercalados (`getIndices(n * 2)`, pares para vértice e ímpares
+   * para o meio seguinte) porque o tldraw ordena as alças por `index` — sem intercalar, todos
+   * os meios cairiam depois de todos os vértices e a navegação por teclado entre alças
+   * andaria fora da ordem da silhueta.
+   */
   override getHandles(shape: SalaPoligonoMapaShapeType): TLHandle[] {
     // mesma lista que a geometria e o desenho usam: alça em vértice que não existe no
     // polígono desenhado é alça que arrasta o nada.
     const pontos = pontosSeguros(shape.props.pontos)
-    const indices = getIndices(pontos.length)
-    return pontos.map((p, i) => ({
+    const indices = getIndices(pontos.length * 2)
+    const meios = meiosDasArestas(pontos)
+
+    const alcas: TLHandle[] = pontos.map((p, i) => ({
       id: `vertice-${i}`,
       type: 'vertex',
-      index: indices[i] as IndexKey,
+      index: indices[i * 2] as IndexKey,
       x: p.x,
       y: p.y,
       canSnap: true,
     }))
+
+    for (const { indice, ponto } of meios) {
+      alcas.push({
+        id: `criar-${indice}`,
+        type: 'create',
+        index: indices[indice * 2 + 1] as IndexKey,
+        x: ponto.x,
+        y: ponto.y,
+        canSnap: true,
+      })
+    }
+
+    return alcas
+  }
+
+  /**
+   * O vértice novo nasce AQUI, no começo do arrasto, e não a cada movimento.
+   *
+   * `DraggingHandle` clona a alça uma vez (`initialHandle = structuredClone(handle)`,
+   * `tldraw/src/lib/tools/SelectTool/childStates/DraggingHandle.tsx`) e reenvia esse MESMO id
+   * em todo `onHandleDrag` do gesto, só trocando x/y. Se a inserção morasse no `onHandleDrag`,
+   * cada pixel de movimento acrescentaria um vértice — um arrasto curto viraria dezenas de
+   * cantos empilhados. Inserindo no start, o resto do arrasto só move o canto recém-criado
+   * (ver `indiceArrastado`).
+   */
+  override onHandleDragStart(
+    shape: SalaPoligonoMapaShapeType,
+    { handle }: TLHandleDragInfo<SalaPoligonoMapaShapeType>,
+  ) {
+    if (!handle.id.startsWith('criar-')) return
+    const aresta = Number(handle.id.slice('criar-'.length))
+    const pontos = pontosSeguros(shape.props.pontos)
+    // `{ x, y }` e não o `Vec` inteiro: `Vec` carrega um `z`, e o validador de `pontos` recusa
+    // chave desconhecida — o update morreria com `props.pontos.1.z: Unexpected property`.
+    const ponto = maybeSnapToGrid(new Vec(handle.x, handle.y), this.editor)
+    const pontos2 = inserirVertice(pontos, aresta, { x: ponto.x, y: ponto.y })
+    return { id: shape.id, type: shape.type, props: { pontos: pontos2 } }
+  }
+
+  /**
+   * Qual canto este arrasto move. `vertice-<i>` move o canto `i`; `criar-<i>` move o canto
+   * `i + 1`, que é o que `onHandleDragStart` acabou de inserir naquela aresta.
+   */
+  private indiceArrastado(idAlca: string): number | null {
+    if (idAlca.startsWith('vertice-')) {
+      const i = Number(idAlca.slice('vertice-'.length))
+      return Number.isInteger(i) ? i : null
+    }
+    if (idAlca.startsWith('criar-')) {
+      const i = Number(idAlca.slice('criar-'.length))
+      return Number.isInteger(i) ? i + 1 : null
+    }
+    return null
   }
 
   override onHandleDrag(shape: SalaPoligonoMapaShapeType, { handle }: TLHandleDragInfo<SalaPoligonoMapaShapeType>) {
-    const indice = Number(handle.id.replace('vertice-', ''))
-    if (!Number.isInteger(indice) || indice < 0 || indice >= shape.props.pontos.length) return
+    const pontos = pontosSeguros(shape.props.pontos)
+    const indice = this.indiceArrastado(handle.id)
+    if (indice === null || indice < 0 || indice >= pontos.length) return
 
     const ponto = maybeSnapToGrid(new Vec(handle.x, handle.y), this.editor)
-    const pontos = shape.props.pontos.map((p, i) => (i === indice ? { x: ponto.x, y: ponto.y } : p))
+    const novos = pontos.map((p, i) => (i === indice ? { x: ponto.x, y: ponto.y } : p))
 
-    return { ...shape, props: { ...shape.props, pontos } }
+    return { ...shape, props: { ...shape.props, pontos: novos } }
+  }
+
+  /**
+   * Remover canto: a operação inversa, e a que evita "apagar a sala e desenhar de novo"
+   * quando o mestre exagerou num vértice.
+   *
+   * Fica como método público em vez de atalho de teclado aqui dentro porque `ShapeUtil` não
+   * recebe evento de teclado — quem escuta é o `atalhosCanvas`, que chama isto. Só as
+   * `props.pontos` mudam: nome, estado, cor, espessura e vínculo com o Cenário sobrevivem,
+   * que é a diferença entre reformar o cômodo e refazê-lo.
+   */
+  static removerVerticeDoShape(
+    pontos: PontoPoligono[],
+    indice: number,
+  ): PontoPoligono[] {
+    return removerVertice(pontosSeguros(pontos), indice)
   }
 
   /**

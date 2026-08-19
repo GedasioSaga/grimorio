@@ -78,6 +78,80 @@ export function pontosDeRetangulo(w: number, h: number): PontoPoligono[] {
   ]
 }
 
+/** Piso de vértices. Abaixo disto não é polígono — é ponto ou segmento, e `Polygon2d` lança. */
+export const MINIMO_DE_VERTICES = 3
+
+/**
+ * Ponto médio de cada ARESTA, incluindo a de fechamento (último vértice → primeiro).
+ *
+ * A aresta de fechamento é o que separa isto da linha nativa do tldraw: uma linha é aberta e
+ * tem `n-1` segmentos, um polígono é fechado e tem `n`. Sem ela, o único lado do cômodo que
+ * não aceitaria um vértice novo seria justamente o que fecha a silhueta — e o usuário
+ * descobriria isso tentando.
+ *
+ * O índice devolvido é o da aresta: inserir nela produz um vértice na posição `indice + 1`.
+ */
+export function meiosDasArestas(pontos: PontoPoligono[]): Array<{ indice: number; ponto: PontoPoligono }> {
+  if (pontos.length < MINIMO_DE_VERTICES) return []
+  return pontos.map((p, i) => {
+    const proximo = pontos[(i + 1) % pontos.length]
+    return { indice: i, ponto: { x: (p.x + proximo.x) / 2, y: (p.y + proximo.y) / 2 } }
+  })
+}
+
+/** Insere `ponto` logo depois da aresta `indice`. Índice fora da faixa devolve a lista intacta. */
+export function inserirVertice(
+  pontos: PontoPoligono[],
+  indice: number,
+  ponto: PontoPoligono,
+): PontoPoligono[] {
+  if (!Number.isInteger(indice) || indice < 0 || indice >= pontos.length) return pontos
+  const saida = [...pontos]
+  saida.splice(indice + 1, 0, ponto)
+  return saida
+}
+
+/**
+ * Remove o vértice `indice`, respeitando o piso de 3.
+ *
+ * Recusar em silêncio no piso é melhor que impedir a tecla: o mestre aperta Delete de novo,
+ * nada some, e a forma continua desenhável. Deixar cair para 2 vértices faria `Polygon2d`
+ * lançar dentro do `getGeometry`, que roda ao ler o documento — o mapa inteiro cairia no
+ * `LimiteDeErro` numa sessão futura, longe do gesto que causou.
+ */
+export function removerVertice(pontos: PontoPoligono[], indice: number): PontoPoligono[] {
+  if (pontos.length <= MINIMO_DE_VERTICES) return pontos
+  if (!Number.isInteger(indice) || indice < 0 || indice >= pontos.length) return pontos
+  return pontos.filter((_, i) => i !== indice)
+}
+
+/**
+ * Índice do vértice mais próximo de `alvo`, ou `null` se o mais próximo estiver além de
+ * `limite`.
+ *
+ * É o que decide o que a tecla Delete significa numa sala em polígono: PERTO de um canto,
+ * apaga o canto; longe dele, a tecla não é tratada e o tldraw apaga a peça inteira, como em
+ * qualquer outra. Sem esse limite, Delete deixaria de conseguir apagar a sala — e trocar
+ * "apagar a peça" por "apagar um canto" em toda a área dela seria roubar um gesto que o
+ * usuário já tem.
+ */
+export function verticeMaisProximo(
+  pontos: PontoPoligono[],
+  alvo: PontoPoligono,
+  limite: number,
+): number | null {
+  let melhor: number | null = null
+  let menor = limite
+  pontos.forEach((p, i) => {
+    const d = Math.hypot(p.x - alvo.x, p.y - alvo.y)
+    if (d <= menor) {
+      menor = d
+      melhor = i
+    }
+  })
+  return melhor
+}
+
 /**
  * Reencaixa uma lista de vértices numa caixa de `w`×`h`, preservando a silhueta.
  *

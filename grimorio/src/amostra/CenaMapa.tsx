@@ -20,6 +20,7 @@ import { getCantoAtivo } from '../lib/cantoAtivo'
 import type { CamadaMapa } from '../lib/types'
 import { VERSAO_CAMADAS } from '../lib/camadasMapa'
 import { PLANTA_EXEMPLO_JSON } from './dadosFalsos'
+import { registrarAtalhos } from '../components/atalhosCanvas'
 
 /**
  * Divisória interna — ferramenta NATIVA `line` do tldraw (cor/traço cinza, tamanho 's'),
@@ -149,10 +150,30 @@ export function CenaMapa() {
               getOrdemCamadas: camadasMapa.getOrdemCamadas,
               getCantoPadrao: () => getCantoAtivo(editor),
             })
+            /**
+             * Atalhos de teclado, os MESMOS do app real (`MapaView`/`CanvasView`).
+             *
+             * A bancada não os registrava, e isso já custou uma vez: um juiz cego reprovou
+             * um painel achando que era defeito do app, quando o defeito era a bancada não
+             * montar a peça inteira. Toda superfície de verificação que monta MENOS que o
+             * app real mente sobre o app real — e aqui mora o Delete que remove vértice da
+             * sala em polígono, que não existiria para conferir.
+             *
+             * Os avisos de cópia caem no vazio de propósito: a bancada não tem banner.
+             */
+            const cancelarAtalhos = registrarAtalhos(editor, {
+              aoCopiar() {},
+              aoFalharCopia(erro) {
+                console.warn('bancada: falha ao copiar imagem:', erro)
+              },
+            })
             montarMapaExemplo(editor)
             camadasMapa.reordenarPelaPilha()
             editor.zoomToFit({ animation: { duration: 0 } })
-            return () => cancelarSideEffect()
+            return () => {
+              cancelarSideEffect()
+              cancelarAtalhos()
+            }
           }}
         />
       </ProvedorContagemCamadas>
