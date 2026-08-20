@@ -7,6 +7,7 @@ import type { CharacterCardShapeType } from './CharacterCardShape'
 import type { CenarioCardShapeType } from './CenarioCardShape'
 import type { ItemCardShapeType } from './ItemCardShape'
 import { transformarImagemEmEntidade } from './transformarImagemEmEntidade'
+import { ferramentaDaTecla, ferramentaExiste } from '../lib/atalhosPecasMapa'
 import {
   MINIMO_DE_VERTICES,
   pontosSeguros,
@@ -97,6 +98,28 @@ export function registrarAtalhos(
         })
       return
     }
+    /**
+     * Peça de construção por tecla — só no MAPA.
+     *
+     * `ferramentaExiste` guarda o Canvas: ele monta outra lista de ferramentas e não tem peça
+     * de mapa nenhuma, então apertar `s` lá não pode tentar armar uma sala. Mesmo listener,
+     * duas superfícies.
+     *
+     * Vem ANTES do Delete e do espaço porque é o caminho mais quente, e depois dos guards de
+     * edição: com texto em foco, `s` é a letra s.
+     */
+    if (!e.repeat && !editor.getEditingShapeId()) {
+      const focado = e.target as HTMLElement | null
+      const digitando = focado?.closest('input, textarea, [contenteditable="true"]')
+      const ferramenta = digitando ? null : ferramentaDaTecla(e)
+      if (ferramenta && ferramentaExiste(editor, ferramenta)) {
+        e.preventDefault()
+        e.stopPropagation()
+        editor.setCurrentTool(ferramenta)
+        return
+      }
+    }
+
     if (e.key === 'Delete' || e.key === 'Backspace') {
       if (editor.getEditingShapeId()) return // editando texto: Delete é do texto
       const alvoTecla = e.target as HTMLElement | null

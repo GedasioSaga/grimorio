@@ -438,3 +438,61 @@ describe('Delete remove o canto sob o cursor', () => {
     cancelar()
   })
 })
+
+describe('atalho de teclado arma a peça', () => {
+  function comAtalhos() {
+    const editor = criarEditorDeTeste()
+    const cancelar = registrarAtalhos(editor, { aoCopiar() {}, aoFalharCopia() {} })
+    return { editor, cancelar }
+  }
+
+  function teclar(editor: Editor, key: string, shiftKey = false) {
+    editor
+      .getContainer()
+      .dispatchEvent(new KeyboardEvent('keydown', { key, shiftKey, bubbles: true, cancelable: true }))
+  }
+
+  it.each([
+    ['s', false, 'sala-mapa'],
+    ['s', true, 'sala-poligono-mapa'],
+    ['c', false, 'corredor-mapa'],
+    ['c', true, 'escada-mapa'],
+    ['m', false, 'muralha-mapa'],
+    ['m', true, 'torre-mapa'],
+    ['p', false, 'porta-mapa'],
+    ['r', false, 'retangulo-mapa'],
+  ])('%s%s arma %s', (key, shift, esperado) => {
+    const { editor, cancelar } = comAtalhos()
+    teclar(editor, key, shift as boolean)
+    expect(editor.getCurrentToolId()).toBe(esperado)
+    cancelar()
+  })
+
+  it('`r` NÃO cai mais no geo nativo do tldraw', () => {
+    const { editor, cancelar } = comAtalhos()
+    teclar(editor, 'r')
+    expect(editor.getCurrentToolId()).not.toBe('geo')
+    cancelar()
+  })
+
+  it('com texto em foco, a tecla é a letra — não arma nada', () => {
+    const { editor, cancelar } = comAtalhos()
+    editor.setCurrentTool('select')
+    const campo = document.createElement('input')
+    editor.getContainer().appendChild(campo)
+    campo.dispatchEvent(new KeyboardEvent('keydown', { key: 's', bubbles: true, cancelable: true }))
+    expect(editor.getCurrentToolId()).toBe('select')
+    campo.remove()
+    cancelar()
+  })
+
+  it('Ctrl+S não vira sala', () => {
+    const { editor, cancelar } = comAtalhos()
+    editor.setCurrentTool('select')
+    editor
+      .getContainer()
+      .dispatchEvent(new KeyboardEvent('keydown', { key: 's', ctrlKey: true, bubbles: true, cancelable: true }))
+    expect(editor.getCurrentToolId()).toBe('select')
+    cancelar()
+  })
+})
