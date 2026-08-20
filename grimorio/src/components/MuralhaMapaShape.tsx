@@ -1,7 +1,13 @@
 import {
   BaseBoxShapeUtil,
   createShapePropsMigrationIds,
-  createShapePropsMigrationSequence, Rectangle2d, type VecLike, SVGContainer, T, type RecordProps, type TLShape } from 'tldraw'
+  createShapePropsMigrationSequence, Rectangle2d, type VecLike, SVGContainer,
+  T,
+  useEditor,
+  useValue,
+  type RecordProps,
+  type TLShape,
+} from 'tldraw'
 import { desenharMuralha } from '../lib/desenhoMuralha'
 import {
   ESPESSURA_CONTORNO_MURALHA,
@@ -9,6 +15,7 @@ import {
   MURALHA_LARGURA_PADRAO,
 } from '../lib/muralhaMapa'
 import { atenderDuploClique } from '../lib/duploCliqueMapa'
+import { vaosPorAresta } from '../lib/ancoraPortaEditor'
 
 declare module '@tldraw/tlschema' {
   interface TLGlobalShapePropsMap {
@@ -128,11 +135,25 @@ export class MuralhaMapaShapeUtil extends BaseBoxShapeUtil<MuralhaMapaShapeType>
   override onDoubleClick = atenderDuploClique
 
   component(shape: MuralhaMapaShapeType) {
-    const { w, h, cor } = shape.props
-    return <SVGContainer>{desenharMuralha({ w, h, cor })}</SVGContainer>
+    return <CorpoMuralha shape={shape} />
   }
 
   indicator(shape: MuralhaMapaShapeType) {
     return <rect width={shape.props.w} height={shape.props.h} />
   }
+}
+
+/**
+ * Sub-componente porque precisa de hook: ler os vãos das portas ancoradas exige `useValue`,
+ * e `component()` da shapeUtil é chamado em contexto onde o padrão do projeto é delegar
+ * (mesmo desenho de `CorpoSala`).
+ *
+ * Sem isto a peça desenhava a parede inteira por cima da porta: ela ancorava, girava e
+ * seguia a parede, e a planta continuava afirmando passagem fechada.
+ */
+function CorpoMuralha({ shape }: { shape: MuralhaMapaShapeType }) {
+  const { w, h, cor } = shape.props
+  const editor = useEditor()
+  const vaos = useValue('vaos-de-porta', () => vaosPorAresta(editor, shape.id), [editor, shape.id])
+  return <SVGContainer>{desenharMuralha({ w, h, cor, vaos })}</SVGContainer>
 }

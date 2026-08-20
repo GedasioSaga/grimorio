@@ -14,6 +14,8 @@ import {
   type TLHandleDragInfo,
   type TLResizeInfo,
   type TLShape,
+  useEditor,
+  useValue,
 } from 'tldraw'
 import { useApp } from '../state/store'
 import { desenharCorpoSalaPoligono } from '../lib/desenhoSalaPoligono'
@@ -27,6 +29,7 @@ import {
   type PontoPoligono,
 } from '../lib/salaPoligonoMapa'
 import { resolverVinculoSala } from '../lib/vinculoSalaCenario'
+import { vaosPorAresta } from '../lib/ancoraPortaEditor'
 
 declare module '@tldraw/tlschema' {
   interface TLGlobalShapePropsMap {
@@ -381,6 +384,11 @@ export class SalaPoligonoMapaShapeUtil extends ShapeUtil<SalaPoligonoMapaShapeTy
 function CorpoSalaPoligono({ shape }: { shape: SalaPoligonoMapaShapeType }) {
   const { pontos, estado, rotulo, cor, cenarioId, espessura, rotuloTamanho, rotuloAncora, rotuloVertical, contorno } =
     shape.props
+  // vãos das portas ancoradas — mesma leitura que a sala retangular faz. Sem isto o cômodo
+  // em L desenha parede por cima da porta e a planta afirma passagem fechada.
+  const editor = useEditor()
+  const vaos = useValue('poligono-vaos-de-porta', () => vaosPorAresta(editor, shape.id), [editor, shape.id])
+
   const nomeCenario = useApp((s) => (cenarioId ? s.cenarios[cenarioId]?.nome : undefined))
   const carregando = useApp((s) => s.carregando)
   const vinculo = resolverVinculoSala(
@@ -400,6 +408,7 @@ function CorpoSalaPoligono({ shape }: { shape: SalaPoligonoMapaShapeType }) {
         vinculo,
         estiloRotulo: { tamanho: rotuloTamanho, ancora: rotuloAncora, vertical: rotuloVertical },
         contorno,
+        vaos,
       })}
     </SVGContainer>
   )

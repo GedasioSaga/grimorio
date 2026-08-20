@@ -224,3 +224,48 @@ export function fundirIntervalos(
   }
   return fundidos
 }
+
+/** Um traço de contorno já resolvido em coordenadas, pronto para virar `<line>`. */
+export interface TracoContorno {
+  x1: number
+  y1: number
+  x2: number
+  y2: number
+}
+
+/**
+ * O contorno de uma peça como lista de traços, com buraco onde há porta.
+ *
+ * Compartilhado por TODAS as peças que hospedam porta — sala, sala em polígono, corredor e
+ * muralha. Antes cada uma desenhava o contorno do seu jeito e só a sala retangular sabia
+ * abrir vão: nas outras três a porta ancorava, girava e seguia a parede, e a parede era
+ * desenhada inteira por cima dela. A planta afirmava parede fechada exatamente onde havia
+ * passagem — o erro de leitura mais caro que um mapa de mesa pode ter, e o mais silencioso,
+ * porque cada peça isolada parecia certa.
+ *
+ * Recebe o ANEL de vértices em coordenadas locais (a caixa vira quatro cantos, o polígono
+ * passa os próprios), então serve os dois formatos sem saber qual é qual.
+ */
+export function contornoComVaos(
+  anel: Ponto[],
+  vaos: Map<number, Array<{ inicio: number; fim: number }>> | undefined,
+): TracoContorno[] {
+  if (anel.length < 2) return []
+  const saida: TracoContorno[] = []
+
+  anel.forEach((a, indice) => {
+    const b = anel[(indice + 1) % anel.length]
+    const dx = b.x - a.x
+    const dy = b.y - a.y
+    for (const trecho of trechosSemVao(vaos?.get(indice) ?? [])) {
+      saida.push({
+        x1: a.x + dx * trecho.inicio,
+        y1: a.y + dy * trecho.inicio,
+        x2: a.x + dx * trecho.fim,
+        y2: a.y + dy * trecho.fim,
+      })
+    }
+  })
+
+  return saida
+}

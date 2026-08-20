@@ -1,5 +1,5 @@
 import type { VinculoSala } from './vinculoSalaCenario'
-import { arestasDeCaixa, trechosSemVao } from './ancoraPorta'
+import { arestasDeCaixa, contornoComVaos } from './ancoraPorta'
 import { ESPESSURA_CONTORNO_SALA, aparenciaDaSala, layoutDoRotulo, type EstiloRotulo } from './salaMapa'
 
 /**
@@ -75,7 +75,7 @@ export function desenharCorpoSala({
           onde tem porta), mas o contorno vira uma lista de trechos, interrompida onde há
           passagem. Um `<rect>` com stroke não sabe pular pedaço. */}
       <rect x={0} y={0} width={w} height={h} fill={aparencia.preenchimento} stroke="none" />
-      {trechosDeContorno(w, h, vaos).map((t, i) => (
+      {contornoComVaos(arestasDeCaixa(w, h).map((a) => a.a), vaos).map((t, i) => (
         <line
           key={i}
           x1={t.x1}
@@ -137,36 +137,3 @@ export function desenharCorpoSala({
   )
 }
 
-/**
- * O contorno do cômodo como uma lista de traços, com buraco onde há porta ancorada.
- *
- * É o que separa "porta pousada em cima da parede" de "porta que ABRE passagem". Sem isto a
- * planta afirma parede contínua exatamente onde existe uma saída — e é o que o juiz de
- * legibilidade cobra: o jogador pergunta se o quarto tem saída olhando para um desenho que
- * responde que não.
- *
- * Sem vão nenhum, devolve os quatro lados inteiros — mesmo desenho de antes, só expresso em
- * quatro linhas em vez de um `<rect>`.
- */
-function trechosDeContorno(
-  w: number,
-  h: number,
-  vaos: Map<number, Array<{ inicio: number; fim: number }>> | undefined,
-): Array<{ x1: number; y1: number; x2: number; y2: number }> {
-  const saida: Array<{ x1: number; y1: number; x2: number; y2: number }> = []
-
-  arestasDeCaixa(w, h).forEach((aresta, indice) => {
-    const dx = aresta.b.x - aresta.a.x
-    const dy = aresta.b.y - aresta.a.y
-    for (const trecho of trechosSemVao(vaos?.get(indice) ?? [])) {
-      saida.push({
-        x1: aresta.a.x + dx * trecho.inicio,
-        y1: aresta.a.y + dy * trecho.inicio,
-        x2: aresta.a.x + dx * trecho.fim,
-        y2: aresta.a.y + dy * trecho.fim,
-      })
-    }
-  })
-
-  return saida
-}

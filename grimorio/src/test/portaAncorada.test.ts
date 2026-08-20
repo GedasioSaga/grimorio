@@ -2,6 +2,7 @@
 import { describe, expect, it } from 'vitest'
 import { createShapeId, type Editor, type TLShapeId } from 'tldraw'
 import { criarEditorDeTeste } from './ajudaEditorMapa'
+import { TIPOS_HOSPEDEIROS } from '../lib/ancoraPortaEditor'
 import {
   lerVinculo,
   registrarAncoraDePortas,
@@ -280,5 +281,57 @@ describe('a porta SEGUE a parede — o side effect', () => {
 
     expect(centro(editor, solta)).toEqual(antes)
     cancelar()
+  })
+})
+
+describe('TODO hospedeiro abre vão de verdade', () => {
+  /**
+   * O defeito que a rodada 5 expôs: quatro peças podiam hospedar porta e só a sala retangular
+   * desenhava o vão. No cômodo em L, no corredor e na muralha a porta ancorava, girava e
+   * seguia a parede — e a parede era desenhada inteira por cima dela. A planta afirmava
+   * passagem FECHADA onde havia porta, que é o erro de leitura mais caro num mapa de mesa e o
+   * mais silencioso, porque cada peça isolada parecia certa.
+   *
+   * O teste itera sobre `TIPOS_HOSPEDEIROS` de propósito: o dia em que um quinto tipo entrar
+   * na lista, ele entra aqui junto e a mentira aparece como falha em vez de queixa.
+   */
+  function hospedeiro(editor: Editor, tipo: string): TLShapeId {
+    const id = createShapeId()
+    const props =
+      tipo === 'sala-poligono-mapa'
+        ? {
+            pontos: [
+              { x: 0, y: 0 },
+              { x: 320, y: 0 },
+              { x: 320, y: 224 },
+              { x: 0, y: 224 },
+            ],
+          }
+        : { w: 320, h: 224 }
+    editor.createShape({ id, type: tipo, x: 0, y: 0, props } as Parameters<typeof editor.createShape>[0])
+    return id
+  }
+
+  it.each([...TIPOS_HOSPEDEIROS])('%s recorta o contorno onde a porta ancora', (tipo) => {
+    const editor = criarEditorDeTeste()
+    const host = hospedeiro(editor, tipo)
+    const p = porta(editor, 140, 6)
+    soltar(editor, p)
+
+    const vinculo = lerVinculo(editor.getShape(p)!)
+    expect(vinculo?.hospedeiroId, `${tipo} não recebeu a âncora`).toBe(host)
+
+    const vaos = vaosPorAresta(editor, host)
+    const naParedeDeCima = vaos.get(vinculo!.indiceAresta)
+    expect(naParedeDeCima, `${tipo} sem vão`).toBeDefined()
+
+    // o contorno tem que ficar PARTIDO: 2 trechos onde havia 1
+    expect(trechosSemVao(naParedeDeCima!), `${tipo} desenharia parede inteira`).toHaveLength(2)
+  })
+
+  it.each([...TIPOS_HOSPEDEIROS])('%s sem porta continua com a parede inteira', (tipo) => {
+    const editor = criarEditorDeTeste()
+    const host = hospedeiro(editor, tipo)
+    expect(vaosPorAresta(editor, host).size).toBe(0)
   })
 })

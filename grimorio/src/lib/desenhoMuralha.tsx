@@ -1,3 +1,4 @@
+import { arestasDeCaixa, contornoComVaos } from './ancoraPorta'
 import { MURALHA_COR_CONTORNO, ESPESSURA_CONTORNO_MURALHA } from './muralhaMapa'
 
 /**
@@ -19,19 +20,40 @@ export interface DesenharMuralhaProps {
    * Sem `contorno` aqui: a muralha É só contorno (`fill="none"`), então desligá-la apagaria a
    * peça inteira em vez de simplificá-la. Quem quer a muralha sumindo apaga a muralha.
    */
+  /**
+   * Vãos abertos pelas portas ancoradas, por índice de aresta. Ver `contornoComVaos`.
+   *
+   * Sem isto a peça desenha a parede por cima da porta e a planta afirma passagem fechada.
+   */
+  vaos?: Map<number, Array<{ inicio: number; fim: number }>>
+
 }
 
-export function desenharMuralha({ w, h, cor }: DesenharMuralhaProps) {
+export function desenharMuralha({ w, h, cor, vaos }: DesenharMuralhaProps) {
+  // O retângulo do traço fica encolhido por meia espessura de cada lado porque o SVG centra
+  // o stroke na borda — sem isso metade da linha vazaria para fora da caixa que o usuário
+  // arrasta. Os traços seguem essa mesma caixa encolhida, senão o vão da porta cairia
+  // deslocado do contorno.
   const meia = ESPESSURA_CONTORNO_MURALHA / 2
+  const anel = arestasDeCaixa(
+    Math.max(0, w - ESPESSURA_CONTORNO_MURALHA),
+    Math.max(0, h - ESPESSURA_CONTORNO_MURALHA),
+  ).map((a) => ({ x: a.a.x + meia, y: a.a.y + meia }))
+
   return (
-    <rect
-      x={meia}
-      y={meia}
-      width={Math.max(0, w - ESPESSURA_CONTORNO_MURALHA)}
-      height={Math.max(0, h - ESPESSURA_CONTORNO_MURALHA)}
-      fill="none"
-      stroke={cor || MURALHA_COR_CONTORNO}
-      strokeWidth={ESPESSURA_CONTORNO_MURALHA}
-    />
+    <>
+      {contornoComVaos(anel, vaos).map((t, i) => (
+        <line
+          key={i}
+          x1={t.x1}
+          y1={t.y1}
+          x2={t.x2}
+          y2={t.y2}
+          stroke={cor || MURALHA_COR_CONTORNO}
+          strokeWidth={ESPESSURA_CONTORNO_MURALHA}
+          strokeLinecap="butt"
+        />
+      ))}
+    </>
   )
 }

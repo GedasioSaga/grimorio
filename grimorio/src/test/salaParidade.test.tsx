@@ -559,10 +559,14 @@ describe('contorno da sala pode ser desligado', () => {
   })
 
   it('desligado, o SVG sai sem traço — e o piso continua lá', () => {
+    // A asserção olha o COMPORTAMENTO (existe linha de contorno?) e não um atributo: o
+    // contorno virou lista de traços quando as peças passaram a abrir vão de porta, e a
+    // versão anterior deste teste, presa a `stroke-width="0"`, quebrou por causa disso sem
+    // que nada de verdade tivesse mudado.
     const comLinha = renderParaSvg(
       desenharCorpoSalaPoligono({ pontos: PONTOS_SALA_POLIGONO_PADRAO, estado: 'sem-info', rotulo: '', cor: '' }),
     )
-    expect(comLinha).toContain('stroke-width="2"')
+    expect(comLinha).toContain('<line')
 
     const semLinha = renderParaSvg(
       desenharCorpoSalaPoligono({
@@ -573,7 +577,7 @@ describe('contorno da sala pode ser desligado', () => {
         contorno: false,
       }),
     )
-    expect(semLinha).toContain('stroke-width="0"')
+    expect(semLinha).not.toContain('<line')
     // a mancha de piso é o que sobra: sem ela a peça sumiria da tela
     expect(semLinha).toContain('<polygon')
     expect(semLinha).toContain('fill=')

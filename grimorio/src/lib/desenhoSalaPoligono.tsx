@@ -1,4 +1,5 @@
 import { ESPESSURA_CONTORNO_SALA, aparenciaDaSala, layoutDoRotulo, type EstiloRotulo } from './salaMapa'
+import { contornoComVaos } from './ancoraPorta'
 import { centroDoPoligono, limitesDoPoligono, pontosSeguros, type PontoPoligono } from './salaPoligonoMapa'
 import type { VinculoSala } from './vinculoSalaCenario'
 
@@ -30,6 +31,13 @@ export interface DesenharCorpoSalaPoligonoProps {
   estiloRotulo?: EstiloRotulo
   /** desenha a linha de contorno? ausente conta como SIM — ver `desenhoSala.tsx` */
   contorno?: boolean
+  /**
+   * Vãos abertos pelas portas ancoradas, por índice de aresta. Ver `contornoComVaos`.
+   *
+   * Sem isto a peça desenha a parede por cima da porta e a planta afirma passagem fechada.
+   */
+  vaos?: Map<number, Array<{ inicio: number; fim: number }>>
+
 }
 
 export function desenharCorpoSalaPoligono({
@@ -41,6 +49,7 @@ export function desenharCorpoSalaPoligono({
   vinculo,
   estiloRotulo,
   contorno = true,
+  vaos,
 }: DesenharCorpoSalaPoligonoProps) {
   const aparencia = aparenciaDaSala(estado, cor || undefined)
   // `> 0` e não `??`: traço 0 é uma sala sem contorno, indistinguível de "sumiu" no escuro.
@@ -65,13 +74,23 @@ export function desenharCorpoSalaPoligono({
 
   return (
     <>
-      <polygon
-        points={pontosSvg}
-        fill={aparencia.preenchimento}
-        stroke={contorno ? aparencia.contorno : 'none'}
-        strokeWidth={contorno ? tracoPx : 0}
-        strokeLinejoin="round"
-      />
+      {/* preenchimento e contorno separados: um `<polygon>` com stroke não sabe pular o
+          pedaço onde há porta, e era por isso que o cômodo em L desenhava parede por cima
+          da passagem. O piso continua inteiro — o chão não tem buraco, a parede tem. */}
+      <polygon points={pontosSvg} fill={aparencia.preenchimento} stroke="none" />
+      {contorno &&
+        contornoComVaos(pontos, vaos).map((t, i) => (
+          <line
+            key={i}
+            x1={t.x1}
+            y1={t.y1}
+            x2={t.x2}
+            y2={t.y2}
+            stroke={aparencia.contorno}
+            strokeWidth={tracoPx}
+            strokeLinecap="butt"
+          />
+        ))}
       <g transform={texto.transform || undefined}>
         {texto.linhas.map((linha, i) => (
           <text

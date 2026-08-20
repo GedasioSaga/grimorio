@@ -1,9 +1,16 @@
 import {
   BaseBoxShapeUtil,
   createShapePropsMigrationIds,
-  createShapePropsMigrationSequence, SVGContainer, T, type RecordProps, type TLShape } from 'tldraw'
+  createShapePropsMigrationSequence, SVGContainer,
+  T,
+  useEditor,
+  useValue,
+  type RecordProps,
+  type TLShape,
+} from 'tldraw'
 import { desenharCorredor } from '../lib/desenhoCorredor'
 import { atenderDuploClique } from '../lib/duploCliqueMapa'
+import { vaosPorAresta } from '../lib/ancoraPortaEditor'
 
 declare module '@tldraw/tlschema' {
   interface TLGlobalShapePropsMap {
@@ -74,11 +81,25 @@ export class CorredorMapaShapeUtil extends BaseBoxShapeUtil<CorredorMapaShapeTyp
   override onDoubleClick = atenderDuploClique
 
   component(shape: CorredorMapaShapeType) {
-    const { w, h, cor, contorno } = shape.props
-    return <SVGContainer>{desenharCorredor({ w, h, cor, contorno })}</SVGContainer>
+    return <CorpoCorredor shape={shape} />
   }
 
   indicator(shape: CorredorMapaShapeType) {
     return <rect width={shape.props.w} height={shape.props.h} />
   }
+}
+
+/**
+ * Sub-componente porque precisa de hook: ler os vãos das portas ancoradas exige `useValue`,
+ * e `component()` da shapeUtil é chamado em contexto onde o padrão do projeto é delegar
+ * (mesmo desenho de `CorpoSala`).
+ *
+ * Sem isto a peça desenhava a parede inteira por cima da porta: ela ancorava, girava e
+ * seguia a parede, e a planta continuava afirmando passagem fechada.
+ */
+function CorpoCorredor({ shape }: { shape: CorredorMapaShapeType }) {
+  const { w, h, cor, contorno } = shape.props
+  const editor = useEditor()
+  const vaos = useValue('vaos-de-porta', () => vaosPorAresta(editor, shape.id), [editor, shape.id])
+  return <SVGContainer>{desenharCorredor({ w, h, cor, contorno, vaos })}</SVGContainer>
 }
