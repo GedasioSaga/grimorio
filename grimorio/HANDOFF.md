@@ -1,88 +1,72 @@
-# HANDOFF — Grimório (19/08/2026)
+# HANDOFF — Grimório (20/08/2026)
 
 Retrato para retomar sem contexto. **Código ganha de qualquer afirmação daqui.**
 
-## v0.12.1 — conserto de regressão da v0.12.0
+## Publicado x commitado — LEIA ANTES DE PROMETER QUALQUER COISA
 
-**A v0.12.0 saiu com um bug visual sério e a v0.12.1 é o conserto.** Se alguém relatar mapa
-sem contorno nenhum, é v0.12.0 — mande atualizar.
+**No ar: v0.12.1.** Cinco commits depois dela ainda NÃO estão publicados:
+propriedades das quatro peças, giro + L/A girado, atalhos de teclado, Alt+Delete + degraus
+da escada, e unir salas. Se alguém disser que uma dessas não funciona, confira a versão dele
+antes de investigar.
 
-O que quebrou: a fusão automática de parede (`9efdd40`) dissolvia o contorno onde duas peças
-de massa se tocavam. A premissa estava errada — compor planta com salas SOBREPOSTAS é
-legítimo (salão grande de piso ao fundo, cômodos menores por cima), e nessa composição, que é
-comum, a regra apagou o contorno de tudo: o mapa virou uma mancha cinza.
+**A v0.12.0 saiu com regressão** (mapa sem contorno) e a v0.12.1 é o conserto. Quem estiver
+na 0.12.0 e vir planta virada mancha cinza, é isso.
 
-**A lição, para não repetir:** heurística não distingue "encostei duas salas para virar um
-ambiente só" de "desenhei um cômodo dentro do salão". Quem sabe é quem está desenhando. O erro
-não foi de implementação — os testes passavam e a geometria estava certa —, foi de escopo.
-
-No lugar entraram duas coisas:
-
-- **`contorno: boolean` na sala** (retangular e polígono), com botão "sem" na fileira Contorno
-  do painel, no mesmo canto em que o seletor de cor põe o "auto". Desligado sobra a mancha de
-  piso, que resolve o traço duplo em planta sobreposta — por escolha, não por adivinhação.
-  Escolher uma espessura RELIGA. Migração sobe LIGADO em todo mapa antigo.
-- **Seleção múltipla edita.** O painel só mexia numa peça; com o contorno virando opção, ligar
-  e desligar um a um em dezenas de cômodos era inutilizável. Agora estado, cor, contorno e
-  estilo do nome valem para a seleção inteira, num único Ctrl+Z (`aoAplicarEmLote`).
-
-Regras da edição em lote que valem para quem for mexer:
-- controle só acende com valor COMUM a todas; sem acordo, nada aceso (mostrar o valor da
-  primeira seria mentira)
-- estados são a INTERSEÇÃO dos tipos, não a união
-- o lote REUSA os handlers de uma peça — versão em lote com regra própria é como toolbar e
-  `getDefaultProps` divergiram e o mapa nasceu todo vermelho
+Suíte: **1882 PASS / 0 FAIL**. `tsc` e `npm run build` limpos.
 
 ## Loop de construções — gauntlet contra Dungeon Scrawl
 
-Bar: **Dungeon Scrawl**, com Dungeondraft/Inkarnate de apoio. Comparação cega em três lentes
-(construir / editar / legibilidade na mesa), rótulos removidos, ordem A/B alternada a cada
-rodada. Escopo travado nas peças de CONSTRUÇÃO.
-
-**Placar: 0×3 → 0×3 → 1×3 → 2×3.** Suíte: **1822 PASS / 0 FAIL**.
+Comparação cega em três lentes (construir / editar / mesa), rótulos removidos, ordem A/B
+alternada a cada rodada. **Placar: 0×3 → 0×3 → 1×3 → 2×3.** Rodada 5 rodando.
 
 | Rodada | Gap eleito | Estado |
 |---|---|---|
-| 1 | Peça nascia no centro da viewport em vez de ser desenhada no canvas | fechado |
+| 1 | Peça nascia no centro em vez de ser desenhada no canvas | fechado |
 | 2 | Inserir e remover vértice na sala em polígono | fechado |
-| 3 | Porta que se ancora na parede e abre vão nela | fechado |
-| 4 | Parede dupla entre cômodos encostados | **revertido** — ver acima |
+| 3 | Porta que se ancora na parede e abre vão | fechado — virou `edicao` |
+| 4 | Parede dupla entre cômodos encostados | **revertido** (ver abaixo) — `mesa` virou por outro motivo |
+| 5 | União de salas | fechado como COMANDO |
 
-**O gap "união booleana" está MORTO como estava formulado.** Ele era dissolver parede
-automaticamente; o usuário rejeitou. Se voltar ao assunto, tem que ser união EXPLÍCITA — o
-mestre seleciona duas salas e manda unir —, nunca por proximidade.
+### A reversão que ensina mais que os acertos
+
+A fusão automática de parede dissolvia o contorno onde duas peças de massa se tocavam. Passou
+nos testes, a geometria estava certa, e **estava errada de escopo**: compor planta com salas
+sobrepostas é legítimo (salão de piso ao fundo, cômodos por cima), e a regra apagou o contorno
+de plantas inteiras. O usuário mandou desfazer.
+
+Regra que ficou: **heurística não distingue "encostei duas salas para virar um ambiente" de
+"desenhei um cômodo dentro do salão".** Quem sabe é quem desenha. Toda operação que junta
+peças agora é comando explícito.
+
+A geometria daquela tentativa não foi jogada fora — voltou como `lib/recorteGeometria.ts`,
+servindo ao comando `Unir`. Trabalho descartado por escopo errado às vezes é a peça certa
+esperando o comando certo.
 
 ### Armadilhas que custaram tempo
 
-- **`isFilled: false` não é a correção de forma oca.** `getShapeAtPoint` trata forma oca num
-  ramo que começa pulando qualquer forma maior que a viewport — e muralha é sempre maior que a
-  tela. Medido: a peça ficou inselecionável. A saída é `ignoreHit`. `Group2d` não serve: o
-  construtor força `isFilled: false`.
-- **`updateShape` FUNDE o `meta`.** Omitir chave não apaga — desancorar porta grava
-  `ancora: null`.
-- **Primeira migração de um shape roda em TODO documento salvo** (sem sequência = versão 0).
-  Um `props.estado = 'livre'` cego teria destrancado todas as portas do cofre. Todo degrau é
-  guardado por `=== undefined`.
-- **`editor.dispatch` quer ponto em espaço de TELA.** Em vitest passa despercebido: câmera em
-  0,0 com zoom 1 faz os dois espaços coincidirem.
-- **Alça emite evento com `target: 'handle'`** — ponteiro em `.tl-canvas` não exercita alça.
-- **A bancada precisa montar o app INTEIRO** (atalhos, side effects). Ela já reprovou um
-  painel por não montar.
+- **`isFilled: false` não conserta forma oca.** `getShapeAtPoint` pula forma oca maior que a
+  viewport, e muralha é sempre maior que a tela: a peça fica inselecionável. Use `ignoreHit`.
+  `Group2d` não serve (força `isFilled: false`).
+- **`updateShape` FUNDE o `meta`.** Omitir chave não apaga; grave `null`.
+- **Primeira migração de um shape roda em TODO documento salvo.** Guarde por `=== undefined`,
+  senão um valor cego reescreve o cofre inteiro.
+- **`editor.dispatch` quer ponto em espaço de TELA.** Em vitest não aparece: câmera 0,0 zoom 1.
+- **Alça emite `target: 'handle'`** — ponteiro em `.tl-canvas` não exercita alça.
+- **A bancada precisa montar o app INTEIRO** (atalhos, side effects) ou mente sobre ele.
+- **L/A vinham de `getShapePageBounds`**, que numa peça girada é a caixa que a contém, não a
+  peça. Medido: girada 90°, `L=20` dava o dobro. Use `getShapeGeometry(id).bounds`.
 
 ### Fila
 
 1. Corredor não tem vínculo com a sala que ele liga.
-2. União EXPLÍCITA de salas (seleção + comando), e subtração de área.
-3. Peças de construção sem atalho de teclado; `r` arma a peça errada.
-4. Rotação não tem campo em lugar nenhum.
-5. Corredor, muralha, torre e escada sem nenhuma propriedade.
-6. Hachura da escada deriva de `w >= h`: em escada quadrada o critério vira sorte.
+2. Subtração de área (nicho, poço, pilar) — a união já existe, o furo não.
+3. Copiar estilo entre peças (além do conta-gotas de cor).
+4. Edição inline do nome no canvas (duplo clique está gasto no Cenário).
 
-### Custos colaterais registrados, não pagos
+### A vigiar
 
-Na lente `edicao`, que já ganhamos — vigiar se cair: rotação do polígono ficou indescobrível
-(alças agora são de vértice, `hideResizeHandles` ligado), e remover canto depende de três
-condições invisíveis, onde errar a mira apaga o cômodo inteiro.
+Um erro solto aparece esporadicamente no fim da suíte — visto 2 vezes em ~6 execuções, não
+derruba teste nenhum e não reproduziu com `--reporter=verbose`. Não é conhecido.
 
 ---
 
