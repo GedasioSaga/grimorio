@@ -75,6 +75,8 @@ export type SelecaoPropriedades =
       rotuloVertical?: boolean
       /** contorno da sala ligado/desligado */
       contorno?: boolean
+      /** rotação da peça em GRAUS, 0..359 */
+      graus: number
       /** `meta.camada` da peça; vazio quando ela nunca foi carimbada (mapa antigo). */
       camadasDaSelecao: string[]
     }
@@ -213,6 +215,14 @@ export function SelecaoPropriedadesBridge() {
       const bounds = editor.getShapePageBounds(id)
       if (!bounds) return null
       const forma = editor.getShape(id)
+      /**
+       * L e A vêm da geometria PRÓPRIA da peça; X e Y continuam vindo da caixa em página.
+       *
+       * Numa peça girada a caixa em página é o retângulo alinhado aos eixos que a contém —
+       * numa sala a 45° isso é a diagonal. O campo exibia esse número como se fosse a largura.
+       * Em peça não girada os dois coincidem, então o caso comum não muda.
+       */
+      const propria = editor.getShapeGeometry(id).bounds
       const props = (forma?.props ?? {}) as Record<string, unknown>
       const meta = (forma?.meta ?? {}) as Record<string, unknown>
       return {
@@ -220,8 +230,9 @@ export function SelecaoPropriedadesBridge() {
         id,
         x: bounds.x,
         y: bounds.y,
-        w: bounds.w,
-        h: bounds.h,
+        w: propria.w,
+        h: propria.h,
+        graus: Math.round((((forma?.rotation ?? 0) * 180) / Math.PI) % 360),
         tipoShape: forma?.type ?? '',
         estado: typeof props.estado === 'string' ? props.estado : undefined,
         rotuloSala: typeof props.rotulo === 'string' ? props.rotulo : undefined,
@@ -278,6 +289,7 @@ export function PainelPropriedades({
   aoTrocarEstiloRotulo,
   aoTrocarContorno,
   aoAplicarEmLote,
+  aoGirar,
 }: {
   selecao: SelecaoPropriedades
   aoAplicarX: (id: TLShapeId, quadrados: number) => void
@@ -303,6 +315,8 @@ export function PainelPropriedades({
   aoTrocarContorno: (id: TLShapeId, ligado: boolean) => void
   /** roda a mesma ação em várias peças como um gesto só (um Ctrl+Z) */
   aoAplicarEmLote: (ids: TLShapeId[], aplicar: (id: TLShapeId) => void) => void
+  /** gira a peça para um ângulo absoluto, em graus */
+  aoGirar: (id: TLShapeId, graus: number) => void
 }) {
   const [colapsado, setColapsado] = useState(false)
 
@@ -477,6 +491,7 @@ export function PainelPropriedades({
           <CampoQuadrado label="L" valorPx={selecao.w} onAplicar={(q) => aoAplicarL(selecao.id, q)} minimoPositivo />
           <CampoQuadrado label="A" valorPx={selecao.h} onAplicar={(q) => aoAplicarA(selecao.id, q)} minimoPositivo />
           </div>
+          <SeletorGiro graus={selecao.graus} onGirar={(g) => aoGirar(selecao.id, g)} />
         </div>
       )}
     </div>
@@ -573,6 +588,76 @@ function SeletorRotulo({
           Em pé
         </button>
       </div>
+    </div>
+  )
+}
+
+/** Ângulos que aparecem numa planta: os retos e as duas diagonais. */
+const GIROS_RAPIDOS = [0, 45, 90, 135, 180, 225, 270, 315]
+
+/**
+ * Giro da peça: campo em GRAUS mais os oito ângulos que uma planta usa.
+ *
+ * Não existia campo de rotação em lugar nenhum do mapa. Girar era arrastar a alça redonda —
+ * que não acerta 90° de propósito — e na sala em polígono nem alça havia, porque as dela
+ * viraram vértices: a peça ficou girável e indescobrível ao mesmo tempo.
+ *
+ * Os botões rápidos existem porque parede diagonal precisa de ângulo EXATO para encostar na
+ * vizinha; "quase 45" vira fresta na planta impressa. O campo livre fica para o resto.
+ */
+function SeletorGiro({ graus, onGirar }: { graus: number; onGirar: (g: number) => void }) {
+  const [rascunho, setRascunho] = useState('')
+  const [editando, setEditando] = useState(false)
+  const normal = ((graus % 360) + 360) % 360
+
+  function aplicar() {
+    setEditando(false)
+    const n = Number(rascunho.replace(',', '.').replace('−', '-'))
+    if (!Number.isFinite(n)) return
+    onGirar(((n % 360) + 360) % 360)
+  }
+
+  return (
+    <div className="painel-estado">
+      <span className="painel-propriedades-label">Giro</span>
+      <div className="painel-estado-opcoes painel-opcoes-lado-a-lado">
+        {GIROS_RAPIDOS.map((g) => (
+          <button
+            key={g}
+            type="button"
+            className={`painel-estado-opcao painel-opcao-giro${normal === g ? ' ativo' : ''}`}
+            title={`Girar para ${g}°`}
+            aria-pressed={normal === g}
+            onClick={() => onGirar(g)}
+          >
+            {g}°
+          </button>
+        ))}
+      </div>
+      <label className="painel-propriedades-campo painel-giro-campo">
+        <span className="painel-propriedades-label">graus</span>
+        <input
+          type="text"
+          inputMode="decimal"
+          className="painel-propriedades-input"
+          value={editando ? rascunho : String(normal)}
+          onFocus={() => {
+            setRascunho(String(normal))
+            setEditando(true)
+          }}
+          onChange={(e) => setRascunho(e.target.value)}
+          onBlur={aplicar}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') (e.target as HTMLInputElement).blur()
+            // Escape descarta o rascunho, mesma regra de CampoQuadrado — sem isto o blur
+            // seguinte aplicaria o valor abandonado.
+            if (e.key === 'Escape') {
+              setRascunho(String(normal))
+              setEditando(false)
+            }
+          }}
+        />
+      </label>
     </div>
   )
 }

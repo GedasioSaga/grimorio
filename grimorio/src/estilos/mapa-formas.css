@@ -189,3 +189,25 @@
   align-items: center;
   padding: 2px;
 }
+
+/* Botão de ângulo: texto curto ("45°"), não amostra visual — largura fixa para os oito
+   ficarem numa grade regular em vez de pular de tamanho conforme o número de dígitos. */
+.painel-opcao-giro {
+  width: 38px;
+  justify-content: center;
+  padding: 3px 2px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* O campo livre de graus fica ABAIXO dos botões e em linha, não empilhado como X/Y/L/A:
+   ele é o complemento dos oito ângulos, não um quinto campo de medida. */
+.painel-giro-campo {
+  flex-direction: row;
+  align-items: center;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.painel-giro-campo .painel-propriedades-input {
+  width: 64px;
+}

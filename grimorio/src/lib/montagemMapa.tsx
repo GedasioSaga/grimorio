@@ -356,6 +356,7 @@ export interface AcoesPainelPropriedadesMapa {
   aoTrocarEstiloRotulo: (id: TLShapeId, estilo: EstiloRotuloPainel) => void
   aoTrocarContorno: (id: TLShapeId, ligado: boolean) => void
   aoAplicarEmLote: (ids: TLShapeId[], aplicar: (id: TLShapeId) => void) => void
+  aoGirar: (id: TLShapeId, graus: number) => void
 }
 
 /**
@@ -464,24 +465,38 @@ export function usePainelPropriedadesMapa(editorRef: React.RefObject<Editor | nu
     moverEixo(id, quadrados, 'y')
   }
 
+  /**
+   * L e A medem a PEÇA, não a caixa envolvente dela.
+   *
+   * Antes vinham de `getShapePageBounds`, que numa peça girada é o retângulo alinhado aos
+   * eixos que a CONTÉM — numa sala a 45° isso é a diagonal, não a largura. O campo exibia um
+   * número que não era o da peça, e digitar nele escalava pela razão errada: `resizeShape`
+   * aplica a escala nos eixos PRÓPRIOS da peça (`scaleAxisRotation` cai no `pageRotation`),
+   * então medir na diagonal e aplicar no eixo deformava a sala a cada Enter.
+   *
+   * `getShapeGeometry(id).bounds` é a medida no espaço da própria peça. Em peça não girada os
+   * dois valores coincidem, então nada muda para o caso comum.
+   */
   function aoAplicarL(id: TLShapeId, quadrados: number) {
     const editor = editorRef.current
     if (!editor) return
-    const bounds = editor.getShapePageBounds(id)
-    if (!bounds || bounds.w <= 0) return
+    const propria = editor.getShapeGeometry(id).bounds
+    const pagina = editor.getShapePageBounds(id)
+    if (!pagina || propria.w <= 0) return
     const larguraAlvoPx = quadradosParaPx(quadrados, QUADRADO_PX)
     marcar('painel-largura')
-    editor.resizeShape(id, { x: larguraAlvoPx / bounds.w, y: 1 }, { scaleOrigin: { x: bounds.x, y: bounds.y } })
+    editor.resizeShape(id, { x: larguraAlvoPx / propria.w, y: 1 }, { scaleOrigin: { x: pagina.x, y: pagina.y } })
   }
 
   function aoAplicarA(id: TLShapeId, quadrados: number) {
     const editor = editorRef.current
     if (!editor) return
-    const bounds = editor.getShapePageBounds(id)
-    if (!bounds || bounds.h <= 0) return
+    const propria = editor.getShapeGeometry(id).bounds
+    const pagina = editor.getShapePageBounds(id)
+    if (!pagina || propria.h <= 0) return
     const alturaAlvoPx = quadradosParaPx(quadrados, QUADRADO_PX)
     marcar('painel-altura')
-    editor.resizeShape(id, { x: 1, y: alturaAlvoPx / bounds.h }, { scaleOrigin: { x: bounds.x, y: bounds.y } })
+    editor.resizeShape(id, { x: 1, y: alturaAlvoPx / propria.h }, { scaleOrigin: { x: pagina.x, y: pagina.y } })
   }
 
   function aoTrocarEstado(id: TLShapeId, estado: string) {
@@ -595,6 +610,29 @@ export function usePainelPropriedadesMapa(editorRef: React.RefObject<Editor | nu
     editor.updateShape({ id, type: shape.type, props: { contorno: ligado } } as TLShapePartial)
   }
 
+  /**
+   * Gira a peça para um ângulo ABSOLUTO, em graus.
+   *
+   * Não existia campo de rotação em lugar nenhum do mapa: girar era só arrastar a alça
+   * redonda, o que não acerta 90° nem 45° de propósito, e na sala em polígono nem alça existe
+   * (as dela viraram vértices). Uma parede diagonal precisa de ângulo exato para encostar na
+   * vizinha, e "quase 45" aparece como fresta na planta impressa.
+   *
+   * `rotateShapesBy` com o DELTA em vez de escrever `rotation` direto: escrever a prop gira em
+   * torno da origem do shape e a peça sai andando pela tela; `rotateShapesBy` gira em torno do
+   * centro dela, que é o que o gesto significa.
+   */
+  function aoGirar(id: TLShapeId, graus: number) {
+    const editor = editorRef.current
+    const shape = editor?.getShape(id)
+    if (!editor || !shape) return
+    const alvo = ((graus % 360) * Math.PI) / 180
+    const delta = alvo - shape.rotation
+    if (Math.abs(delta) < 1e-6) return
+    marcar('painel-girar')
+    editor.rotateShapesBy([id], delta)
+  }
+
   function aoTrocarPreenchido(id: TLShapeId, preenchido: boolean) {
     const editor = editorRef.current
     const shape = editor?.getShape(id)
@@ -651,6 +689,7 @@ export function usePainelPropriedadesMapa(editorRef: React.RefObject<Editor | nu
     aoTrocarEstiloRotulo,
     aoTrocarContorno,
     aoAplicarEmLote,
+    aoGirar,
   }
 }
 

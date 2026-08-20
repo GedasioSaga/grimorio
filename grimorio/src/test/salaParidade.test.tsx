@@ -203,6 +203,7 @@ describe('painel desenha os mesmos controles para os dois formatos', () => {
       cor: '',
       cenarioId: '',
       espessura: ESPESSURA_CONTORNO_SALA,
+      graus: 0,
       camadasDaSelecao: [],
     }
   }
@@ -230,6 +231,7 @@ describe('painel desenha os mesmos controles para os dois formatos', () => {
           aoTrocarEstiloRotulo={vazio}
           aoTrocarContorno={vazio}
           aoAplicarEmLote={vazio}
+          aoGirar={vazio}
         />,
       ),
     )
@@ -707,5 +709,94 @@ describe('corredor, muralha, torre e escada deixam de ser inertes', () => {
     const id = criarSala(editor, 'porta-mapa')
     act(() => acoes.atual.aoTrocarCor(id, '#8a4340'))
     expect(props(editor, id).cor).toBeUndefined()
+  })
+})
+
+describe('girar a peça', () => {
+  /**
+   * Não existia campo de rotação em lugar nenhum do mapa. Girar era arrastar a alça redonda —
+   * que não acerta 90° de propósito — e na sala em polígono nem alça havia, porque as dela
+   * viraram vértices: a peça ficou girável e indescobrível ao mesmo tempo.
+   */
+  it.each(TIPOS_SALA)('%s gira para um ângulo absoluto', (tipo) => {
+    const editor = criarEditorDeTeste()
+    const acoes = montarAcoes(editor)
+    const id = criarSala(editor, tipo)
+
+    act(() => acoes.atual.aoGirar(id, 90))
+    expect((editor.getShape(id)!.rotation * 180) / Math.PI).toBeCloseTo(90, 3)
+
+    // absoluto, não acumulado: girar para 90 duas vezes continua em 90
+    act(() => acoes.atual.aoGirar(id, 90))
+    expect((editor.getShape(id)!.rotation * 180) / Math.PI).toBeCloseTo(90, 3)
+
+    act(() => acoes.atual.aoGirar(id, 45))
+    expect((editor.getShape(id)!.rotation * 180) / Math.PI).toBeCloseTo(45, 3)
+  })
+
+  it('gira em torno do CENTRO, não da origem', () => {
+    // escrever `rotation` direto gira em torno da origem do shape e a peça sai andando
+    const editor = criarEditorDeTeste()
+    const acoes = montarAcoes(editor)
+    const id = criarSala(editor, 'sala-mapa')
+    const antes = editor.getShapePageBounds(id)!
+    const centroAntes = { x: antes.x + antes.w / 2, y: antes.y + antes.h / 2 }
+
+    act(() => acoes.atual.aoGirar(id, 90))
+
+    const depois = editor.getShapePageBounds(id)!
+    expect(depois.x + depois.w / 2).toBeCloseTo(centroAntes.x, 1)
+    expect(depois.y + depois.h / 2).toBeCloseTo(centroAntes.y, 1)
+  })
+
+  it('girar é UM Ctrl+Z', () => {
+    const editor = criarEditorDeTeste()
+    const acoes = montarAcoes(editor)
+    const id = criarSala(editor, 'sala-mapa')
+    act(() => acoes.atual.aoGirar(id, 90))
+    act(() => void editor.undo())
+    expect(editor.getShape(id)!.rotation).toBeCloseTo(0, 5)
+  })
+})
+
+describe('L/A numa peça GIRADA', () => {
+  /**
+   * A metade silenciosa do problema: L e A vinham de `getShapePageBounds`, que numa peça
+   * girada é o retângulo alinhado aos eixos que a CONTÉM — numa sala a 45° isso é a diagonal.
+   * O campo exibia esse número como se fosse a largura, e digitar nele escalava pela razão
+   * errada, deformando a peça a cada Enter.
+   */
+  it('L continua valendo a largura da PEÇA depois de girar 90°', () => {
+    const editor = criarEditorDeTeste()
+    const acoes = montarAcoes(editor)
+    const id = criarSala(editor, 'sala-mapa')
+    editor.updateShape({ id, type: 'sala-mapa', props: { w: 320, h: 160 } } as Parameters<
+      typeof editor.updateShape
+    >[0])
+
+    act(() => acoes.atual.aoGirar(id, 90))
+    // a caixa em página trocou de eixo, mas a peça continua 320 de largura
+    expect(editor.getShapeGeometry(id).bounds.w).toBeCloseTo(320, 1)
+
+    act(() => acoes.atual.aoAplicarL(id, 20))
+    expect(editor.getShapeGeometry(id).bounds.w).toBeCloseTo(20 * QUADRADO_PX, 1)
+    // e a altura NÃO foi junto
+    expect(editor.getShapeGeometry(id).bounds.h).toBeCloseTo(160, 1)
+  })
+
+  it('numa peça a 45°, aplicar L não deforma a altura', () => {
+    const editor = criarEditorDeTeste()
+    const acoes = montarAcoes(editor)
+    const id = criarSala(editor, 'sala-mapa')
+    editor.updateShape({ id, type: 'sala-mapa', props: { w: 320, h: 160 } } as Parameters<
+      typeof editor.updateShape
+    >[0])
+    act(() => acoes.atual.aoGirar(id, 45))
+
+    const alturaAntes = editor.getShapeGeometry(id).bounds.h
+    act(() => acoes.atual.aoAplicarL(id, 20))
+
+    expect(editor.getShapeGeometry(id).bounds.w).toBeCloseTo(20 * QUADRADO_PX, 0)
+    expect(editor.getShapeGeometry(id).bounds.h).toBeCloseTo(alturaAntes, 0)
   })
 })
