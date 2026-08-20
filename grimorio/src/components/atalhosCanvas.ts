@@ -120,14 +120,29 @@ export function registrarAtalhos(
       }
     }
 
+    /**
+     * Remover canto pede **Alt**. Delete sozinho continua apagando a peça, sempre.
+     *
+     * A primeira versão disto decidia pela MIRA: Delete perto de um canto removia o canto,
+     * longe dele apagava a sala. Errar por quinze pixels apagava o cômodo inteiro — e o gesto
+     * era invisível, então o usuário nem sabia que estava mirando em nada. Um Ctrl+Z devolve,
+     * mas o susto no meio da sessão não.
+     *
+     * Com o modificador, os dois gestos ficam separados por INTENÇÃO e não por precisão:
+     * Alt+Delete sem canto sob o cursor não faz nada (seguro), e Delete puro faz o que faz em
+     * qualquer editor. Errar a mira deixou de custar o cômodo.
+     */
     if (e.key === 'Delete' || e.key === 'Backspace') {
       if (editor.getEditingShapeId()) return // editando texto: Delete é do texto
       const alvoTecla = e.target as HTMLElement | null
       if (alvoTecla?.closest('input, textarea, [contenteditable="true"]')) return
-      if (removerCantoSobCursor(editor)) {
-        e.preventDefault()
-        e.stopPropagation()
-      }
+      if (!e.altKey) return // sem Alt: o Delete do tldraw segue e apaga a peça
+
+      // com Alt, a tecla é NOSSA mesmo que não haja canto sob o cursor — deixar o Delete
+      // nativo passar aqui é exatamente o acidente que este modificador existe para evitar.
+      e.preventDefault()
+      e.stopPropagation()
+      removerCantoSobCursor(editor)
       return
     }
 

@@ -357,6 +357,7 @@ export interface AcoesPainelPropriedadesMapa {
   aoTrocarContorno: (id: TLShapeId, ligado: boolean) => void
   aoAplicarEmLote: (ids: TLShapeId[], aplicar: (id: TLShapeId) => void) => void
   aoGirar: (id: TLShapeId, graus: number) => void
+  aoTrocarDegraus: (id: TLShapeId, direcao: string) => void
 }
 
 /**
@@ -633,6 +634,23 @@ export function usePainelPropriedadesMapa(editorRef: React.RefObject<Editor | nu
     editor.rotateShapesBy([id], delta)
   }
 
+  /**
+   * Direção dos degraus da escada: automático, horizontal ou vertical.
+   *
+   * O automático (`''`) decide pelo lado maior e resolve quase tudo — mas em escada QUADRADA
+   * `w >= h` vira cara-ou-coroa, e um pixel de redimensionamento inverte a hachura inteira na
+   * frente do usuário. Escada em patamar e de torre são quadradas com frequência, e nelas a
+   * direção é decisão de leitura (para onde se sobe), não consequência da proporção.
+   */
+  function aoTrocarDegraus(id: TLShapeId, direcao: string) {
+    const editor = editorRef.current
+    const shape = editor?.getShape(id)
+    if (!editor || !shape || shape.type !== 'escada-mapa') return
+    if (direcao !== '' && direcao !== 'h' && direcao !== 'v') return
+    marcar('painel-degraus')
+    editor.updateShape({ id, type: shape.type, props: { degraus: direcao } } as TLShapePartial)
+  }
+
   function aoTrocarPreenchido(id: TLShapeId, preenchido: boolean) {
     const editor = editorRef.current
     const shape = editor?.getShape(id)
@@ -690,6 +708,7 @@ export function usePainelPropriedadesMapa(editorRef: React.RefObject<Editor | nu
     aoTrocarContorno,
     aoAplicarEmLote,
     aoGirar,
+    aoTrocarDegraus,
   }
 }
 

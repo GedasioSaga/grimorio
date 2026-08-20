@@ -77,6 +77,8 @@ export type SelecaoPropriedades =
       contorno?: boolean
       /** rotação da peça em GRAUS, 0..359 */
       graus: number
+      /** só escada: '' automático, 'h' horizontal, 'v' vertical */
+      degraus?: string
       /** `meta.camada` da peça; vazio quando ela nunca foi carimbada (mapa antigo). */
       camadasDaSelecao: string[]
     }
@@ -248,6 +250,7 @@ export function SelecaoPropriedadesBridge() {
         rotuloAncora: ehAncoraRotulo(props.rotuloAncora) ? props.rotuloAncora : undefined,
         rotuloVertical: typeof props.rotuloVertical === 'boolean' ? props.rotuloVertical : undefined,
         contorno: typeof props.contorno === 'boolean' ? props.contorno : undefined,
+        degraus: typeof props.degraus === 'string' ? props.degraus : undefined,
         camadasDaSelecao,
       }
     },
@@ -290,6 +293,7 @@ export function PainelPropriedades({
   aoTrocarContorno,
   aoAplicarEmLote,
   aoGirar,
+  aoTrocarDegraus,
 }: {
   selecao: SelecaoPropriedades
   aoAplicarX: (id: TLShapeId, quadrados: number) => void
@@ -317,6 +321,8 @@ export function PainelPropriedades({
   aoAplicarEmLote: (ids: TLShapeId[], aplicar: (id: TLShapeId) => void) => void
   /** gira a peça para um ângulo absoluto, em graus */
   aoGirar: (id: TLShapeId, graus: number) => void
+  /** só escada: direção dos degraus ('' automático, 'h', 'v') */
+  aoTrocarDegraus: (id: TLShapeId, direcao: string) => void
 }) {
   const [colapsado, setColapsado] = useState(false)
 
@@ -492,6 +498,41 @@ export function PainelPropriedades({
           <CampoQuadrado label="A" valorPx={selecao.h} onAplicar={(q) => aoAplicarA(selecao.id, q)} minimoPositivo />
           </div>
           <SeletorGiro graus={selecao.graus} onGirar={(g) => aoGirar(selecao.id, g)} />
+          {selecao.tipoShape === 'escada-mapa' && (
+            <div className="painel-estado">
+              <span className="painel-propriedades-label">Degraus</span>
+              <div className="painel-estado-opcoes painel-opcoes-lado-a-lado">
+                {[
+                  { id: '', rotulo: 'auto', titulo: 'Pelo lado maior da caixa' },
+                  { id: 'h', rotulo: '↔', titulo: 'Degraus na horizontal' },
+                  { id: 'v', rotulo: '↕', titulo: 'Degraus na vertical' },
+                ].map((op) => (
+                  <button
+                    key={op.id || 'auto'}
+                    type="button"
+                    className={`painel-estado-opcao${(selecao.degraus ?? '') === op.id ? ' ativo' : ''}`}
+                    title={op.titulo}
+                    aria-pressed={(selecao.degraus ?? '') === op.id}
+                    onClick={() => aoTrocarDegraus(selecao.id, op.id)}
+                  >
+                    {op.rotulo}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+          {selecao.tipoShape === 'sala-poligono-mapa' && (
+            /**
+             * A outra metade do conserto do "gesto invisível": exigir Alt tirou o risco de
+             * apagar o cômodo por mira ruim, mas ninguém descobre um atalho que não está
+             * escrito em lugar nenhum. A dica mora aqui, junto da peça a que ela se aplica, e
+             * some quando a seleção muda — nota de rodapé permanente vira ruído.
+             */
+            <p className="painel-dica-canto">
+              Arraste o meio de uma parede para criar canto. <strong>Alt+Delete</strong> em cima
+              de um canto remove.
+            </p>
+          )}
         </div>
       )}
     </div>

@@ -135,7 +135,7 @@ describe('shapes próprios do Mapa registram tipo e props', () => {
   it('EscadaMapaShapeUtil', async () => {
     const { EscadaMapaShapeUtil } = await import('../components/EscadaMapaShape')
     expect(EscadaMapaShapeUtil.type).toBe('escada-mapa')
-    expect(Object.keys(EscadaMapaShapeUtil.props)).toEqual(['w', 'h', 'cor', 'contorno'])
+    expect(Object.keys(EscadaMapaShapeUtil.props)).toEqual(['w', 'h', 'cor', 'contorno', 'degraus'])
   })
 
   it('MuralhaMapaShapeUtil', async () => {

@@ -28,10 +28,20 @@ export interface DesenharEscadaProps {
   cor?: string
   /** desenha a linha de contorno? ausente conta como SIM */
   contorno?: boolean
+  /**
+   * Direção dos degraus. Ausente = decide pelo lado maior da caixa.
+   *
+   * O automático resolve 95% dos casos e falha exatamente no que não é raro: escada QUADRADA,
+   * em que `w >= h` vira cara-ou-coroa e um pixel de redimensionamento inverte a hachura
+   * inteira na frente do usuário. Escada em patamar e escada de torre são quadradas com
+   * frequência, e nelas a direção é uma decisão de leitura — para onde se sobe —, não uma
+   * consequência da proporção.
+   */
+  degrausHorizontais?: boolean
 }
 
-export function desenharEscada({ w, h, cor, contorno = true }: DesenharEscadaProps) {
-  const horizontal = w >= h
+export function desenharEscada({ w, h, cor, contorno = true, degrausHorizontais }: DesenharEscadaProps) {
+  const horizontal = degrausHorizontais ?? w >= h
   const comprimento = horizontal ? w : h
   const qtdDegraus = Math.max(1, Math.floor((comprimento - ESCADA_MARGEM_DEGRAU * 2) / ESCADA_ESPACO_DEGRAU) + 1)
 

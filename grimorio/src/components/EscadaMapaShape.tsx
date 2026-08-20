@@ -15,6 +15,8 @@ declare module '@tldraw/tlschema' {
       cor: string
       /** desenha a linha de contorno? */
       contorno: boolean
+      /** '' = decide pelo lado maior; 'h' = degraus na horizontal; 'v' = na vertical */
+      degraus: string
     }
   }
 }
@@ -43,6 +45,7 @@ export class EscadaMapaShapeUtil extends BaseBoxShapeUtil<EscadaMapaShapeType> {
     h: T.positiveNumber,
     cor: T.string,
     contorno: T.boolean,
+    degraus: T.string,
   }
 
   static override migrations = createShapePropsMigrationSequence({
@@ -53,25 +56,33 @@ export class EscadaMapaShapeUtil extends BaseBoxShapeUtil<EscadaMapaShapeType> {
         up(props) {
           if (props.cor === undefined) props.cor = ''
           if (props.contorno === undefined) props.contorno = true
+          if (props.degraus === undefined) props.degraus = ''
         },
         down(props) {
           delete props.cor
           delete props.contorno
+          delete props.degraus
         },
       },
     ],
   })
 
   getDefaultProps(): EscadaMapaShapeType['props'] {
-    return { w: ESCADA_LARGURA_PADRAO, h: ESCADA_ALTURA_PADRAO, cor: '', contorno: true }
+    return { w: ESCADA_LARGURA_PADRAO, h: ESCADA_ALTURA_PADRAO, cor: '', contorno: true, degraus: '' }
   }
 
   /** Ver `atenderDuploClique`: sem isto, todo duplo clique nesta peça larga um texto vazio no mapa. */
   override onDoubleClick = atenderDuploClique
 
   component(shape: EscadaMapaShapeType) {
-    const { w, h, cor, contorno } = shape.props
-    return <SVGContainer>{desenharEscada({ w, h, cor, contorno })}</SVGContainer>
+    const { w, h, cor, contorno, degraus } = shape.props
+    return <SVGContainer>{desenharEscada({
+          w,
+          h,
+          cor,
+          contorno,
+          degrausHorizontais: degraus === 'h' ? true : degraus === 'v' ? false : undefined,
+        })}</SVGContainer>
   }
 
   indicator(shape: EscadaMapaShapeType) {

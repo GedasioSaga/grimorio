@@ -373,7 +373,7 @@ describe('Delete remove o canto sob o cursor', () => {
   const contar = (editor: Editor, id: ReturnType<typeof createShapeId>) =>
     (editor.getShape(id)!.props as { pontos: unknown[] }).pontos.length
 
-  function apertarDelete(editor: Editor, pagina: { x: number; y: number }) {
+  function apertarDelete(editor: Editor, pagina: { x: number; y: number }, comAlt = true) {
     editor.dispatch({
       type: 'pointer',
       name: 'pointer_move',
@@ -391,23 +391,33 @@ describe('Delete remove o canto sob o cursor', () => {
     editor.emit('tick', 16)
     editor
       .getContainer()
-      .dispatchEvent(new KeyboardEvent('keydown', { key: 'Delete', bubbles: true, cancelable: true }))
+      .dispatchEvent(
+        new KeyboardEvent('keydown', { key: 'Delete', altKey: comAlt, bubbles: true, cancelable: true }),
+      )
   }
+
+  it('Delete SEM Alt nunca mexe em canto — ele apaga a peça, como em qualquer editor', () => {
+    // Era o risco: a primeira versão decidia pela MIRA, e errar por quinze pixels apagava o
+    // cômodo inteiro. Agora os dois gestos se separam por INTENÇÃO, não por precisão.
+    const { editor, id, cancelar } = comAtalhos()
+    apertarDelete(editor, { x: 200, y: 100 }, false)
+    expect(contar(editor, id)).toBe(6)
+    cancelar()
+  })
+
+  it('Alt+Delete LONGE de canto não faz nada — errar a mira não custa o cômodo', () => {
+    const { editor, id, cancelar } = comAtalhos()
+    apertarDelete(editor, { x: 40, y: 40 })
+    expect(contar(editor, id)).toBe(6)
+    expect(editor.getShape(id)).toBeDefined()
+    cancelar()
+  })
 
   it('cursor EM CIMA de um canto: remove aquele canto', () => {
     const { editor, id, cancelar } = comAtalhos()
     expect(contar(editor, id)).toBe(6)
     apertarDelete(editor, { x: 200, y: 100 })
     expect(contar(editor, id)).toBe(5)
-    cancelar()
-  })
-
-  it('cursor LONGE de canto: não trata, e o Delete do tldraw segue seu curso', () => {
-    // trocar "apagar a peça" por "apagar um canto" em toda a área da sala tiraria do
-    // usuário um gesto que ele já tem.
-    const { editor, id, cancelar } = comAtalhos()
-    apertarDelete(editor, { x: 40, y: 40 })
-    expect(contar(editor, id)).toBe(6)
     cancelar()
   })
 

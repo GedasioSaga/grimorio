@@ -232,6 +232,7 @@ describe('painel desenha os mesmos controles para os dois formatos', () => {
           aoTrocarContorno={vazio}
           aoAplicarEmLote={vazio}
           aoGirar={vazio}
+          aoTrocarDegraus={vazio}
         />,
       ),
     )
@@ -798,5 +799,73 @@ describe('L/A numa peça GIRADA', () => {
 
     expect(editor.getShapeGeometry(id).bounds.w).toBeCloseTo(20 * QUADRADO_PX, 0)
     expect(editor.getShapeGeometry(id).bounds.h).toBeCloseTo(alturaAntes, 0)
+  })
+})
+
+describe('direção dos degraus da escada', () => {
+  /**
+   * A hachura vinha de `w >= h`. Em escada QUADRADA isso é cara-ou-coroa: um pixel de
+   * redimensionamento inverte a hachura inteira na frente do usuário. Escada em patamar e de
+   * torre são quadradas com frequência, e nelas a direção é decisão de leitura — para onde se
+   * sobe —, não consequência da proporção.
+   */
+  function escada(editor: Editor, w: number, h: number) {
+    const id = createShapeId()
+    editor.createShape({ id, type: 'escada-mapa', x: 0, y: 0, props: { w, h } } as Parameters<
+      typeof editor.createShape
+    >[0])
+    return id
+  }
+
+  it('nasce em automático', () => {
+    const editor = criarEditorDeTeste()
+    expect(props(editor, escada(editor, 200, 56)).degraus).toBe('')
+  })
+
+  it('a escolha manual vence o automático nos dois sentidos', () => {
+    const editor = criarEditorDeTeste()
+    const acoes = montarAcoes(editor)
+    // caixa DEITADA: o automático daria horizontal
+    const id = escada(editor, 200, 56)
+
+    act(() => acoes.atual.aoTrocarDegraus(id, 'v'))
+    expect(props(editor, id).degraus).toBe('v')
+
+    act(() => acoes.atual.aoTrocarDegraus(id, 'h'))
+    expect(props(editor, id).degraus).toBe('h')
+
+    act(() => acoes.atual.aoTrocarDegraus(id, ''))
+    expect(props(editor, id).degraus).toBe('')
+  })
+
+  it('escada QUADRADA para de depender de um pixel', () => {
+    const editor = criarEditorDeTeste()
+    const acoes = montarAcoes(editor)
+    const id = escada(editor, 96, 96)
+    act(() => acoes.atual.aoTrocarDegraus(id, 'v'))
+
+    // redimensionar de 96x96 para 97x96 inverteria o automático; com escolha manual, não muda
+    act(() =>
+      editor.updateShape({ id, type: 'escada-mapa', props: { w: 97 } } as Parameters<
+        typeof editor.updateShape
+      >[0]),
+    )
+    expect(props(editor, id).degraus).toBe('v')
+  })
+
+  it('valor inválido é recusado', () => {
+    const editor = criarEditorDeTeste()
+    const acoes = montarAcoes(editor)
+    const id = escada(editor, 200, 56)
+    act(() => acoes.atual.aoTrocarDegraus(id, 'diagonal'))
+    expect(props(editor, id).degraus).toBe('')
+  })
+
+  it('peça que não é escada ignora o handler', () => {
+    const editor = criarEditorDeTeste()
+    const acoes = montarAcoes(editor)
+    const id = criarSala(editor, 'sala-mapa')
+    act(() => acoes.atual.aoTrocarDegraus(id, 'h'))
+    expect(props(editor, id).degraus).toBeUndefined()
   })
 })
