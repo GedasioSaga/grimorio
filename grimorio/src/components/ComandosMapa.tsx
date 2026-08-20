@@ -13,6 +13,9 @@ import { pecasConversiveis, planoDeConversao } from '../lib/conversaoMapa'
 import { entradasDaLegenda, type EntradaLegenda } from '../lib/legendaMapa'
 import { ELEMENTOS_PALETA } from '../lib/paletaMapa'
 import { pontosDeRetangulo } from '../lib/salaPoligonoMapa'
+import { contornoDaUniao } from '../lib/recorteGeometria'
+import { arestasEmPagina } from '../lib/ancoraPortaEditor'
+import { ehTipoSala } from '../lib/tiposSala'
 import { tamanhoDoSimbolo } from './SimboloMapaShape'
 
 /**
@@ -26,6 +29,20 @@ export function ComandosMapa({ stylePropsPorNome }: { stylePropsPorNome: Record<
   const editor = useEditor()
   const [menuAberto, setMenuAberto] = useState(false)
   const qtdSelecionada = useValue('mapa-comandos-selecao', () => editor.getSelectedShapeIds().length, [editor])
+  /**
+   * Unir só acende com DUAS OU MAIS salas selecionadas.
+   *
+   * Botão que fica sempre clicável e às vezes não faz nada ensina o usuário a desconfiar do
+   * botão. Aqui a condição é barata de checar e a resposta é honesta antes do clique.
+   */
+  const podeUnir = useValue(
+    'mapa-comandos-pode-unir',
+    () => {
+      const sel = editor.getSelectedShapes()
+      return sel.length >= 2 && sel.every((s) => ehTipoSala(s.type))
+    },
+    [editor],
+  )
 
   return (
     <>
@@ -63,6 +80,19 @@ export function ComandosMapa({ stylePropsPorNome }: { stylePropsPorNome: Record<
           Converter ▸
         </button>
       </div>
+      <button
+        type="button"
+        className="btn-icon"
+        title={
+          podeUnir
+            ? 'Unir as salas selecionadas num cômodo só'
+            : 'Unir: selecione duas ou mais salas encostadas'
+        }
+        disabled={!podeUnir}
+        onClick={() => unirSalas(editor)}
+      >
+        Unir
+      </button>
       <button type="button" className="btn-icon" title="Inserir legenda do mapa" onClick={() => inserirLegenda(editor)}>
         Legenda
       </button>
@@ -152,6 +182,67 @@ function converterSelecao(editor: Editor, pecaId: string, stylePropsPorNome: Rec
     }
     editor.deleteShapes(selecionadas)
     if (novas.length) editor.setSelectedShapes(novas)
+  })
+}
+
+/**
+ * Une as salas selecionadas num único cômodo em polígono.
+ *
+ * ## Por que é um COMANDO e não automático
+ *
+ * A primeira tentativa de unir dissolvia parede sozinha, por proximidade, e foi revertida:
+ * compor planta com salas sobrepostas é legítimo — salão de piso ao fundo, cômodos por cima —
+ * e a regra apagava o contorno de plantas inteiras. Heurística não distingue "encostei duas
+ * salas para virar um ambiente" de "desenhei um cômodo dentro do salão". Quem sabe é quem
+ * está desenhando, então quem manda unir é ele.
+ *
+ * ## O que a peça nova herda
+ *
+ * Nome, estado, cor, espessura, contorno e o vínculo com o Cenário vêm da PRIMEIRA sala
+ * selecionada. Perguntar qual manter num diálogo seria um passo a mais no gesto mais comum
+ * (unir duas salas iguais), e escolher a primeira é a regra que o usuário controla sozinho —
+ * basta selecionar na ordem que ele quer.
+ *
+ * ## Quando não faz nada
+ *
+ * Peças que não se tocam, ou união com buraco no meio, não cabem num polígono simples.
+ * `contornoDaUniao` devolve `null` nesses casos e aqui a ação para: unir errado tiraria as
+ * peças originais e devolveria uma forma que o mestre não desenhou.
+ */
+function unirSalas(editor: Editor) {
+  const selecionadas = editor.getSelectedShapes().filter((s) => ehTipoSala(s.type) && !s.isLocked)
+  if (selecionadas.length < 2) return
+
+  const contornos = selecionadas.map((s) => arestasEmPagina(editor, s).map((a) => a.a))
+  if (contornos.some((c) => c.length < 3)) return
+
+  const uniao = contornoDaUniao(contornos)
+  if (!uniao) return
+
+  const minX = Math.min(...uniao.map((p) => p.x))
+  const minY = Math.min(...uniao.map((p) => p.y))
+  const herdadas = selecionadas[0].props as Record<string, unknown>
+  const novoId = createShapeId()
+
+  editor.run(() => {
+    editor.markHistoryStoppingPoint('unir-salas')
+    editor.createShape({
+      id: novoId,
+      type: 'sala-poligono-mapa',
+      x: minX,
+      y: minY,
+      // vértices são LOCAIS ao shape: a origem é o canto da caixa da união
+      props: {
+        pontos: uniao.map((p) => ({ x: p.x - minX, y: p.y - minY })),
+        estado: herdadas.estado ?? 'sem-info',
+        rotulo: herdadas.rotulo ?? '',
+        cor: herdadas.cor ?? '',
+        cenarioId: herdadas.cenarioId ?? '',
+      },
+      meta: { ...selecionadas[0].meta },
+    } as Parameters<typeof editor.createShape>[0])
+    editor.deleteShapes(selecionadas.map((s) => s.id))
+    editor.setSelectedShapes([novoId])
   })
 }
 
