@@ -15,7 +15,7 @@ import {
 } from '../lib/transformarImagem'
 import { versaoAtiva } from '../lib/cenarioVersao'
 import { versaoAtivaPersonagem } from '../lib/personagemVersao'
-import { pedirTexto } from './dialogos'
+import { pedirTexto, pedirTextoComPrefixo } from './dialogos'
 import { associarEscolhendoCampanhas } from './dialogoCampanhas'
 import { pedirTransformacao } from './dialogoTransformar'
 
@@ -88,14 +88,23 @@ export async function transformarImagemEmEntidade(editor: Editor, shape: TLImage
         propId = 'cenarioId'
       }
     } else {
-      const { tipo: tipoNovo, dir: dirEscolhido, novaPasta } = escolha
+      const { tipo: tipoNovo, dir: dirEscolhido, novaPasta, paiNome } = escolha
       tipo = tipoNovo
-      const nome = await pedirTexto(
-        `Nome do ${ROTULO_TIPO[tipo].toLowerCase()}:`,
-        sugestaoDeNome(asset?.type === 'image' ? asset.props.name : ''),
-        'Criar',
-      )
+      const titulo = `Nome do ${ROTULO_TIPO[tipo].toLowerCase()}:`
+      // Subcenário segue a convenção "Pai: Filho" (mesma de CenariosSoltos). Com o pai já
+      // escolhido no diálogo anterior, o prefixo entra pronto e o nome do arquivo da imagem
+      // cai fora — ele quase nunca é o nome do lugar, e obrigaria a apagar antes de digitar.
+      const nome = paiNome
+        ? await pedirTextoComPrefixo(titulo, `${paiNome}: `, 'Criar')
+        : await pedirTexto(titulo, sugestaoDeNome(asset?.type === 'image' ? asset.props.name : ''), 'Criar')
       if (!nome) return
+      // O diálogo já devolve null quando o prefixo volta intocado, mas essa regra mora em
+      // dialogos.tsx. Este é o único ponto que sabe qual é o prefixo E cria a entidade, e
+      // "Reino de Goa: " é truthy: sem a guarda aqui, bastaria o diálogo mudar de ideia para
+      // nascer um cenário com os dois-pontos pendurados. Exigir a parte própria (o que sobra
+      // depois de "Pai:") em vez de reescrever o nome mantém o que vai para o disco igual ao
+      // que o usuário digitou.
+      if (paiNome && !parteProprieDoNome(nome, paiNome)) return
       // pasta nova só nasce depois do nome confirmado: cancelar não deixa pasta órfã
       const dir = novaPasta ? (await repo.criarPasta(dirEscolhido, novaPasta)).caminho : dirEscolhido
 
@@ -168,4 +177,14 @@ export async function transformarImagemEmEntidade(editor: Editor, shape: TLImage
   } catch (e) {
     await message(`Falha ao transformar a imagem: ${e}`, { title: 'Grimório', kind: 'error' })
   }
+}
+
+/**
+ * Parte própria de um nome na convenção "Pai: Filho": o que sobra depois de "Pai:", sem
+ * espaços nas pontas. "Reino de Goa: " e "Reino de Goa:" dão vazio; um nome que não começa
+ * pelo prefixo (o usuário apagou o "Pai: ") é todo ele parte própria.
+ */
+function parteProprieDoNome(nome: string, paiNome: string): string {
+  const prefixo = `${paiNome}:`
+  return (nome.startsWith(prefixo) ? nome.slice(prefixo.length) : nome).trim()
 }

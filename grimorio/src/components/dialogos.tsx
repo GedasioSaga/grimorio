@@ -11,34 +11,52 @@ interface PedidoAberto {
   confirmar: string
   /** texto oferecido como chip clicável abaixo do campo (ex.: prefixo do cenário pai) */
   sugestao?: string
+  /**
+   * 'selecionar': o valor inicial é um nome inteiro a trocar (renomear) — a primeira tecla
+   * substitui tudo. 'fim': o valor inicial é um prefixo a completar — a primeira tecla
+   * continua dele.
+   */
+  cursor: 'selecionar' | 'fim'
   resolver: (valor: string | null) => void
 }
 
 interface DialogoState {
   pedido: PedidoAberto | null
-  pedir(titulo: string, valorInicial: string, confirmar: string, sugestao?: string): Promise<string | null>
+  pedir(titulo: string, valorInicial: string, confirmar: string, sugestao?: string, cursor?: PedidoAberto['cursor']): Promise<string | null>
   responder(valor: string | null): void
 }
 
 export const useDialogo = create<DialogoState>((set, get) => ({
   pedido: null,
-  pedir: (titulo, valorInicial, confirmar, sugestao) =>
+  pedir: (titulo, valorInicial, confirmar, sugestao, cursor = 'selecionar') =>
     new Promise<string | null>((resolver) => {
       // se já houver um pedido pendente (não deveria: modal bloqueia), resolve como
       // cancelado antes de abrir o novo — evita promise pendurada
       const anterior = get().pedido
       if (anterior) anterior.resolver(null)
-      set({ pedido: { titulo, valorInicial, confirmar, sugestao, resolver } })
+      set({ pedido: { titulo, valorInicial, confirmar, sugestao, cursor, resolver } })
     }),
   responder: (valor) => {
     const pedido = get().pedido
     if (!pedido) return
-    const limpo = typeof valor === 'string' ? valor.trim() : null
     set({ pedido: null })
-    // vazio/whitespace vira null: mantém a semântica do antigo `if (!nome) return`
-    pedido.resolver(limpo ? limpo : null)
+    pedido.resolver(textoConfirmado(pedido, valor))
   },
 }))
+
+/**
+ * O que o pedido devolve quando confirmado. Vazio/whitespace vira null (semântica do antigo
+ * `if (!nome) return`). Com cursor 'fim' o prefixo intocado é o "vazio" deste pedido: quem
+ * confirma "Reino de Goa: " sem completar não quis um cenário chamado assim, com os
+ * dois-pontos pendurados — e nada mais adiante saberia barrar, porque a string é truthy.
+ */
+function textoConfirmado(pedido: PedidoAberto, valor: string | null): string | null {
+  if (typeof valor !== 'string') return null
+  const limpo = valor.trim()
+  if (!limpo) return null
+  if (pedido.cursor === 'fim' && limpo === pedido.valorInicial.trim()) return null
+  return limpo
+}
 
 /**
  * Pede um texto ao usuário via modal in-app. Resolve com o texto (trim) ou null se cancelar/vazio.
@@ -48,6 +66,15 @@ export function pedirTexto(
   titulo: string, valorInicial = '', confirmar = 'OK', sugestao?: string,
 ): Promise<string | null> {
   return useDialogo.getState().pedir(titulo, valorInicial, confirmar, sugestao)
+}
+
+/**
+ * Como pedirTexto, mas o campo abre com `prefixo` já digitado e o cursor no fim dele —
+ * para quando a primeira parte do nome já está decidida (ex.: "Pai: " de um subcenário)
+ * e o usuário só completa. Sem chip: o prefixo não é sugestão, é ponto de partida.
+ */
+export function pedirTextoComPrefixo(titulo: string, prefixo: string, confirmar = 'OK'): Promise<string | null> {
+  return useDialogo.getState().pedir(titulo, prefixo, confirmar, undefined, 'fim')
 }
 
 // Diálogo de escolha entre opções (ex.: "Canvas ou Mapa?"). Mesmo padrão de pedirTexto
@@ -153,10 +180,15 @@ export function HostDialogos() {
   useEffect(() => {
     if (!pedido) return
     setValor(pedido.valorInicial)
-    // autofoco + seleção (útil no renomear, que vem preenchido)
+    // rAF: o input é controlado — antes do re-render o value ainda é o antigo, e
+    // select()/setSelectionRange atuariam sobre ele
     const id = requestAnimationFrame(() => {
-      inputRef.current?.focus()
-      inputRef.current?.select()
+      const input = inputRef.current
+      if (!input) return
+      input.focus()
+      // select() com prefixo faria a primeira tecla apagar o "Pai: " que acabou de entrar
+      if (pedido.cursor === 'fim') input.setSelectionRange(pedido.valorInicial.length, pedido.valorInicial.length)
+      else input.select()
     })
     return () => cancelAnimationFrame(id)
   }, [pedido])

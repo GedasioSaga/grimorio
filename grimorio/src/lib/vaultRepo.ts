@@ -15,6 +15,7 @@ import { VERSAO_CAMADAS } from './camadasMapa'
 import { ehTipoSala } from './tiposSala'
 import { normalizarFoco } from './focoRetrato'
 import { normalizarVinculos } from './vinculos'
+import { ehPastaComPonto, ehPastaInternaDaArvore } from './pastasInternas'
 import { normalizarChat, type MensagemChat } from './chatIA'
 import { normalizarLayoutTeia, type LayoutSalvo } from './grafoLayoutPersistido'
 import { LixeiraExecutor } from './lixeiraExecutar'
@@ -570,13 +571,16 @@ export class VaultRepo {
     const subpastas: PastaCenarioNode[] = []
     const cenarios: CenarioNode[] = []
     for (const e of entries) {
-      if (!e.isDir || e.name.endsWith('.notas')) continue
+      if (!e.isDir || e.name.endsWith('.notas') || ehPastaComPonto(e.name)) continue
       const caminho = `${dir}/${e.name}`
       if (await this.fs.exists(this.abs(`${caminho}/cenario.json`))) {
         cenarios.push(await this.montarCenarioNode(caminho))
-      } else {
-        subpastas.push(await this.montarArvoreCenarios(caminho))
+        continue
       }
+      const pasta = await this.montarArvoreCenarios(caminho)
+      const nosDentro = pasta.cenarios.length + pasta.subpastas.length
+      if (ehPastaInternaDaArvore(e.name, await this.temConteudoDoMestre(caminho, nosDentro))) continue
+      subpastas.push(pasta)
     }
     let nome = dir.split('/').pop() ?? dir
     let id: string | undefined
@@ -821,6 +825,16 @@ export class VaultRepo {
   }
 
   /**
+   * Uma pasta é conteúdo do mestre quando algo dentro dela apareceria na árvore, ou quando
+   * tem `pasta.json` (o que `criarPasta` grava). A pasta de retratos não tem nenhum dos dois:
+   * o app só grava imagem nela. Olhar o que tem dentro, e não só o marcador, é o que salva a
+   * pasta "Assets" criada à mão no disco com fichas dentro.
+   */
+  private async temConteudoDoMestre(dir: string, nosDentro: number): Promise<boolean> {
+    return nosDentro > 0 || this.fs.exists(this.abs(`${dir}/pasta.json`))
+  }
+
+  /**
    * Varredura genérica de "pastas aninhadas contendo arquivos .json". Serve a personagens
    * e a itens: as duas seções têm exatamente esta forma, e só divergem no nome do campo
    * das folhas. Cenário NÃO passa por aqui — lá a entidade é o próprio diretório.
@@ -836,7 +850,12 @@ export class VaultRepo {
     const personagens: ItemRef[] = []
     for (const e of entries) {
       if (e.isDir) {
-        subpastas.push(await this.montarArvoreDeArquivos(`${dir}/${e.name}`))
+        if (ehPastaComPonto(e.name)) continue
+        const subdir = `${dir}/${e.name}`
+        const pasta = await this.montarArvoreDeArquivos(subdir)
+        const nosDentro = pasta.arquivos.length + pasta.subpastas.length
+        if (ehPastaInternaDaArvore(e.name, await this.temConteudoDoMestre(subdir, nosDentro))) continue
+        subpastas.push(pasta)
       } else if (e.name.endsWith('.json') && e.name !== 'pasta.json') {
         const slug = e.name.replace(/\.json$/, '')
         const caminho = `${dir}/${e.name}`

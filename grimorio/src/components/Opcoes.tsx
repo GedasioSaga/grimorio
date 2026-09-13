@@ -6,6 +6,7 @@ import { OpcoesIA } from './OpcoesIA'
 import { OpcoesNuvem } from './OpcoesNuvem'
 import { OpcoesLixeira } from './OpcoesLixeira'
 import { useMiniaturas } from '../state/miniaturas'
+import { usePrefixoCenario } from '../state/prefixoCenario'
 
 export type AbaOpcoes = 'cofre' | 'nuvem' | 'aparencia' | 'ia' | 'lixeira'
 
@@ -44,6 +45,22 @@ function SeletorMiniaturas() {
       <span>
         Mostrar miniatura da imagem
         <small>Desligado, cada linha volta ao ícone: 💎 itens, 🗺 cenários, 👤 personagens.</small>
+      </span>
+    </label>
+  )
+}
+
+/** Liga/desliga o corte do prefixo do pai no nome dos sub-cenários da árvore. */
+function SeletorPrefixoCenario() {
+  const ocultar = usePrefixoCenario((s) => s.ocultar)
+  const alternar = usePrefixoCenario((s) => s.alternar)
+
+  return (
+    <label className="opcoes-alternador">
+      <input type="checkbox" checked={ocultar} onChange={(e) => alternar(e.target.checked)} />
+      <span>
+        Encurtar nome de sub-cenário na árvore
+        <small>“Reino de Goa: Castelo” dentro de “Reino de Goa” aparece como “Castelo”. O nome completo continua no arquivo, na busca e ao passar o mouse.</small>
       </span>
     </label>
   )
@@ -94,6 +111,7 @@ export function HostOpcoes() {
               <div className="opcoes-secao">
                 <h3>Listas laterais</h3>
                 <SeletorMiniaturas />
+                <SeletorPrefixoCenario />
               </div>
             </>
           )}

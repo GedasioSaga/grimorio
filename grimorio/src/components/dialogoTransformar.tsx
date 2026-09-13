@@ -26,6 +26,12 @@ export type EscolhaTransformacao =
       dir: string
       /** Nome de subpasta a criar dentro de dir antes de criar a entidade. */
       novaPasta?: string
+      /**
+       * Nome do cenário pai quando o novo nasce como subcenário. O dir já aponta pro pai,
+       * mas quem cria precisa do NOME pra propor "Pai: " no batismo — recuperá-lo do dir
+       * seria refazer a busca que este diálogo acabou de fazer.
+       */
+      paiNome?: string
     }
   | {
       modo: 'existente'
@@ -163,7 +169,7 @@ export function HostDialogoTransformar() {
 
   function submeterNovo() {
     if (!tipo || !dirFinal) return
-    responder({ modo: 'novo', tipo, dir: dirFinal, novaPasta: novaPasta.trim() || undefined })
+    responder({ modo: 'novo', tipo, dir: dirFinal, novaPasta: novaPasta.trim() || undefined, paiNome: paiSelecionado?.nome })
   }
 
   const retratoUrl = (c: Candidato) => (miniaturas ? urlRetrato(vaultPath, c.retrato, c.id) : null)
@@ -273,7 +279,10 @@ export function HostDialogoTransformar() {
                 autoFocus
                 placeholder={`Nome da nova pasta em "${pastas.find((p) => p.caminho === dirAtual)?.nome ?? ''}"`}
                 value={novaPasta}
-                onChange={(e) => setNovaPasta(e.target.value)}
+                // Nova pasta e cenário pai são excludentes: juntos, a pasta nasceria DENTRO do
+                // dir do pai e o cenário dentro dela — e a árvore só aceita como filho dir com
+                // cenario.json, então o cenário criado ficaria invisível. Digitar aqui desfaz o pai.
+                onChange={(e) => { setNovaPasta(e.target.value); setPaiId(null) }}
                 onKeyDown={(e) => {
                   if (e.key === 'Escape') {
                     e.stopPropagation()
@@ -302,7 +311,9 @@ export function HostDialogoTransformar() {
                           type="radio"
                           name="cenario-pai-transformar"
                           checked={paiId === c.id}
-                          onChange={() => setPaiId(c.id)}
+                          // simétrico ao radio de pasta (que limpa o pai): escolher pai desliga
+                          // o modo "nova pasta" e apaga o texto digitado nela
+                          onChange={() => { setPaiId(c.id); setCriandoPasta(false); setNovaPasta('') }}
                         />
                         {c.nome}
                       </label>

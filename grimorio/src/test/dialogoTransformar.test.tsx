@@ -194,7 +194,7 @@ describe('HostDialogoTransformar', () => {
     expect(container.textContent).toContain('criar novo ou já existente?')
   })
 
-  it('Novo cenário: escolher "Dentro do cenário" nasce como subcenário — dir vira o do pai', async () => {
+  it('Novo cenário: escolher "Dentro do cenário" nasce como subcenário — dir vira o do pai, e o nome do pai vai junto', async () => {
     await montar()
     const { p } = await abrir()
     await act(async () => { clicar(botaoComTexto('Cenário')) })
@@ -207,7 +207,7 @@ describe('HostDialogoTransformar', () => {
 
     expect(container.textContent).toContain('Nascerá como subcenário de "Castelo"')
     await act(async () => { clicar(botaoComTexto('Criar')) })
-    expect(await p).toEqual({ modo: 'novo', tipo: 'cenario', dir: 'cenarios/castelo', novaPasta: undefined })
+    expect(await p).toEqual({ modo: 'novo', tipo: 'cenario', dir: 'cenarios/castelo', novaPasta: undefined, paiNome: 'Castelo' })
   })
 
   it('Novo cenário sem pai escolhido usa a pasta organizacional normalmente', async () => {
@@ -216,7 +216,67 @@ describe('HostDialogoTransformar', () => {
     await act(async () => { clicar(botaoComTexto('Cenário')) })
     await act(async () => { clicar(botaoComTexto('Criar novo')) })
     await act(async () => { clicar(botaoComTexto('Criar')) })
-    expect(await p).toEqual({ modo: 'novo', tipo: 'cenario', dir: 'cenarios', novaPasta: undefined })
+    const r = await p
+    expect(r).toEqual({ modo: 'novo', tipo: 'cenario', dir: 'cenarios', novaPasta: undefined })
+    // toEqual ignora chave undefined — o "sem pai" precisa ser dito com todas as letras
+    expect(r && r.modo === 'novo' ? r.paiNome : 'x').toBeUndefined()
+  })
+
+  // Nova pasta + pai juntos no mesmo payload criavam a subpasta DENTRO do dir do pai e o
+  // cenário dentro dela — a árvore só aceita como filho dir com cenario.json (a subpasta
+  // tem só pasta.json), então o cenário nascia invisível, com retrato já copiado.
+  const inputNovaPasta = () => container.querySelector<HTMLInputElement>('input[placeholder^="Nome da nova pasta"]')
+  const escolherPai = async (nome: string) => {
+    const buscaPai = container.querySelector<HTMLInputElement>('input[placeholder="Buscar cenário…"]')
+    if (!buscaPai) throw new Error('busca de pai não encontrada')
+    await digitar(buscaPai, nome.toLowerCase())
+    const radio = Array.from(container.querySelectorAll('input[name="cenario-pai-transformar"]'))
+      .find((el) => el.closest('.dialogo-lista-item')?.textContent?.includes(nome))
+    await act(async () => { clicar(radio ?? null) })
+  }
+
+  it('CRÍTICO: nova pasta digitada e DEPOIS pai escolhido — o pai desliga a nova pasta, payload sai só com o pai', async () => {
+    await montar()
+    const { p } = await abrir()
+    await act(async () => { clicar(botaoComTexto('Cenário')) })
+    await act(async () => { clicar(botaoComTexto('Criar novo')) })
+
+    await act(async () => { clicar(botaoComTexto('📁+ Nova pasta…')) })
+    const campo = inputNovaPasta()
+    if (!campo) throw new Error('campo de nova pasta não abriu')
+    await digitar(campo, 'Ruínas')
+
+    await escolherPai('Castelo')
+    expect(container.textContent).toContain('Nascerá como subcenário de "Castelo"')
+    // o modo "nova pasta" fechou e o texto sumiu — não é só o payload que ignora, a UI mostra
+    expect(inputNovaPasta()).toBeNull()
+    expect(container.textContent).not.toContain('Ruínas')
+
+    await act(async () => { clicar(botaoComTexto('Criar')) })
+    expect(await p).toEqual({ modo: 'novo', tipo: 'cenario', dir: 'cenarios/castelo', novaPasta: undefined, paiNome: 'Castelo' })
+  })
+
+  it('CRÍTICO: pai escolhido e DEPOIS nova pasta digitada — digitar limpa o pai, payload sai só com a pasta', async () => {
+    await montar()
+    const { p } = await abrir()
+    await act(async () => { clicar(botaoComTexto('Cenário')) })
+    await act(async () => { clicar(botaoComTexto('Criar novo')) })
+
+    await escolherPai('Castelo')
+    expect(container.textContent).toContain('Nascerá como subcenário de "Castelo"')
+
+    await act(async () => { clicar(botaoComTexto('📁+ Nova pasta…')) })
+    const campo = inputNovaPasta()
+    if (!campo) throw new Error('campo de nova pasta não abriu')
+    await digitar(campo, 'Ruínas')
+    expect(container.textContent).not.toContain('Nascerá como subcenário')
+
+    await act(async () => { clicar(botaoComTexto('Criar')) })
+    const r = await p
+    // dir volta pra pasta organizacional (não o dir do pai), e a pasta vai sozinha
+    expect(r).toEqual({ modo: 'novo', tipo: 'cenario', dir: 'cenarios', novaPasta: 'Ruínas' })
+    // toEqual ignora chave undefined — o "sem pai" precisa ser dito com todas as letras
+    expect(r && r.modo === 'novo' ? r.paiNome : 'x').toBeUndefined()
   })
 
   it('CRÍTICO: Cenário → Existente → Voltar → Voltar → Item não trava em branco (modo stale resetado)', async () => {

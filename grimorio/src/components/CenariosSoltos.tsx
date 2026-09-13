@@ -14,6 +14,8 @@ import { urlRetrato } from '../lib/urlRetrato'
 import { versaoAtiva } from '../lib/cenarioVersao'
 import { versaoAtivaPersonagem } from '../lib/personagemVersao'
 import { useMiniaturas } from '../state/miniaturas'
+import { usePrefixoCenario } from '../state/prefixoCenario'
+import { nomeCenarioExibido } from '../lib/nomeCenarioExibido'
 import { useAberto, useArvoreRail } from '../state/arvoreRail'
 import { BotaoArvore } from './BotaoArvore'
 
@@ -218,10 +220,15 @@ function PastaCenarioLinha({ pasta, nivel, aoMudar }: { pasta: PastaCenarioNode;
   )
 }
 
-function CenarioLinha({ node, nivel, aoMudar, resultado }: {
+function CenarioLinha({ node, nivel, aoMudar, resultado, nomePai }: {
   node: CenarioNode; nivel: number; aoMudar: () => Promise<void>
   /** modo lista plana da busca: sem filhos, sem arrastar, com o caminho ao lado */
   resultado?: { caminhoRotulo: string; aoCriar?: () => void }
+  /**
+   * nome do CENÁRIO que contém este nó; pasta não conta, nem a raiz, nem a busca —
+   * só quem vem da recursão de filhos passa, e é só aí que o prefixo pode ser cortado
+   */
+  nomePai?: string
 }) {
   const repo = useApp((s) => s.repo)
   const abrirCenario = useApp((s) => s.abrirCenario)
@@ -232,6 +239,10 @@ function CenarioLinha({ node, nivel, aoMudar, resultado }: {
 
   const vinculados = personagensVivos(cenario?.personagens ?? [], personagens)
   const temFilhos = !resultado && (node.filhos.length > 0 || vinculados.length > 0)
+
+  const ocultarPrefixo = usePrefixoCenario((s) => s.ocultar)
+  // só o rótulo encurta: `title`, drag, renomear e lixeira seguem com `node.nome` completo
+  const rotulo = ocultarPrefixo ? nomeCenarioExibido(node.nome, nomePai) : node.nome
 
   const vaultPath = useApp((s) => s.vaultPath)
   const miniaturas = useMiniaturas((s) => s.ligadas)
@@ -300,7 +311,7 @@ function CenarioLinha({ node, nivel, aoMudar, resultado }: {
           ? <span className="chevron" onClick={(e) => { e.stopPropagation(); alternarNo('cenarios', node.caminho) }}>{aberto ? '▾' : '▸'}</span>
           : <span className="chevron-vazio" />}
         <CardRetrato className="rail-icone" src={retratoSrc} alt="" fallback={<span>🗺</span>} />
-        <span className="rail-titulo">{node.nome}{node.erro ? ' ⚠' : ''}</span>
+        <span className="rail-titulo">{rotulo}{node.erro ? ' ⚠' : ''}</span>
         {resultado?.caminhoRotulo && <span className="rail-caminho">· {resultado.caminhoRotulo}</span>}
         <span className="rail-acoes" onClick={(e) => e.stopPropagation()}>
           <button className="btn-icon" title="Novo sub-cenário" onClick={novoSub}>+</button>
@@ -313,7 +324,7 @@ function CenarioLinha({ node, nivel, aoMudar, resultado }: {
       </div>
       {!resultado && aberto && (
         <>
-          {node.filhos.map((f) => <CenarioLinha key={f.caminho} node={f} nivel={nivel + 1} aoMudar={aoMudar} />)}
+          {node.filhos.map((f) => <CenarioLinha key={f.caminho} node={f} nivel={nivel + 1} aoMudar={aoMudar} nomePai={node.nome} />)}
           {vinculados.map((pid) => <PersonagemVinculadoLinha key={pid} personagemId={pid} nivel={nivel + 1} />)}
         </>
       )}
