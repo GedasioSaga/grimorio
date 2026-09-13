@@ -1,18 +1,26 @@
-# HANDOFF — Grimório (20/08/2026)
+# HANDOFF — Grimório (13/09/2026)
 
 Retrato para retomar sem contexto. **Código ganha de qualquer afirmação daqui.**
 
 ## Publicado x commitado — LEIA ANTES DE PROMETER QUALQUER COISA
 
-**No ar: v0.12.1.** Cinco commits depois dela ainda NÃO estão publicados:
-propriedades das quatro peças, giro + L/A girado, atalhos de teclado, Alt+Delete + degraus
-da escada, e unir salas. Se alguém disser que uma dessas não funciona, confira a versão dele
-antes de investigar.
+**No ar: v0.13.0** (13/09/2026, commit `20bd4b9`). Nada commitado ficou fora dela. Levou:
+- faixa com o acervo de itens grudada no card de cenário (`FaixaItensCenario.tsx`, `lib/faixaItensCenario.ts`);
+- imagem dentro de Frame vira card no mesmo lugar (`lugarDoCardNaImagem`, `lib/transformarImagem.ts`);
+- pasta de retratos e pastas com ponto fora da árvore; subcenário pelo Espaço com "Pai: "; opção de nome próprio na árvore;
+- as peças de mapa de 19-20/08 que estavam commitadas e não publicadas (propriedades das peças, giro, atalhos, Alt+Delete, unir salas, vão da porta).
 
-**A v0.12.0 saiu com regressão** (mapa sem contorno) e a v0.12.1 é o conserto. Quem estiver
-na 0.12.0 e vir planta virada mancha cinza, é isso.
+Se alguém disser que uma dessas não funciona, confira a versão dele antes de investigar.
 
-Suíte: **1882 PASS / 0 FAIL**. `tsc` e `npm run build` limpos.
+**A v0.12.0 saiu com regressão** (mapa sem contorno) e a v0.12.1 é o conserto.
+
+Suíte: **141 arquivos, 1995 PASS / 0 FAIL**. `tsc` e `npm run build` limpos.
+
+## Evidência
+
+- Release v0.13.0: run `34777186764` (success, 8m36s). Rascunho com `Grimorio_0.13.0_x64-setup.exe` (5.006.262 bytes), `.sig` e `latest.json` versão 0.13.0 assinado; URL do updater no mesmo formato da v0.12.1.
+- Pós-publicação, sem autenticação: `curl -sL .../releases/latest/download/latest.json` → `version 0.13.0`, assinatura 420 chars; range request no `.exe` → `HTTP 206`, bytes `MZ`.
+- `npm test` em `b8056cf`: 141 arquivos, 1995 testes, exit 0. Bug do Frame reproduzido: 3 casos de `transformarImagemNoFrame.test.ts` falham no código antigo.
 
 ## Loop de construções — gauntlet contra Dungeon Scrawl
 
