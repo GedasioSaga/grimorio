@@ -1,4 +1,4 @@
-import { createShapeId, type Editor, type TLImageShape } from 'tldraw'
+import { createShapeId, isPageId, type Editor, type TLImageShape } from 'tldraw'
 import { message } from '@tauri-apps/plugin-dialog'
 import { useApp } from '../state/store'
 import { caminhoAbsolutoImagem } from '../lib/caminhos'
@@ -8,6 +8,7 @@ import {
   ROTULO_TIPO,
   destinoRetrato,
   extensaoDe,
+  lugarDoCardNaImagem,
   novaVersaoCenarioComRetrato,
   novaVersaoPersonagemComRetrato,
   sugestaoDeNome,
@@ -159,12 +160,17 @@ export async function transformarImagemEmEntidade(editor: Editor, shape: TLImage
 
     // Batch: remoção da imagem + card + setas viram UM passo de undo.
     editor.run(() => {
-      editor.deleteShapes([shape.id])
+      // a imagem pode ter sido movida enquanto os diálogos estavam abertos: vale onde ela está agora
+      const imagem = editor.getShape<TLImageShape>(shape.id) ?? shape
+      const lugar = lugarDoCardNaImagem(imagem, { w: CARD_LARGURA_PADRAO, h: CARD_ALTURA_PADRAO })
+      // frame apagado com o diálogo aberto: o card cai na página em vez de o tldraw recusar um pai que sumiu
+      const paiExiste = isPageId(lugar.parentId) || Boolean(editor.getShape(lugar.parentId))
+      editor.deleteShapes([imagem.id])
       editor.createShape({
         id: createShapeId(),
         type: cardTipo,
-        x: shape.x + (shape.props.w - CARD_LARGURA_PADRAO) / 2,
-        y: shape.y + (shape.props.h - CARD_ALTURA_PADRAO) / 2,
+        ...lugar,
+        parentId: paiExiste ? lugar.parentId : editor.getCurrentPageId(),
         props: { [propId]: entidadeId },
       })
       const cards = cardsPorEntidade(editor)

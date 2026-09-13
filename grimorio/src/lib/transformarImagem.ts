@@ -44,6 +44,38 @@ export function extensaoDe(rel: string): string {
   return rel.match(/\.([a-z0-9]+)$/i)?.[1]?.toLowerCase() ?? 'png'
 }
 
+/** O que importa da imagem para posicionar o card que a substitui. `x`/`y` são no espaço do PAI. */
+export interface LugarDaImagem<P extends string = string> {
+  parentId: P
+  x: number
+  y: number
+  rotation: number
+  props: { w: number; h: number }
+}
+
+/**
+ * Onde nasce o card que substitui a imagem: dentro do mesmo pai e com o mesmo centro.
+ *
+ * `x`/`y` de um shape do tldraw são relativos ao PAI. Dentro de um Frame, criar o card sem o
+ * `parentId` da imagem jogava essas coordenadas locais direto na página, e o card aparecia em
+ * outro ponto do canvas — tanto mais longe quanto mais longe da origem o Frame estivesse.
+ *
+ * O centro leva a rotação em conta porque o tldraw gira o shape em volta de `x`/`y` (o canto de
+ * cima-esquerda), não do meio. O card nasce reto, centrado onde a imagem aparecia.
+ */
+export function lugarDoCardNaImagem<P extends string>(
+  imagem: LugarDaImagem<P>,
+  card: { w: number; h: number },
+): { parentId: P; x: number; y: number } {
+  const cos = Math.cos(imagem.rotation)
+  const sin = Math.sin(imagem.rotation)
+  const meioW = imagem.props.w / 2
+  const meioH = imagem.props.h / 2
+  const centroX = imagem.x + meioW * cos - meioH * sin
+  const centroY = imagem.y + meioW * sin + meioH * cos
+  return { parentId: imagem.parentId, x: centroX - card.w / 2, y: centroY - card.h / 2 }
+}
+
 /** Diretório da entidade a partir do caminho do seu JSON (ou o próprio caminho, se já for dir). */
 export function dirDoCaminho(caminho: string): string {
   return caminho.replace(/[\\/][^\\/]+\.json$/i, '')
