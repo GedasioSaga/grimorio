@@ -536,6 +536,69 @@ button:hover { border-color: var(--dourado); color: var(--dourado-claro); }
 .card-fonte-ctrl button:hover { color: var(--dourado-claro); border-color: var(--dourado); }
 .card-fonte-ctrl button:disabled { opacity: 0.4; cursor: default; }
 
+/* ---- faixa de itens do acervo, grudada no card de cenário ----
+   `--faixa-esp` vem do componente (espessuraFaixa, faixaItensCenario.ts) e já inclui o `gap`
+   de 10px do .char-card: o card cresceu exatamente isso, então a faixa ocupa o resto. */
+.card-faixa-btn {
+  margin-top: calc(6px * var(--card-fe, 1) * var(--card-ctrl, 1));
+  margin-left: calc(4px * var(--card-fe, 1) * var(--card-ctrl, 1));
+  border: 1px solid var(--borda); background: var(--fundo); color: var(--texto);
+  border-radius: 4px; line-height: 1; cursor: pointer;
+  font-size: calc(12px * var(--card-fe, 1) * var(--card-ctrl, 1));
+  padding: calc(3px * var(--card-fe, 1) * var(--card-ctrl, 1)) calc(7px * var(--card-fe, 1) * var(--card-ctrl, 1));
+}
+.card-faixa-btn:hover { color: var(--dourado-claro); border-color: var(--dourado); }
+.char-card-com-faixa { flex-direction: column; }
+.char-card-faixa-direita { flex-direction: row; }
+.char-card-faixa-cima { flex-direction: column-reverse; }
+.char-card-faixa-esquerda { flex-direction: row-reverse; }
+.char-card-conteudo { flex: 1 1 0; min-width: 0; min-height: 0; display: flex; gap: 10px; }
+.faixa-itens {
+  flex: 0 0 auto; display: flex; gap: 6px; min-width: 0; min-height: 0;
+  background: var(--fundo); border: 1px solid var(--borda); border-radius: 4px; padding: 4px;
+}
+.char-card-faixa-baixo .faixa-itens,
+.char-card-faixa-cima .faixa-itens { height: calc(var(--faixa-esp, 0px) - 10px); flex-direction: row; overflow-x: auto; overflow-y: hidden; }
+.char-card-faixa-direita .faixa-itens,
+.char-card-faixa-esquerda .faixa-itens { width: calc(var(--faixa-esp, 0px) - 10px); flex-direction: column; overflow-y: auto; overflow-x: hidden; }
+.faixa-item { position: relative; flex: 0 0 auto; aspect-ratio: 1; }
+.char-card-faixa-baixo .faixa-item,
+.char-card-faixa-cima .faixa-item { height: 100%; }
+.char-card-faixa-direita .faixa-item,
+.char-card-faixa-esquerda .faixa-item { width: 100%; }
+.faixa-item-arte {
+  display: block; width: 100%; height: 100%; padding: 0; overflow: hidden; cursor: pointer;
+  border: 1px solid var(--borda); border-radius: 4px; background: var(--fundo-elevado);
+}
+.faixa-item-arte img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.faixa-item-arte:hover { border-color: var(--dourado); }
+.faixa-item-foco .faixa-item-arte { border-color: var(--dourado-claro); box-shadow: 0 0 0 2px var(--dourado); }
+.faixa-item-qtd {
+  position: absolute; right: 2px; bottom: 2px; padding: 0 3px; border-radius: 3px;
+  background: rgba(0, 0, 0, 0.7); color: var(--dourado-claro);
+  font-size: calc(10px * var(--card-fe, 1)); line-height: 1.3; pointer-events: none;
+}
+.faixa-item-copiar {
+  position: absolute; top: 2px; right: 2px; padding: 1px 3px; line-height: 1; cursor: pointer;
+  border: 1px solid var(--borda); border-radius: 3px; background: rgba(0, 0, 0, 0.7);
+  font-size: calc(10px * var(--card-fe, 1)); opacity: 0;
+}
+.faixa-item:hover .faixa-item-copiar,
+.faixa-item-foco .faixa-item-copiar,
+.faixa-item-copiar:focus-visible { opacity: 1; }
+.faixa-item-copiar:disabled { cursor: default; }
+.faixa-item:hover .faixa-item-copiar:disabled,
+.faixa-item-foco .faixa-item-copiar:disabled { opacity: 0.35; }
+.faixa-item-aviso {
+  position: absolute; inset: auto 0 0 0; text-align: center; pointer-events: none;
+  background: rgba(0, 0, 0, 0.75); color: var(--dourado-claro); font-size: calc(10px * var(--card-fe, 1));
+}
+.faixa-item-aviso-erro { color: var(--erro); }
+.faixa-itens-vazia {
+  align-self: center; margin: auto; color: var(--texto-fraco); font-style: italic;
+  font-size: calc(11px * var(--card-fe, 1)); white-space: nowrap;
+}
+
 /* ---- modal de perfil ---- */
 .modal-overlay {
   position: fixed; inset: 0; background: rgba(0, 0, 0, 0.6);

@@ -1,12 +1,10 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { message } from '@tauri-apps/plugin-dialog'
 import { useApp } from '../state/store'
 import type { Item, ItemNoCenario } from '../lib/types'
 import { acervoVivo, adicionarAoAcervo, definirQtd, removerDoAcervo, type AtualizadorAcervo } from '../lib/acervoCenario'
-import { corFundoItem, escolherSimboloItem, formatarContador } from '../lib/arteItem'
-import { urlRetrato } from '../lib/urlRetrato'
-import { posicaoCss } from '../lib/focoRetrato'
-import { desenharArteGenericaInventario, desenharArteInventario, TAM_ARTE_INVENTARIO } from '../lib/arteInventario'
+import { formatarContador } from '../lib/arteItem'
+import { ArteDoItem } from './ArteDoItem'
 import { associarNaCriacao } from './dialogoCampanhas'
 import '../estilos/inventario.css'
 
@@ -188,37 +186,5 @@ function SlotInventario({ item, qtd, vaultPath, aoAbrir, aoAjustarQtd, aoRemover
         </button>
       </div>
     </div>
-  )
-}
-
-/** Retrato > símbolo vetorial (palpite pelo nome) > pino genérico. Nunca cai num emoji cru. */
-function ArteDoItem({ item, vaultPath }: { item: Item; vaultPath: string | null }) {
-  const src = urlRetrato(vaultPath, item.retrato, item.modificadoEm)
-  const [erro, setErro] = useState(false)
-  useEffect(() => setErro(false), [src])
-
-  if (src && !erro) {
-    return (
-      <img
-        src={src}
-        alt=""
-        draggable={false}
-        style={{ objectPosition: posicaoCss(item.foco) }}
-        onError={() => setErro(true)}
-      />
-    )
-  }
-
-  const simbolo = escolherSimboloItem(item.nome)
-  const cor = corFundoItem(item.id)
-  return (
-    <svg
-      viewBox={`0 0 ${TAM_ARTE_INVENTARIO} ${TAM_ARTE_INVENTARIO}`}
-      width="100%"
-      height="100%"
-      aria-hidden="true"
-    >
-      {simbolo ? desenharArteInventario(simbolo, cor) : desenharArteGenericaInventario(cor)}
-    </svg>
   )
 }

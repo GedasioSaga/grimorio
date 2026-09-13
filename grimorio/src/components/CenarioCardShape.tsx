@@ -20,6 +20,16 @@ import { ControlesFonte } from './ControlesFonte'
 import { CardRetrato } from './CardRetrato'
 import { escalaDosControles } from '../lib/escalaFonte'
 import { versaoAtiva, versaoVizinha } from '../lib/cenarioVersao'
+import {
+  LADOS_FAIXA,
+  espessuraFaixa,
+  larguraDoConteudo,
+  proximoLado,
+  tamanhoAoTrocarLado,
+  type LadoFaixa,
+} from '../lib/faixaItensCenario'
+import { acervoVivo } from '../lib/acervoCenario'
+import { FaixaItensCenario } from './FaixaItensCenario'
 
 declare module '@tldraw/tlschema' {
   interface TLGlobalShapePropsMap {
@@ -35,6 +45,7 @@ declare module '@tldraw/tlschema' {
       itensExpandido: boolean
       itensAoLado: boolean
       fonteEscala: number
+      itensFaixa: LadoFaixa
     }
   }
 }
@@ -44,6 +55,7 @@ export type CenarioCardShapeType = TLShape<'cenario-card'>
 const versoes = createShapePropsMigrationIds('cenario-card', {
   AdicionaSecoesEventosItens: 1,
   AdicionaFonteEscala: 2,
+  AdicionaFaixaDeItens: 3,
 })
 
 export class CenarioCardShapeUtil extends BaseBoxShapeUtil<CenarioCardShapeType> {
@@ -60,9 +72,10 @@ export class CenarioCardShapeUtil extends BaseBoxShapeUtil<CenarioCardShapeType>
     itensExpandido: T.boolean,
     itensAoLado: T.boolean,
     fonteEscala: T.positiveNumber,
+    itensFaixa: T.literalEnum(...LADOS_FAIXA),
   }
 
-  // canvases salvos antes das seções Eventos/Itens e da escala de fonte não têm essas flags
+  // canvases salvos antes das seções Eventos/Itens, da escala de fonte e da faixa de itens não têm essas flags
   static override migrations = createShapePropsMigrationSequence({
     sequence: [
       {
@@ -89,6 +102,16 @@ export class CenarioCardShapeUtil extends BaseBoxShapeUtil<CenarioCardShapeType>
           delete props.fonteEscala
         },
       },
+      {
+        // oculta: o card salvo abre do mesmo tamanho; a faixa só aparece quando pedida
+        id: versoes.AdicionaFaixaDeItens,
+        up(props) {
+          props.itensFaixa = 'oculta'
+        },
+        down(props) {
+          delete props.itensFaixa
+        },
+      },
     ],
   })
 
@@ -105,6 +128,7 @@ export class CenarioCardShapeUtil extends BaseBoxShapeUtil<CenarioCardShapeType>
       itensExpandido: false,
       itensAoLado: false,
       fonteEscala: 1,
+      itensFaixa: 'oculta',
     }
   }
 
@@ -146,6 +170,21 @@ function contarAoLado(props: CenarioCardShapeType['props']): number {
   return [props.infoAoLado, props.eventosAoLado, props.itensAoLado].filter(Boolean).length
 }
 
+/** Onde a faixa está, nas palavras do botão ("faixa embaixo"). */
+const ROTULO_LADO: Record<LadoFaixa, string> = {
+  oculta: 'escondida',
+  baixo: 'embaixo',
+  direita: 'à direita',
+  cima: 'em cima',
+  esquerda: 'à esquerda',
+}
+
+/** Texto do botão que gira a faixa: onde ela está e o que o próximo clique faz. */
+function descreverGiro(atual: LadoFaixa, proximo: LadoFaixa): string {
+  const acao = proximo === 'oculta' ? 'esconder' : `faixa ${ROTULO_LADO[proximo]}`
+  return `Itens do acervo (faixa ${ROTULO_LADO[atual]}). Clique: ${acao}`
+}
+
 type ChaveSecao = 'informacao' | 'eventos' | 'itens'
 
 const SECOES: { chave: ChaveSecao; rotulo: string; semTexto: string }[] = [
@@ -167,17 +206,20 @@ const FLAGS: Record<ChaveSecao, { exp: FlagBooleana; lado: FlagBooleana }> = {
 }
 
 function CartaoCenario({ shape }: { shape: CenarioCardShapeType }) {
-  const { cenarioId, expandido, fonteEscala } = shape.props
+  const { cenarioId, expandido, fonteEscala, itensFaixa } = shape.props
   const c = useApp((s) => s.cenarios[cenarioId])
+  const itens = useApp((s) => s.itens)
   const vaultPath = useApp((s) => s.vaultPath)
   const salvarParcial = useApp((s) => s.salvarCenarioParcial)
   const definirVersaoAtiva = useApp((s) => s.definirVersaoAtiva)
   const editor = useEditor()
 
   // escala uniforme: largura por coluna vs base → multiplica toda fonte (--card-fe),
-  // então imagem e texto crescem juntos ao redimensionar o card
+  // então imagem e texto crescem juntos ao redimensionar o card. A faixa de itens ao lado
+  // não entra na conta: ligar a faixa não pode aumentar o texto.
   const cols = colunasTotais(expandido, contarAoLado(shape.props))
-  const cardFe = escalaDoCartao(shape.props.w, cols) * fonteEscala
+  const cardFe = escalaDoCartao(larguraDoConteudo(shape.props.w, itensFaixa, cols), cols) * fonteEscala
+  const espFaixa = espessuraFaixa(shape.props.w, itensFaixa, cols)
   // escala dos controles corrigida pelo zoom da câmera; o porquê está em `escalaDosControles`,
   // e o porquê do `useValue` (em vez de `getZoomLevel()` cru) está no CharacterCardShape.
   const ctrlFe = escalaDosControles(cardFe, useValue('zoom', () => editor.getZoomLevel(), [editor]))
@@ -202,7 +244,7 @@ function CartaoCenario({ shape }: { shape: CenarioCardShapeType }) {
     if (!el) return
     const aoRolar = (e: WheelEvent) => {
       const alvo = e.target as HTMLElement | null
-      if (alvo?.closest('.char-card-painel')) e.stopPropagation()
+      if (alvo?.closest('.char-card-painel, .faixa-itens')) e.stopPropagation()
     }
     el.addEventListener('wheel', aoRolar, { passive: true })
     return () => el.removeEventListener('wheel', aoRolar)
@@ -216,7 +258,8 @@ function CartaoCenario({ shape }: { shape: CenarioCardShapeType }) {
     img.onload = () => {
       if (cancelado || img.naturalWidth <= 0 || img.naturalHeight <= 0) return
       const atual = editor.getShape(shape.id) as CenarioCardShapeType | undefined
-      if (!atual || atual.props.expandido) return
+      // com faixa, a altura padrão já não é a da imagem: emoldurar esmagaria a faixa
+      if (!atual || atual.props.expandido || atual.props.itensFaixa !== 'oculta') return
       if (atual.props.w !== CARD_LARGURA_PADRAO || atual.props.h !== CARD_ALTURA_PADRAO) return
       const novaH = alturaMoldadaAImagem(atual.props.w, img.naturalWidth / img.naturalHeight)
       if (novaH !== atual.props.h) {
@@ -326,11 +369,38 @@ function CartaoCenario({ shape }: { shape: CenarioCardShapeType }) {
   const empilhadas = SECOES.filter((s) => !shape.props[FLAGS[s.chave].lado])
   const aoLado = SECOES.filter((s) => shape.props[FLAGS[s.chave].lado])
 
+  const qtdNoAcervo = acervoVivo(va.acervo, itens).length
+  const faixaLado = itensFaixa === 'oculta' ? null : itensFaixa
+  const proximo = proximoLado(itensFaixa)
+
+  // um updateShape só (lado + tamanho): um Ctrl+Z desfaz o giro inteiro
+  const girarFaixa = () => {
+    editor.markHistoryStoppingPoint('girar-faixa-itens')
+    editor.updateShape<CenarioCardShapeType>({
+      id: shape.id,
+      type: 'cenario-card',
+      props: { itensFaixa: proximo, ...tamanhoAoTrocarLado(shape.props, cols, itensFaixa, proximo) },
+    })
+  }
+
+  const classeCard = faixaLado ? `char-card char-card-com-faixa char-card-faixa-${faixaLado}` : 'char-card'
+
   return (
-    <HTMLContainer className="char-card" style={{ pointerEvents: 'all', ['--card-fe' as any]: cardFe, ['--card-ctrl' as any]: ctrlFe }}>
+    <HTMLContainer
+      className={classeCard}
+      style={{
+        pointerEvents: 'all',
+        ['--card-fe' as any]: cardFe,
+        ['--card-ctrl' as any]: ctrlFe,
+        ['--faixa-esp' as any]: `${espFaixa}px`,
+      }}
+    >
       {/* HTMLContainer não encaminha ref (não usa forwardRef); wrapper com
           display:contents pega o listener de wheel sem alterar o layout flex. */}
       <div ref={cardRef} style={{ display: 'contents' }}>
+        {/* sem faixa o conteúdo some do layout (display:contents) e o card fica idêntico ao de
+            antes; com faixa ele vira o bloco que divide o card com a faixa */}
+        <div className={faixaLado ? 'char-card-conteudo' : undefined} style={faixaLado ? undefined : { display: 'contents' }}>
         <div className="char-card-principal">
           <CardRetrato
             src={retratoSrc}
@@ -351,6 +421,18 @@ function CartaoCenario({ shape }: { shape: CenarioCardShapeType }) {
                 })
               }
             />
+            {(qtdNoAcervo > 0 || faixaLado) && (
+              <button
+                type="button"
+                className="card-faixa-btn"
+                title={descreverGiro(itensFaixa, proximo)}
+                aria-label={descreverGiro(itensFaixa, proximo)}
+                onPointerDown={(e) => e.stopPropagation()}
+                onClick={girarFaixa}
+              >
+                🎒 {qtdNoAcervo}
+              </button>
+            )}
             {c.versoes.length >= 2 && (
               <span className="card-versao-ctrl" onPointerDown={(e) => e.stopPropagation()}>
                 <button title="Versão anterior" onClick={() => definirVersaoAtiva(cenarioId, versaoVizinha(c, -1))}>‹</button>
@@ -391,6 +473,8 @@ function CartaoCenario({ shape }: { shape: CenarioCardShapeType }) {
             ))}
           </>
         )}
+        </div>
+        {faixaLado && <FaixaItensCenario shapeId={shape.id} acervo={va.acervo} lado={faixaLado} />}
       </div>
     </HTMLContainer>
   )

@@ -1,6 +1,7 @@
 import type { Editor, TLImageShape } from 'tldraw'
 import { convertFileSrc } from '@tauri-apps/api/core'
 import { useApp } from '../state/store'
+import { itemEmFocoNoCard } from '../state/faixaItensFoco'
 import { relRetratoDoCard, type ShapeMinimo } from '../lib/copiaImagemCard'
 import { copiarImagemParaClipboard } from '../lib/copiarImagem'
 import type { CharacterCardShapeType } from './CharacterCardShape'
@@ -80,13 +81,21 @@ export function registrarAtalhos(
     if ((e.ctrlKey || e.metaKey) && (e.key === 'c' || e.key === 'C')) {
       if (editor.getEditingShapeId()) return // editando texto: deixa copiar o texto
       const { personagens, cenarios, itens, vaultPath: vp } = useApp.getState()
+      const selecionado = editor.getOnlySelectedShape()
+      // item em foco na faixa de acervo deste card: a imagem é a do ITEM, não a do cenário
+      const itemEmFoco = itemEmFocoNoCard(selecionado?.id)
       // TLShape → ShapeMinimo: só lemos type/props; o cast evita acoplar o helper ao tldraw
-      const rel = relRetratoDoCard(
-        editor.getOnlySelectedShape() as unknown as ShapeMinimo | null,
-        personagens,
-        cenarios,
-        itens,
-      )
+      const rel = itemEmFoco
+        ? (itens[itemEmFoco]?.retrato ?? null)
+        : relRetratoDoCard(selecionado as unknown as ShapeMinimo | null, personagens, cenarios, itens)
+      if (itemEmFoco && !rel) {
+        // quem escolheu o item esperava a imagem dele: deixar o tldraw copiar o card do cenário
+        // colaria outra coisa sem explicação
+        e.preventDefault()
+        e.stopPropagation()
+        avisos.aoFalharCopia('item sem imagem')
+        return
+      }
       if (!rel || !vp) return // sem imagem: deixa o Ctrl+C nativo do tldraw agir
       e.preventDefault()
       e.stopPropagation()
