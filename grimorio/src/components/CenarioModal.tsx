@@ -11,6 +11,7 @@ import type { DonoImagem } from '../lib/organizarImagens/nomes'
 import { AbaVinculos } from './AbaVinculos'
 import { AcervoCenario } from './AcervoCenario'
 import { AcoesIA, type AcaoIA } from './AcoesIA'
+import { BotaoAbrirPasta } from './BotaoAbrirPasta'
 import { ChatEntidade } from './ChatEntidade'
 import { contextoDeEntidade } from '../lib/contextoIA'
 import { htmlParaTexto } from '../lib/htmlTexto'
@@ -247,6 +248,7 @@ export function CenarioModal({ cenarioId }: { cenarioId: string }) {
               value={va.resumo}
               onChange={(e) => agendarSalvar({ resumo: e.target.value })} />
           </div>
+          <BotaoAbrirPasta vaultPath={vaultPath} rel={retratoRel} />
           <AcoesIA
             system={SYSTEM_ESCRITOR}
             abaAtual={aba}

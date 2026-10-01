@@ -6,6 +6,7 @@ import type { Item } from '../lib/types'
 import { EditorTexto } from './EditorTexto'
 import { AbaVinculos } from './AbaVinculos'
 import { AcoesIA, type AcaoIA } from './AcoesIA'
+import { BotaoAbrirPasta } from './BotaoAbrirPasta'
 import { ChatEntidade } from './ChatEntidade'
 import { contextoDeEntidade } from '../lib/contextoIA'
 import { htmlParaTexto } from '../lib/htmlTexto'
@@ -203,6 +204,7 @@ export function ItemModal({ itemId }: { itemId: string }) {
               value={item.resumo}
               onChange={(e) => agendarSalvar({ resumo: e.target.value })} />
           </div>
+          <BotaoAbrirPasta vaultPath={vaultPath} rel={item.retrato} />
           <AcoesIA
             system={SYSTEM_ESCRITOR}
             abaAtual={aba}
