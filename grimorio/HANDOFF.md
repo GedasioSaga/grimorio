@@ -2,7 +2,7 @@
 
 Retrato para retomar sem contexto. **Código ganha de qualquer afirmação daqui.**
 
-## PRONTO (01/10/2026): organizar imagens com nomes legíveis — commitado, NÃO publicado
+## PRONTO (01/10/2026): organizar imagens com nomes legíveis — PUBLICADO na v0.14.0
 
 ### Objetivo
 Imagens do cofre em pasta por tipo/dono com nome legível (`imagens/personagens/<Nome>/retrato.png`, `imagens/cenarios/<Pai>/<Filho>/retrato.png`, `imagens/itens/<Nome>.png`, `imagens/canvas/<Sessão>/01.png`, `imagens/mapas/<Mapa>/01.png`), botão em Opções › Imagens com prévia + desfazer, imagem nova já nascendo com nome certo, duplicatas do mesmo dono juntadas, freio do sync entendendo renomeação. Plano: `C:\Users\gedasio.filho\.claude\plans\zazzy-gathering-torvalds.md`.
@@ -19,7 +19,7 @@ Imagens do cofre em pasta por tipo/dono com nome legível (`imagens/personagens/
 - `scripts/portaoOrganizarImagens.mjs` é de sessão antiga, untracked, fica de lado (fixa um sha256 de `tipos.ts` que já não bate).
 
 ### Próximos passos
-1. Publicar numa release só quando o usuário pedir. Hoje está commitado e fora da v0.13.0.
+1. Publicado na v0.14.0 (01/10/2026), a pedido do usuário. Evidência na seção "Publicado x commitado".
 2. No cofre real, Organizar só pelo botão, pelo usuário. Depois do primeiro sync, conferir no outro PC que as fichas abrem com imagem.
 3. Feature separada pedida em 27/09: ao colar/arrastar imagem nova (mapa, nota, galeria, retrato), abrir campo para o usuário escolher o nome, já preenchido com a sugestão. Fazer plano curto + grilling antes (colar múltiplo, sufixo anti-colisão '-a3f9').
 4. Limpeza opcional, pede OK do usuário: `%APPDATA%\com.gedasio.grimorio\organizar\` só contém o diário e o registro do teste feito na CÓPIA do cofre (estado 'desfeito').
@@ -36,7 +36,9 @@ Imagens do cofre em pasta por tipo/dono com nome legível (`imagens/personagens/
 
 ## Publicado x commitado — LEIA ANTES DE PROMETER QUALQUER COISA
 
-**No ar: v0.13.0** (13/09/2026, commit `20bd4b9`). **Fora dela:** o "Organizar imagens" (commit de 01/10/2026), commitado e NÃO publicado. Levou:
+**No ar: v0.14.0** (01/10/2026, commit `0d94315`). Nada commitado ficou fora dela. Levou o "Organizar imagens" inteiro (commit `7a9034a`, seção do topo).
+
+**Anterior: v0.13.0** (13/09/2026, commit `20bd4b9`). Levou:
 - faixa com o acervo de itens grudada no card de cenário (`FaixaItensCenario.tsx`, `lib/faixaItensCenario.ts`);
 - imagem dentro de Frame vira card no mesmo lugar (`lugarDoCardNaImagem`, `lib/transformarImagem.ts`);
 - pasta de retratos e pastas com ponto fora da árvore; subcenário pelo Espaço com "Pai: "; opção de nome próprio na árvore;
@@ -46,10 +48,12 @@ Se alguém disser que uma dessas não funciona, confira a versão dele antes de 
 
 **A v0.12.0 saiu com regressão** (mapa sem contorno) e a v0.12.1 é o conserto.
 
-Suíte: **141 arquivos, 1995 PASS / 0 FAIL**. `tsc` e `npm run build` limpos.
+Suíte na v0.14.0: **151 arquivos, 2223 PASS / 0 FAIL**. `tsc` e `npm run build` limpos.
 
 ## Evidência
 
+- Release v0.14.0: run `36816924744` (success, 9m14s). Rascunho com `Grimorio_0.14.0_x64-setup.exe` (5.016.249 bytes), `.sig` (420) e `latest.json` versão 0.14.0, URL do updater no mesmo formato da v0.13.0 (asset da API). Publicada em 2026-10-01T05:00:04Z, marcada como latest.
+- Pós-publicação, sem autenticação: `curl -sL .../releases/latest/download/latest.json` → `version 0.14.0`, assinatura 420 chars; range request no `.exe` e no asset do updater (`api.github.com/.../assets/602471629`, `Accept: application/octet-stream`) → `HTTP 206`, bytes `MZ`.
 - Release v0.13.0: run `34777186764` (success, 8m36s). Rascunho com `Grimorio_0.13.0_x64-setup.exe` (5.006.262 bytes), `.sig` e `latest.json` versão 0.13.0 assinado; URL do updater no mesmo formato da v0.12.1.
 - Pós-publicação, sem autenticação: `curl -sL .../releases/latest/download/latest.json` → `version 0.13.0`, assinatura 420 chars; range request no `.exe` → `HTTP 206`, bytes `MZ`.
 - `npm test` em `b8056cf`: 141 arquivos, 1995 testes, exit 0. Bug do Frame reproduzido: 3 casos de `transformarImagemNoFrame.test.ts` falham no código antigo.
