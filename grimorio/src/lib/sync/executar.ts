@@ -1,5 +1,7 @@
 import { normalizarCaminho } from '../cofres'
 import type { FsBridge } from '../fsBridge'
+import { apurarCitacoes, type CitacoesApuradas } from '../organizarImagens/citacoes'
+import { chaveCaminho, ehImagem } from '../organizarImagens/nomes'
 import type { ClienteDrive } from './driveBridge'
 import { reconstruirManifesto, type Desfecho, type EstadoPosCiclo } from './reconstruir'
 import type { Acao, EstadoLocal, EstadoRemoto, Manifesto } from './tipos'
@@ -24,6 +26,46 @@ import type { Acao, EstadoLocal, EstadoRemoto, Manifesto } from './tipos'
  * cofre grande, mas a ordem determinística é o que torna o executor testável de forma exata, e
  * a cota do Drive (325.000 unidades/min) não é o gargalo. Otimizar isso é para quando houver
  * medição, não antes.
+ *
+ * Duas exceções à ordem do plano, as duas com IMAGEM — o arquivo que as fichas citam pelo caminho.
+ *
+ * 1. `apagarLocal` de imagem roda depois das outras ações. Antes de apagar, o executor pergunta a
+ *    `apurarCitacoes` (a leitura do "Organizar imagens") se alguma ficha, mapa ou nota do cofre
+ *    ainda cita a imagem — já com as descidas deste ciclo no disco, porque é a ficha baixada agora
+ *    que diz se a citação velha ainda vale. O caso real: o outro PC organizou as imagens enquanto
+ *    este editava offline uma ficha que cita o caminho velho; a ficha deste PC vence o conflito, e
+ *    apagar a imagem a deixaria citando um arquivo que não existe mais.
+ *
+ *    - Ninguém cita: apaga, como qualquer `apagarLocal`.
+ *    - Um arquivo LIDO cita: a imagem volta a subir. O remoto é lápide ou não existe, então o envio
+ *      cria um arquivo novo, o manifesto o registra e o ciclo seguinte vê `igual × igual` — sem laço.
+ *    - Quem cita falhou neste ciclo, algum `.json` não deu para ler, ou a checagem não pôde rodar:
+ *      vira falha "adiado", a entrada anterior fica e o ciclo seguinte refaz a conta. Subir na
+ *      dúvida, como o organizador faz, aqui não serve: um arquivo travado por um instante
+ *      devolveria ao Drive, imagem por imagem, a organização inteira do outro PC.
+ *
+ *    A conta usa a varredura do começo do ciclo, mais o que desceu e menos o que foi apagado, em vez
+ *    de listar o cofre de novo (`arquivosDepoisDasAcoes`). Fichas na `.lixeira` e JSON que não
+ *    parseia, mas tem o caminho no texto, continuam protegendo a imagem.
+ *
+ * 2. `apagarRemoto` de imagem roda por último de tudo, e só se as fichas deste PC e a imagem nova
+ *    chegaram ao Drive. O caso real é o avesso do de cima: ESTE PC organizou, e o Drive ainda tem a
+ *    ficha velha, que cita a imagem velha. Duas falhas seguram o apagar, que vira "adiado" e o ciclo
+ *    seguinte tenta de novo:
+ *
+ *    - Uma ação que levaria um `.json` do Drive ao estado deste PC (`ACOES_QUE_LEVAM_FICHA`). Apagar
+ *      a imagem lá antes de a ficha nova subir — ou com a subida falhando — deixa o Drive citando um
+ *      arquivo que não existe; o outro PC, cuja ficha ainda cita a imagem velha, a sobe de volta, e
+ *      ela vira órfã duplicada quando a ficha nova enfim chega. Segura TODO apagar de imagem: este PC
+ *      não sabe o que a ficha de lá cita.
+ *    - A subida de uma imagem com o MESMO conteúdo (`ACOES_QUE_LEVAM_IMAGEM`). O organizador copia os
+ *      bytes para o endereço novo, então o hash da imagem nova é o que o manifesto guarda para a velha.
+ *      Com a ficha nova lá e a imagem nova de fora, o outro PC baixa a ficha, não vê mais ninguém
+ *      citando a velha e a apaga do disco: o conteúdo ficaria só neste disco e na lixeira do Drive.
+ *      Segura só as velhas daquele hash, porque aqui o conteúdo é conhecido — e segurar tudo deixaria
+ *      uma imagem travada prender no Drive as velhas de um cofre inteiro organizado. Custo aceito: o
+ *      outro PC fica sem a imagem nova até ela subir, porque a ficha que a cita já chegou; a velha
+ *      continua lá e no disco dele.
  */
 
 /** Um conflito com o vencedor já decidido pelo motor. */
@@ -112,7 +154,12 @@ function nomeDe(caminho: string): string {
  * daria um caminho misto que o Rust até abre, e que a `sondarLocal` seguinte não reencontra.
  */
 export function caminhoAbsoluto(raizLocal: string, caminho: string): string {
-  return `${normalizarCaminho(raizLocal).replace(/\/+$/, '')}/${caminho}`
+  return `${raizCanonica(raizLocal)}/${caminho}`
+}
+
+/** A raiz com `/` e sem barra no fim — a forma que `caminhoAbsoluto` e `quemCita` concatenam. */
+function raizCanonica(raizLocal: string): string {
+  return normalizarCaminho(raizLocal).replace(/\/+$/, '')
 }
 
 /**
@@ -346,12 +393,179 @@ function criarResolvedorDePastas(
   return { resolver, conhecidas: () => conhecidas }
 }
 
+/** O que a passada já apurou: o desfecho de quem concluiu e o que falhou. */
+interface Registro {
+  concluidos: Map<string, Desfecho>
+  falhados: Set<string>
+  concluidas: Acao[]
+  falhas: FalhaAcao[]
+}
+
+function registrarFalha(registro: Registro, acao: Acao, erro: string): void {
+  registro.falhados.add(acao.caminho)
+  registro.falhas.push({ acao, erro })
+}
+
+/** Roda um passo isolado: o sucesso vira desfecho, a falha vira item de `falhas` e o ciclo segue. */
+async function tentar(acao: Acao, passo: () => Promise<Desfecho>, registro: Registro): Promise<void> {
+  try {
+    registro.concluidos.set(acao.caminho, await passo())
+    registro.concluidas.push(acao)
+  } catch (erro) {
+    registrarFalha(registro, acao, mensagemDeErro(erro))
+  }
+}
+
+/**
+ * Junta as citações por chave de comparação. `quemCita` credita só o último `rel` de chaves
+ * iguais (a mesma imagem em NFC e em NFD, ou com caixa diferente); sem juntar, a outra grafia
+ * sairia "sem citação" e seria apagada.
+ */
+function citantesPorChave(citacoes: Map<string, string[]>): Map<string, string[]> {
+  const porChave = new Map<string, string[]>()
+  for (const [rel, citantes] of citacoes) {
+    const chave = chaveCaminho(rel)
+    porChave.set(chave, [...(porChave.get(chave) ?? []), ...citantes])
+  }
+  return porChave
+}
+
+function adiado(motivo: string): string {
+  return `${motivo} — adiado para a próxima rodada`
+}
+
+function ehJson(caminho: string): boolean {
+  return caminho.toLowerCase().endsWith('.json')
+}
+
+/**
+ * Ações que, falhando com um `.json`, deixam no Drive uma ficha diferente da deste PC — e a de lá
+ * pode citar a imagem que este PC tirou do lugar. `baixar` fica de fora: a ficha que não desceu é a
+ * que JÁ está no Drive, e o apagar da imagem não muda o que ela cita.
+ */
+const ACOES_QUE_LEVAM_FICHA: ReadonlySet<Acao['tipo']> = new Set(['subir', 'conflito', 'apagarRemoto'])
+
+/**
+ * Ações que, falhando com uma imagem, deixam fora do Drive um conteúdo que só este PC tem — e pode ser o
+ * da imagem velha que o plano manda apagar lá. `conflito` entra pelos dois vencedores, como em
+ * `ACOES_QUE_LEVAM_FICHA`: na dúvida, a velha fica.
+ */
+const ACOES_QUE_LEVAM_IMAGEM: ReadonlySet<Acao['tipo']> = new Set(['subir', 'conflito'])
+
+/**
+ * Os arquivos do cofre como as outras ações os deixaram, sem listar o disco de novo: a varredura do
+ * começo do ciclo, mais o que desceu, menos o que foi apagado. `undefined` quando a conta não fecha —
+ * conflito de `.json` grava uma cópia do perdedor cujo caminho só `preservarPerdedor` conhece, e aí só
+ * listando o cofre.
+ *
+ * Mover uma ficha, ou mandá-la para a lixeira, no meio do ciclo tira o caminho velho do disco, e ele
+ * cai em ilegível: adia. Custo aceito: um `.json` NOVO, criado no meio do ciclo citando uma imagem
+ * que já existe, só entra na conta da próxima varredura. A listagem tinha a mesma janela (da checagem
+ * ao apagar), só que mais curta; e o app não cria ficha nova citando imagem antiga — transformar
+ * imagem em entidade copia o arquivo.
+ */
+function arquivosDepoisDasAcoes(plano: Acao[], ciclo: Ciclo, registro: Registro): string[] | undefined {
+  if (plano.some((a) => a.tipo === 'conflito' && ehJson(a.caminho))) return undefined
+  const arquivos = new Set(ciclo.estado.local.keys())
+  for (const acao of registro.concluidas) {
+    if (acao.tipo === 'baixar') arquivos.add(acao.caminho)
+    if (acao.tipo === 'apagarLocal') arquivos.delete(acao.caminho)
+  }
+  return [...arquivos]
+}
+
+/**
+ * As imagens que o plano manda apagar do disco, conferidas contra o cofre como ele ficou depois de
+ * todas as outras ações (o porquê está no cabeçalho).
+ */
+async function apagarImagensSemCitacao(acoes: Acao[], plano: Acao[], ciclo: Ciclo, registro: Registro): Promise<void> {
+  if (acoes.length === 0) return
+  let apuradas: CitacoesApuradas
+  try {
+    const raiz = raizCanonica(ciclo.estado.raizLocal)
+    const rels = acoes.map((a) => a.caminho)
+    apuradas = await apurarCitacoes(raiz, ciclo.deps.fs, rels, arquivosDepoisDasAcoes(plano, ciclo, registro))
+  } catch (erro) {
+    const motivo = mensagemDeErro(erro)
+    for (const acao of acoes) {
+      registrarFalha(registro, acao, adiado(`não deu para conferir se alguma ficha ainda cita ${acao.caminho} (${motivo})`))
+    }
+    return
+  }
+  const citacoes = citantesPorChave(apuradas.citantes)
+  // Um ilegível pode citar qualquer imagem; basta um para nenhuma sem citação lida poder ser apagada.
+  const ilegivel: string | undefined = apuradas.ilegiveis[0]
+  // Quem falhou neste ciclo ainda tem no disco a versão de antes, que pode não ser a que vai valer.
+  const pendentes = new Set([...registro.falhados].map(chaveCaminho))
+  for (const acao of acoes) {
+    const citantes = citacoes.get(chaveCaminho(acao.caminho))
+    if (citantes === undefined) {
+      // `apurarCitacoes` responde por todo `rel` pedido; sem resposta, na dúvida a imagem fica.
+      registrarFalha(registro, acao, adiado(`não deu para conferir se alguma ficha ainda cita ${acao.caminho}`))
+      continue
+    }
+    if (citantes.length === 0) {
+      if (ilegivel === undefined) await tentar(acao, () => apagarLocal(acao.caminho, ciclo), registro)
+      else registrarFalha(registro, acao, adiado(`não deu para ler ${ilegivel}, que pode citar ${acao.caminho}`))
+      continue
+    }
+    const pendente = citantes.find((c) => pendentes.has(chaveCaminho(c)))
+    if (pendente !== undefined) {
+      registrarFalha(registro, acao, adiado(`${acao.caminho} ainda é citada por ${pendente}, que não sincronizou neste ciclo`))
+      continue
+    }
+    await tentar({ tipo: 'subir', caminho: acao.caminho }, () => subir(acao.caminho, ciclo), registro)
+  }
+}
+
+/**
+ * A imagem em `caminho`, que não subiu neste ciclo, pode ter o conteúdo de `hash`? Sem um dos dois
+ * hashes não há como provar que é outro conteúdo, e na dúvida a imagem velha fica no Drive.
+ */
+function podeTerOConteudo(caminho: string, hash: string | undefined, ciclo: Ciclo): boolean {
+  const daQueFicou = ciclo.estado.local.get(caminho)?.hash
+  return hash === undefined || daQueFicou === undefined || daQueFicou === hash
+}
+
+/**
+ * O último passo do ciclo: as imagens que o plano manda apagar no Drive, depois de todo o resto e só
+ * se nenhuma ficha deixou de chegar lá como está neste PC, nem a imagem com o mesmo conteúdo (o porquê
+ * está no cabeçalho).
+ */
+async function apagarImagensDoDrive(acoes: Acao[], ciclo: Ciclo, registro: Registro): Promise<void> {
+  if (acoes.length === 0) return
+  const fichaQueFicou = registro.falhas.find((f) => ACOES_QUE_LEVAM_FICHA.has(f.acao.tipo) && ehJson(f.acao.caminho))
+  const imagensQueFicaram = registro.falhas.filter((f) => ACOES_QUE_LEVAM_IMAGEM.has(f.acao.tipo) && ehImagem(f.acao.caminho))
+  // Map, e não índice no objeto, pela convenção de `reconciliar`: nenhum caminho acha o protótipo.
+  const anteriores = new Map(Object.entries(ciclo.estado.anterior.arquivos))
+  for (const acao of acoes) {
+    const hash = anteriores.get(acao.caminho)?.hash
+    const novaQueFicou = imagensQueFicaram.find((f) => podeTerOConteudo(f.acao.caminho, hash, ciclo))
+    if (novaQueFicou !== undefined) {
+      const nova = novaQueFicou.acao.caminho
+      registrarFalha(registro, acao, adiado(`${acao.caminho} só sai do Google Drive depois que ${nova}, que tem o mesmo conteúdo, chegar lá`))
+      continue
+    }
+    if (fichaQueFicou === undefined) {
+      await tentar(acao, () => apagarRemoto(acao.caminho, ciclo), registro)
+      continue
+    }
+    const ficha = fichaQueFicou.acao.caminho
+    const motivo = `${acao.caminho} só sai do Google Drive depois que ${ficha} ficar lá como está aqui`
+    registrarFalha(registro, acao, adiado(`${motivo}, porque a de lá ainda pode citá-la`))
+  }
+}
+
 /**
  * Aplica o plano e devolve o manifesto do próximo ciclo junto com o que falhou.
  *
  * Recebe `Acao[]`, e não `Plano`: a recusa por deleção em massa é decisão de produto
  * (perguntar ao usuário) e quem orquestra tem de abri-la explicitamente. Um executor que
  * aceitasse a recusa teria de escolher em silêncio entre ignorá-la e não fazer nada.
+ *
+ * Imagem sai da ordem do plano (ver o cabeçalho): `apagarLocal` roda depois das outras ações e
+ * pode virar `subir` ou falha "adiado"; `apagarRemoto` roda por último e pode virar "adiado", por
+ * ficha que não chegou ao Drive ou por imagem de mesmo conteúdo que não subiu.
  */
 export async function executarPlano(
   acoes: Acao[],
@@ -360,32 +574,34 @@ export async function executarPlano(
 ): Promise<ResultadoCiclo> {
   const pastas = criarResolvedorDePastas(deps.drive, estado.anterior.pastaRaizId, estado.pastasRemotas)
   const ciclo: Ciclo = { estado, deps, resolverPasta: pastas.resolver }
+  const registro: Registro = { concluidos: new Map(), falhados: new Set(), concluidas: [], falhas: [] }
 
-  const concluidos = new Map<string, Desfecho>()
-  const falhados = new Set<string>()
-  const concluidas: Acao[] = []
-  const falhas: FalhaAcao[] = []
-
+  const imagensAApagar: Acao[] = []
+  const imagensATirarDoDrive: Acao[] = []
   for (const acao of acoes) {
-    try {
-      concluidos.set(acao.caminho, await aplicar(acao, ciclo))
-      concluidas.push(acao)
-    } catch (erro) {
-      falhados.add(acao.caminho)
-      falhas.push({ acao, erro: mensagemDeErro(erro) })
+    if (acao.tipo === 'apagarLocal' && ehImagem(acao.caminho)) {
+      imagensAApagar.push(acao)
+      continue
     }
+    if (acao.tipo === 'apagarRemoto' && ehImagem(acao.caminho)) {
+      imagensATirarDoDrive.push(acao)
+      continue
+    }
+    await tentar(acao, () => aplicar(acao, ciclo), registro)
   }
+  await apagarImagensSemCitacao(imagensAApagar, acoes, ciclo, registro)
+  await apagarImagensDoDrive(imagensATirarDoDrive, ciclo, registro)
 
   const posCiclo: EstadoPosCiclo = {
     anterior: estado.anterior,
     local: estado.local,
     remoto: estado.remoto,
-    concluidos,
-    falhados,
+    concluidos: registro.concluidos,
+    falhados: registro.falhados,
   }
   return {
     manifesto: reconstruirManifesto(posCiclo, pastas.conhecidas(), deps.agora()),
-    concluidas,
-    falhas,
+    concluidas: registro.concluidas,
+    falhas: registro.falhas,
   }
 }

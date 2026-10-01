@@ -20,6 +20,7 @@ import { normalizarChat, type MensagemChat } from './chatIA'
 import { normalizarLayoutTeia, type LayoutSalvo } from './grafoLayoutPersistido'
 import { LixeiraExecutor } from './lixeiraExecutar'
 import type { EntradaLixeira, TipoLixeira } from './lixeira'
+import { citacaoUnica } from './organizarImagens/citacoes'
 
 function agora(): string {
   return new Date().toISOString()
@@ -368,6 +369,30 @@ export class VaultRepo {
   /** Copia um arquivo externo (caminho absoluto) para dentro do cofre (caminho relativo). */
   async copiarParaCofre(origemAbsoluta: string, destinoRel: string): Promise<void> {
     await this.fs.copyFile(origemAbsoluta, this.abs(destinoRel))
+  }
+
+  /**
+   * Arquivos (não pastas) de um diretório do cofre, como `rel`. Serve para imagem nova escolher
+   * nome livre na pasta do dono (`reservarDestino`). Diretório que não existe = lista vazia.
+   */
+  async listarArquivosEm(dirRel: string): Promise<string[]> {
+    try {
+      return (await this.fs.listDir(this.abs(dirRel))).filter((e) => !e.isDir).map((e) => `${dirRel}/${e.name}`)
+    } catch {
+      return []
+    }
+  }
+
+  /**
+   * A imagem pode ser sobrescrita ou apagada? Só se nenhuma outra ficha, versão ou nota a cita —
+   * a checagem única de `organizarImagens/citacoes.ts`. `emMemoria` é a entidade aberta, que pode
+   * estar à frente do disco (versão recém-clonada ainda no debounce do autosave).
+   */
+  async citacaoUnicaDaImagem(
+    rel: string,
+    emMemoria?: { valor: unknown; arquivo: string | null; permitidas: number },
+  ): Promise<boolean> {
+    return citacaoUnica(rel, { raiz: this.raiz, fs: this.fs, emMemoria })
   }
 
   /** Apaga um arquivo do cofre por caminho relativo (ex.: imagem removida da galeria). */

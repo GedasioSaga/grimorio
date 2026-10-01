@@ -3,6 +3,7 @@ import { criarFakeFs } from './fakeFs'
 import type { FsBridge } from '../lib/fsBridge'
 import { caminhoAbsoluto, executarPlano, type DependenciasDoCiclo, type EstadoDoCiclo } from '../lib/sync/executar'
 import type { ClienteDrive, PedidoEnvio } from '../lib/sync/driveBridge'
+import { reconciliar } from '../lib/sync/reconciliar'
 import type { Acao, EntradaArquivo, EstadoLocal, EstadoRemoto, Manifesto } from '../lib/sync/tipos'
 
 const RAIZ = 'C:/Cofre/RPG'
@@ -112,6 +113,26 @@ function criarSondador(fs: FsBridge) {
     relogio += 1
     return { hash: `sha(${conteudo})`, tamanho: conteudo.length, mtime: relogio }
   }
+}
+
+/** Faz a leitura de `rel` falhar como arquivo travado (antivírus, autosave segurando). Embrulha o fake, não o muda. */
+function travar(fs: FsBridge, rel: string): void {
+  const ler = fs.readText
+  fs.readText = async (caminho) => {
+    if (caminho.endsWith(`/${rel}`)) throw new Error('EBUSY: arquivo em uso')
+    return ler(caminho)
+  }
+}
+
+/** Conta as listagens de pasta, para afirmar que a checagem de citação não listou o disco. */
+function contarListagens(fs: FsBridge): string[] {
+  const listadas: string[] = []
+  const listar = fs.listDir
+  fs.listDir = async (caminho) => {
+    listadas.push(caminho)
+    return listar(caminho)
+  }
+  return listadas
 }
 
 interface Cenario {
@@ -566,6 +587,459 @@ describe('uma falha não derruba o ciclo', () => {
     expect(cenario.fake.chamadas).toEqual(['garantirPasta:raizDrive/campanhas', 'enviar:solto.json'])
     expect(resultado.falhas.map((f) => f.acao.caminho)).toEqual(['campanhas/x.json', 'campanhas/y.json'])
     expect(Object.keys(resultado.manifesto.arquivos)).toEqual(['solto.json'])
+  })
+})
+
+describe('apagarLocal de imagem que uma ficha ainda cita', () => {
+  // O caso real: o outro PC organizou as imagens (a velha virou lápide no Drive) enquanto este
+  // editava offline uma ficha que cita o caminho velho.
+  const IMG = 'galeria/x.png'
+  const FICHA = 'personagens/p.json'
+  const IMAGEM = 'bytes da imagem'
+  const FICHA_CITANDO = JSON.stringify({ nome: 'P', retrato: IMG })
+  const ENTRADA_IMG = ent({ fileId: 'f-img', hash: shaDe(IMAGEM) })
+  const ENTRADA_FICHA = ent({ fileId: 'f-p', hash: shaDe(FICHA_CITANDO) })
+  const APAGAR_IMG: Acao = { tipo: 'apagarLocal', caminho: IMG }
+  /** A ficha como o outro PC a deixou depois de organizar. */
+  const FICHA_DO_OUTRO_PC = rem({ fileId: 'f-p', hash: 'H-do-outro-PC', versao: 'v1' })
+
+  async function cofreComFichaCitando(
+    remotoFicha: EstadoRemoto = rem({ fileId: 'f-p', hash: shaDe(FICHA_CITANDO), versao: 'v0' }),
+  ) {
+    const cenario = montar({
+      anterior: manifesto({ arquivos: { [IMG]: ENTRADA_IMG, [FICHA]: ENTRADA_FICHA } }),
+      local: { [IMG]: loc({ hash: shaDe(IMAGEM) }), [FICHA]: loc({ hash: shaDe(FICHA_CITANDO) }) },
+      remoto: { [IMG]: rem({ fileId: 'f-img', removido: true }), [FICHA]: remotoFicha },
+      pastasRemotas: { galeria: 'p-galeria', personagens: 'p-personagens' },
+    })
+    await cenario.fs.writeTextAtomic(`${RAIZ}/${IMG}`, IMAGEM)
+    await cenario.fs.writeTextAtomic(`${RAIZ}/${FICHA}`, FICHA_CITANDO)
+    return cenario
+  }
+
+  it('ficha que ainda cita: a imagem volta a subir como arquivo novo, e o ciclo seguinte não mexe nela', async () => {
+    const cenario = await cofreComFichaCitando()
+
+    const resultado = await cenario.executar([APAGAR_IMG])
+
+    expect(cenario.fs.arquivos.has(`${RAIZ}/${IMG}`)).toBe(true)
+    // `fileId: null`: o remoto é lápide, então o envio cria um arquivo novo em vez de remendar o da lixeira
+    expect(cenario.fake.enviados).toMatchObject([{ nome: 'x.png', fileId: null }])
+    expect(resultado.falhas).toEqual([])
+    expect(resultado.concluidas).toEqual([{ tipo: 'subir', caminho: IMG }])
+    expect(resultado.manifesto.arquivos[IMG]).toMatchObject({ fileId: 'novo(x.png)', hash: shaDe(IMAGEM) })
+
+    // Sem laço: com o que o Drive lista depois deste envio, o plano seguinte deixa a imagem em paz.
+    const seguinte = reconciliar(resultado.manifesto, cenario.estado.local, new Map<string, EstadoRemoto>([
+      [IMG, rem({ fileId: 'novo(x.png)', hash: shaDe(IMAGEM), versao: 'v1' })],
+      [FICHA, rem({ fileId: 'f-p', hash: shaDe(FICHA_CITANDO), versao: 'v0' })],
+    ]))
+    expect(seguinte.ok ? seguinte.acoes.filter((a) => a.caminho === IMG) : ['freio']).toEqual([])
+  })
+
+  it('conflito em que a ficha deste PC vence: a ficha sobe e a imagem que ela cita sobe junto', async () => {
+    const cenario = await cofreComFichaCitando(FICHA_DO_OUTRO_PC)
+
+    const resultado = await cenario.executar([APAGAR_IMG, { tipo: 'conflito', caminho: FICHA, vencedor: 'local' }])
+
+    expect(cenario.fake.chamadas).toEqual(['preservar:personagens/p.json', 'enviar:p.json', 'enviar:x.png'])
+    expect(cenario.fs.arquivos.has(`${RAIZ}/${IMG}`)).toBe(true)
+    expect(resultado.falhas).toEqual([])
+  })
+
+  it('a ficha baixada neste ciclo já não cita: a imagem é apagada, porque a conta usa o disco depois das descidas', async () => {
+    // o download entrega `conteúdo de f-p`, que não cita a imagem
+    const cenario = await cofreComFichaCitando(FICHA_DO_OUTRO_PC)
+
+    const resultado = await cenario.executar([APAGAR_IMG, { tipo: 'baixar', caminho: FICHA }])
+
+    expect(cenario.fs.arquivos.has(`${RAIZ}/${IMG}`)).toBe(false)
+    expect(cenario.fake.chamadas).toEqual(['baixar:f-p'])
+    expect(resultado.falhas).toEqual([])
+    expect(resultado.manifesto.arquivos[IMG]).toBeUndefined()
+  })
+
+  it('a ficha que cita não desceu: nem apaga nem sobe, adia com a entrada anterior', async () => {
+    const cenario = await cofreComFichaCitando(FICHA_DO_OUTRO_PC)
+    cenario.fake.falhas.set('baixar:f-p', new Error('rede caiu'))
+
+    const resultado = await cenario.executar([APAGAR_IMG, { tipo: 'baixar', caminho: FICHA }])
+
+    expect(cenario.fs.arquivos.has(`${RAIZ}/${IMG}`)).toBe(true)
+    expect(cenario.fake.enviados).toEqual([])
+    const falha = resultado.falhas.find((f) => f.acao.caminho === IMG)
+    expect(falha?.acao).toEqual(APAGAR_IMG)
+    expect(falha?.erro).toContain(FICHA)
+    expect(falha?.erro).toContain('adiado')
+    expect(resultado.manifesto.arquivos[IMG]).toEqual(ENTRADA_IMG)
+  })
+
+  it('não deu para varrer o cofre: adia em vez de apagar às cegas', async () => {
+    // Só um conflito de .json obriga a listar o disco (a cópia do perdedor só existe lá); sem ele a
+    // conta usa a varredura do ciclo e não lista nada.
+    const cenario = await cofreComFichaCitando(FICHA_DO_OUTRO_PC)
+    cenario.fs.listDir = async () => {
+      throw new Error('acesso negado')
+    }
+
+    const resultado = await cenario.executar([APAGAR_IMG, { tipo: 'conflito', caminho: FICHA, vencedor: 'local' }])
+
+    expect(cenario.fs.arquivos.has(`${RAIZ}/${IMG}`)).toBe(true)
+    expect(resultado.falhas).toHaveLength(1)
+    expect(resultado.falhas[0]?.acao).toEqual(APAGAR_IMG)
+    expect(resultado.falhas[0]?.erro).toContain('acesso negado')
+    expect(resultado.falhas[0]?.erro).toContain('adiado')
+    expect(resultado.manifesto.arquivos[IMG]).toEqual(ENTRADA_IMG)
+  })
+
+  it('um .json que não deu para ler (travado) não faz a imagem subir de volta: adia, com a entrada anterior', async () => {
+    // O organizador, na dúvida, deixa a imagem onde está. O sync tem uma terceira saída, adiar — e subir
+    // de volta por causa de um arquivo travado por um instante devolveria ao Drive, imagem por imagem,
+    // a organização inteira que o outro PC acabou de fazer.
+    const TRAVADO = 'personagens/travado.json'
+    const cenario = await cofreComFichaCitando()
+    await cenario.fs.writeTextAtomic(`${RAIZ}/${FICHA}`, JSON.stringify({ nome: 'P', retrato: 'imagens/p/retrato.png' }))
+    await cenario.fs.writeTextAtomic(`${RAIZ}/${TRAVADO}`, JSON.stringify({ nome: 'T' }))
+    cenario.estado.local.set(TRAVADO, loc({ hash: 'H-travado' }))
+    travar(cenario.fs, TRAVADO)
+
+    const resultado = await cenario.executar([APAGAR_IMG])
+
+    expect(cenario.fs.arquivos.has(`${RAIZ}/${IMG}`)).toBe(true)
+    expect(cenario.fake.enviados).toEqual([])
+    expect(resultado.falhas).toHaveLength(1)
+    expect(resultado.falhas[0]?.acao).toEqual(APAGAR_IMG)
+    expect(resultado.falhas[0]?.erro).toContain(TRAVADO)
+    expect(resultado.falhas[0]?.erro).toContain('adiado')
+    expect(resultado.manifesto.arquivos[IMG]).toEqual(ENTRADA_IMG)
+  })
+
+  it('ficha legível que cita ganha da dúvida: a imagem sobe mesmo com outro .json travado', async () => {
+    const TRAVADO = 'personagens/travado.json'
+    const cenario = await cofreComFichaCitando()
+    await cenario.fs.writeTextAtomic(`${RAIZ}/${TRAVADO}`, JSON.stringify({ nome: 'T' }))
+    cenario.estado.local.set(TRAVADO, loc({ hash: 'H-travado' }))
+    travar(cenario.fs, TRAVADO)
+
+    const resultado = await cenario.executar([APAGAR_IMG])
+
+    expect(resultado.falhas).toEqual([])
+    expect(resultado.concluidas).toEqual([{ tipo: 'subir', caminho: IMG }])
+  })
+
+  it('sem conflito de .json no ciclo, a conta usa a varredura do ciclo e não lista o disco de novo', async () => {
+    const cenario = await cofreComFichaCitando()
+    const listadas = contarListagens(cenario.fs)
+
+    const resultado = await cenario.executar([APAGAR_IMG])
+
+    expect(listadas).toEqual([])
+    expect(resultado.concluidas).toEqual([{ tipo: 'subir', caminho: IMG }])
+  })
+
+  it('a ficha que desceu neste ciclo entra na conta, mesmo sem estar na varredura', async () => {
+    const NOVA = 'personagens/nova.json'
+    const cenario = await cofreComFichaCitando()
+    await cenario.fs.writeTextAtomic(`${RAIZ}/${FICHA}`, JSON.stringify({ nome: 'P', retrato: 'imagens/p/retrato.png' }))
+    cenario.estado.remoto.set(NOVA, rem({ fileId: 'f-nova', hash: 'H-nova' }))
+    const baixar = cenario.fake.drive.baixar
+    cenario.fake.drive.baixar = async (fileId, caminhoLocal) => {
+      if (fileId !== 'f-nova') return baixar(fileId, caminhoLocal)
+      await cenario.fs.writeTextAtomic(caminhoLocal, JSON.stringify({ nome: 'Nova', retrato: IMG }))
+    }
+
+    const resultado = await cenario.executar([APAGAR_IMG, { tipo: 'baixar', caminho: NOVA }])
+
+    expect(cenario.fs.arquivos.has(`${RAIZ}/${IMG}`)).toBe(true)
+    expect(resultado.concluidas).toContainEqual({ tipo: 'subir', caminho: IMG })
+  })
+
+  it('ficha da varredura que sumiu do disco no meio do ciclo (foi para a lixeira): adia em vez de apagar', async () => {
+    // A lixeira cita imagem, e o caminho novo da ficha só a próxima varredura vê.
+    const MOVIDA = 'personagens/movida.json'
+    const cenario = await cofreComFichaCitando()
+    await cenario.fs.writeTextAtomic(`${RAIZ}/${FICHA}`, JSON.stringify({ nome: 'P', retrato: 'imagens/p/retrato.png' }))
+    cenario.estado.local.set(MOVIDA, loc({ hash: 'H-movida' }))
+    await cenario.fs.writeTextAtomic(`${RAIZ}/.lixeira/e1/movida.json`, JSON.stringify({ nome: 'M', retrato: IMG }))
+
+    const resultado = await cenario.executar([APAGAR_IMG])
+
+    expect(cenario.fs.arquivos.has(`${RAIZ}/${IMG}`)).toBe(true)
+    expect(resultado.falhas).toHaveLength(1)
+    expect(resultado.falhas[0]?.erro).toContain(MOVIDA)
+    expect(resultado.falhas[0]?.erro).toContain('adiado')
+  })
+
+  it('com conflito de .json no ciclo a conta lista o disco: a cópia do perdedor só existe lá, e ela cita', async () => {
+    const COPIA = 'personagens/p (conflito).json'
+    const cenario = await cofreComFichaCitando(FICHA_DO_OUTRO_PC)
+    cenario.deps.preservarPerdedor = async () => {
+      // a ficha deste PC perde e vira cópia; o download traz a do outro PC, que não cita
+      await cenario.fs.writeTextAtomic(`${RAIZ}/${COPIA}`, FICHA_CITANDO)
+    }
+
+    const resultado = await cenario.executar([APAGAR_IMG, { tipo: 'conflito', caminho: FICHA, vencedor: 'remoto' }])
+
+    expect(cenario.fs.arquivos.has(`${RAIZ}/${IMG}`)).toBe(true)
+    expect(resultado.concluidas).toContainEqual({ tipo: 'subir', caminho: IMG })
+  })
+
+  it('ninguém cita: apaga como qualquer apagarLocal', async () => {
+    const cenario = await cofreComFichaCitando()
+    await cenario.fs.writeTextAtomic(`${RAIZ}/${FICHA}`, JSON.stringify({ nome: 'P', retrato: 'imagens/p/retrato.png' }))
+
+    const resultado = await cenario.executar([APAGAR_IMG])
+
+    expect(cenario.fs.arquivos.has(`${RAIZ}/${IMG}`)).toBe(false)
+    expect(cenario.fake.chamadas).toEqual([])
+    expect(resultado.falhas).toEqual([])
+    expect(resultado.concluidas).toEqual([APAGAR_IMG])
+  })
+
+  it('o reenvio da imagem citada falha: fica no disco, a falha aparece como envio e a entrada anterior fica', async () => {
+    const cenario = await cofreComFichaCitando()
+    cenario.fake.falhas.set('enviar:x.png', new Error('cota do Drive'))
+
+    const resultado = await cenario.executar([APAGAR_IMG])
+
+    expect(cenario.fs.arquivos.has(`${RAIZ}/${IMG}`)).toBe(true)
+    expect(resultado.falhas).toEqual([{ acao: { tipo: 'subir', caminho: IMG }, erro: 'cota do Drive' }])
+    expect(resultado.manifesto.arquivos[IMG]).toEqual(ENTRADA_IMG)
+  })
+
+  it('mesma imagem em NFC e em NFD, a ficha cita uma: as duas ficam, porque a checagem não separa as grafias', async () => {
+    const NFC = 'galeria/é.png'.normalize('NFC')
+    const NFD = 'galeria/é.png'.normalize('NFD')
+    const fichaNfc = JSON.stringify({ nome: 'P', retrato: NFC })
+    const cenario = montar({
+      anterior: manifesto({
+        arquivos: {
+          [NFC]: ent({ fileId: 'f-nfc', hash: shaDe(IMAGEM) }),
+          [NFD]: ent({ fileId: 'f-nfd', hash: shaDe(IMAGEM) }),
+          [FICHA]: ent({ fileId: 'f-p', hash: shaDe(fichaNfc) }),
+        },
+      }),
+      local: {
+        [NFC]: loc({ hash: shaDe(IMAGEM) }),
+        [NFD]: loc({ hash: shaDe(IMAGEM) }),
+        [FICHA]: loc({ hash: shaDe(fichaNfc) }),
+      },
+      remoto: {
+        [NFC]: rem({ fileId: 'f-nfc', removido: true }),
+        [NFD]: rem({ fileId: 'f-nfd', removido: true }),
+        [FICHA]: rem({ fileId: 'f-p', hash: shaDe(fichaNfc), versao: 'v0' }),
+      },
+      pastasRemotas: { galeria: 'p-galeria', personagens: 'p-personagens' },
+    })
+    await cenario.fs.writeTextAtomic(`${RAIZ}/${NFC}`, IMAGEM)
+    await cenario.fs.writeTextAtomic(`${RAIZ}/${NFD}`, IMAGEM)
+    await cenario.fs.writeTextAtomic(`${RAIZ}/${FICHA}`, fichaNfc)
+
+    const resultado = await cenario.executar([
+      { tipo: 'apagarLocal', caminho: NFC },
+      { tipo: 'apagarLocal', caminho: NFD },
+    ])
+
+    expect(cenario.fs.arquivos.has(`${RAIZ}/${NFC}`)).toBe(true)
+    expect(cenario.fs.arquivos.has(`${RAIZ}/${NFD}`)).toBe(true)
+    expect(resultado.falhas).toEqual([])
+  })
+})
+
+describe('apagarRemoto de imagem: no fim do ciclo, e só se as fichas e a imagem nova chegaram ao Drive', () => {
+  // Este PC organizou: X saiu de `galeria/`, virou Y sob `imagens/`, e a ficha passou a citar Y. O Drive
+  // ainda tem X e a ficha velha, que cita X. Apagar X lá antes de a ficha nova chegar deixa o Drive
+  // citando um arquivo que não existe — e o outro PC, cuja ficha ainda cita X, sobe X de volta: órfã.
+  // E apagar X com Y de fora deixa o conteúdo só neste disco e na lixeira do Drive: o outro PC baixa a
+  // ficha nova, ninguém mais cita X, e ele apaga X do disco dele.
+  const X = 'galeria/x.png'
+  const Y = 'imagens/personagens/P/retrato.png'
+  const FICHA = 'personagens/p.json'
+  const IMAGEM = 'bytes da imagem'
+  const FICHA_NOVA = JSON.stringify({ nome: 'P', retrato: Y })
+  const ENTRADA_X = ent({ fileId: 'f-x', hash: shaDe(IMAGEM) })
+  const APAGAR_X: Acao = { tipo: 'apagarRemoto', caminho: X }
+  const SUBIR_Y: Acao = { tipo: 'subir', caminho: Y }
+  /** Na ordem do plano, que é a dos caminhos: `galeria/` vem antes de `imagens/` e de `personagens/`. */
+  const PLANO: Acao[] = [APAGAR_X, SUBIR_Y, { tipo: 'subir', caminho: FICHA }]
+
+  async function cofreOrganizado() {
+    const cenario = montar({
+      anterior: manifesto({ arquivos: { [X]: ENTRADA_X, [FICHA]: ent({ fileId: 'f-p', hash: 'H-ficha-velha' }) } }),
+      local: { [Y]: loc({ hash: shaDe(IMAGEM) }), [FICHA]: loc({ hash: shaDe(FICHA_NOVA) }) },
+      remoto: { [X]: rem({ fileId: 'f-x', hash: shaDe(IMAGEM) }), [FICHA]: rem({ fileId: 'f-p', hash: 'H-ficha-velha' }) },
+      pastasRemotas: {
+        galeria: 'p-g', personagens: 'p-p', imagens: 'p-i', 'imagens/personagens': 'p-ip', 'imagens/personagens/P': 'p-ipp',
+      },
+    })
+    await cenario.fs.writeTextAtomic(`${RAIZ}/${Y}`, IMAGEM)
+    await cenario.fs.writeTextAtomic(`${RAIZ}/${FICHA}`, FICHA_NOVA)
+    return cenario
+  }
+
+  it('a imagem velha só sai do Drive depois que a imagem nova e a ficha reescrita subiram', async () => {
+    const cenario = await cofreOrganizado()
+
+    const resultado = await cenario.executar(PLANO)
+
+    expect(cenario.fake.chamadas).toEqual(['enviar:retrato.png', 'enviar:p.json', 'apagar:f-x'])
+    expect(resultado.falhas).toEqual([])
+    expect(resultado.manifesto.arquivos[X]).toBeUndefined()
+  })
+
+  it('a imagem nova não subiu: a velha fica no Drive mesmo com a ficha já lá, e o apagar vira adiado', async () => {
+    const cenario = await cofreOrganizado()
+    cenario.fake.falhas.set('enviar:retrato.png', new Error('cota do Drive'))
+
+    const resultado = await cenario.executar(PLANO)
+
+    // a ficha subiu: quem segura X é a imagem que leva o conteúdo dela, não uma ficha
+    expect(cenario.fake.chamadas).toEqual(['enviar:retrato.png', 'enviar:p.json'])
+    expect(cenario.fake.apagados).toEqual([])
+    expect(resultado.falhas).toContainEqual({ acao: SUBIR_Y, erro: 'cota do Drive' })
+    const falha = resultado.falhas.find((f) => f.acao.caminho === X)
+    expect(falha?.acao).toEqual(APAGAR_X)
+    expect(falha?.erro).toContain(Y)
+    expect(falha?.erro).toContain('adiado')
+    expect(resultado.manifesto.arquivos[X]).toEqual(ENTRADA_X)
+  })
+
+  it('conflito da imagem nova que falha também segura a velha no Drive', async () => {
+    const cenario = await cofreOrganizado()
+    cenario.estado.remoto.set(Y, rem({ fileId: 'f-y', hash: 'H-do-outro-PC' }))
+    cenario.conflitos.erro = new Error('a pasta de cópias está bloqueada')
+
+    const resultado = await cenario.executar([APAGAR_X, { tipo: 'conflito', caminho: Y, vencedor: 'local' }, { tipo: 'subir', caminho: FICHA }])
+
+    expect(cenario.fake.apagados).toEqual([])
+    const falha = resultado.falhas.find((f) => f.acao.caminho === X)
+    expect(falha?.erro).toContain(Y)
+    expect(falha?.erro).toContain('adiado')
+    expect(resultado.manifesto.arquivos[X]).toEqual(ENTRADA_X)
+  })
+
+  it('o apagar segurado pela imagem volta no ciclo seguinte: a imagem sobe e só então a velha sai', async () => {
+    const cenario = await cofreOrganizado()
+    cenario.fake.falhas.set('enviar:retrato.png', new Error('cota do Drive'))
+    const primeiro = await cenario.executar(PLANO)
+    expect(cenario.fake.apagados).toEqual([])
+    cenario.fake.falhas.delete('enviar:retrato.png')
+
+    // Ciclo seguinte: o Drive já tem a ficha nova (subiu no primeiro) e ainda X; Y continua só aqui.
+    const local = new Map([[Y, loc({ hash: shaDe(IMAGEM) })], [FICHA, loc({ hash: shaDe(FICHA_NOVA) })]])
+    const remoto = new Map([
+      [X, rem({ fileId: 'f-x', hash: shaDe(IMAGEM) })],
+      [FICHA, rem({ fileId: 'f-p', hash: shaDe(FICHA_NOVA), versao: 'v1' })],
+    ])
+    const plano = reconciliar(primeiro.manifesto, local, remoto)
+    expect(plano.ok ? plano.acoes : plano).toEqual([APAGAR_X, SUBIR_Y])
+    const estadoSeguinte: EstadoDoCiclo = { ...cenario.estado, anterior: primeiro.manifesto, local, remoto }
+    const segundo = await executarPlano(plano.ok ? plano.acoes : [], estadoSeguinte, cenario.deps)
+
+    expect(segundo.falhas).toEqual([])
+    expect(cenario.fake.chamadas.slice(-2)).toEqual(['enviar:retrato.png', 'apagar:f-x'])
+    expect(segundo.manifesto.arquivos[X]).toBeUndefined()
+  })
+
+  it('imagem de OUTRO conteúdo que não subiu não segura a velha: o que X precisa no Drive é o conteúdo dela', async () => {
+    const OUTRA = 'imagens/itens/espada.png'
+    const ESPADA = 'bytes da espada'
+    const cenario = await cofreOrganizado()
+    cenario.estado.local.set(OUTRA, loc({ hash: shaDe(ESPADA) }))
+    await cenario.fs.writeTextAtomic(`${RAIZ}/${OUTRA}`, ESPADA)
+    cenario.fake.falhas.set('enviar:espada.png', new Error('cota do Drive'))
+
+    const resultado = await cenario.executar([APAGAR_X, { tipo: 'subir', caminho: OUTRA }, SUBIR_Y, { tipo: 'subir', caminho: FICHA }])
+
+    expect(cenario.fake.apagados).toEqual(['f-x'])
+    expect(resultado.falhas).toEqual([{ acao: { tipo: 'subir', caminho: OUTRA }, erro: 'cota do Drive' }])
+    expect(resultado.manifesto.arquivos[X]).toBeUndefined()
+  })
+
+  it('imagem que não subiu e nem está na varredura: sem hash para comparar, a velha fica', async () => {
+    const FANTASMA = 'imagens/fantasma.png'
+    const cenario = await cofreOrganizado()
+
+    const resultado = await cenario.executar([APAGAR_X, { tipo: 'subir', caminho: FANTASMA }, SUBIR_Y, { tipo: 'subir', caminho: FICHA }])
+
+    expect(cenario.fake.apagados).toEqual([])
+    const falha = resultado.falhas.find((f) => f.acao.caminho === X)
+    expect(falha?.erro).toContain(FANTASMA)
+    expect(falha?.erro).toContain('adiado')
+  })
+
+  it('imagem velha sem entrada no manifesto: sem hash para comparar, qualquer imagem que não subiu a segura', async () => {
+    const cenario = await cofreOrganizado()
+    cenario.estado.anterior = manifesto({ arquivos: { [FICHA]: ent({ fileId: 'f-p', hash: 'H-ficha-velha' }) } })
+    cenario.fake.falhas.set('enviar:retrato.png', new Error('cota do Drive'))
+
+    const resultado = await cenario.executar(PLANO)
+
+    expect(cenario.fake.apagados).toEqual([])
+    expect(resultado.falhas.find((f) => f.acao.caminho === X)?.erro).toContain(Y)
+  })
+
+  it('a ficha não subiu (mudou no disco durante o ciclo): a imagem velha fica no Drive e o apagar vira adiado', async () => {
+    const cenario = await cofreOrganizado()
+    await cenario.fs.writeTextAtomic(`${RAIZ}/${FICHA}`, 'edição feita durante o ciclo')
+
+    const resultado = await cenario.executar(PLANO)
+
+    expect(cenario.fake.apagados).toEqual([])
+    const falha = resultado.falhas.find((f) => f.acao.caminho === X)
+    expect(falha?.acao).toEqual(APAGAR_X)
+    expect(falha?.erro).toContain(FICHA)
+    expect(falha?.erro).toContain('adiado')
+    // a entrada fica: o ciclo seguinte vê X sumido daqui e igual lá, e manda apagar de novo
+    expect(resultado.manifesto.arquivos[X]).toEqual(ENTRADA_X)
+  })
+
+  it('o apagar adiado volta no ciclo seguinte e acontece, depois que a ficha sobe', async () => {
+    const cenario = await cofreOrganizado()
+    const EDICAO = 'edição feita durante o ciclo'
+    await cenario.fs.writeTextAtomic(`${RAIZ}/${FICHA}`, EDICAO)
+    const primeiro = await cenario.executar(PLANO)
+    expect(cenario.fake.apagados).toEqual([])
+
+    // Ciclo seguinte: a varredura vê a edição assentada; o Drive já tem Y (subiu no primeiro) e ainda X.
+    const local = new Map([[Y, loc({ hash: shaDe(IMAGEM) })], [FICHA, loc({ hash: shaDe(EDICAO) })]])
+    const remoto = new Map([
+      [X, rem({ fileId: 'f-x', hash: shaDe(IMAGEM) })],
+      [Y, rem({ fileId: 'novo(retrato.png)', hash: shaDe(IMAGEM), versao: 'v1' })],
+      [FICHA, rem({ fileId: 'f-p', hash: 'H-ficha-velha' })],
+    ])
+    const plano = reconciliar(primeiro.manifesto, local, remoto)
+    expect(plano.ok ? plano.acoes : plano).toEqual([APAGAR_X, { tipo: 'subir', caminho: FICHA }])
+    const estadoSeguinte: EstadoDoCiclo = { ...cenario.estado, anterior: primeiro.manifesto, local, remoto }
+    const segundo = await executarPlano(plano.ok ? plano.acoes : [], estadoSeguinte, cenario.deps)
+
+    expect(segundo.falhas).toEqual([])
+    expect(cenario.fake.chamadas.slice(-2)).toEqual(['enviar:p.json', 'apagar:f-x'])
+    expect(segundo.manifesto.arquivos[X]).toBeUndefined()
+  })
+
+  it('conflito da ficha que falha também segura a imagem velha no Drive', async () => {
+    const cenario = await cofreOrganizado()
+    cenario.conflitos.erro = new Error('a pasta de cópias está bloqueada')
+
+    const resultado = await cenario.executar([APAGAR_X, SUBIR_Y, { tipo: 'conflito', caminho: FICHA, vencedor: 'local' }])
+
+    expect(cenario.fake.apagados).toEqual([])
+    expect(resultado.falhas.find((f) => f.acao.caminho === X)?.erro).toContain('adiado')
+    expect(resultado.manifesto.arquivos[X]).toEqual(ENTRADA_X)
+  })
+
+  it('ficha que não saiu do Drive também segura: a de lá ainda pode citar a imagem', async () => {
+    const cenario = montar({
+      anterior: manifesto({ arquivos: { [X]: ENTRADA_X, [FICHA]: ent({ fileId: 'f-p' }) } }),
+      remoto: { [X]: rem({ fileId: 'f-x' }), [FICHA]: rem({ fileId: 'f-p' }) },
+    })
+    cenario.fake.falhas.set('apagar:f-p', new Error('rede caiu'))
+
+    const resultado = await cenario.executar([APAGAR_X, { tipo: 'apagarRemoto', caminho: FICHA }])
+
+    expect(cenario.fake.apagados).toEqual([])
+    expect(resultado.falhas.find((f) => f.acao.caminho === X)?.erro).toContain('adiado')
   })
 })
 

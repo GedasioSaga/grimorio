@@ -5,10 +5,11 @@ import { OpcoesCofre } from './OpcoesCofre'
 import { OpcoesIA } from './OpcoesIA'
 import { OpcoesNuvem } from './OpcoesNuvem'
 import { OpcoesLixeira } from './OpcoesLixeira'
+import { OpcoesOrganizarImagens } from './OpcoesOrganizarImagens'
 import { useMiniaturas } from '../state/miniaturas'
 import { usePrefixoCenario } from '../state/prefixoCenario'
 
-export type AbaOpcoes = 'cofre' | 'nuvem' | 'aparencia' | 'ia' | 'lixeira'
+export type AbaOpcoes = 'cofre' | 'nuvem' | 'aparencia' | 'ia' | 'imagens' | 'lixeira'
 
 interface OpcoesState {
   aberto: boolean
@@ -31,6 +32,7 @@ const ABAS: { id: AbaOpcoes; rotulo: string }[] = [
   { id: 'nuvem', rotulo: 'Nuvem' },
   { id: 'aparencia', rotulo: 'Aparência' },
   { id: 'ia', rotulo: 'IA' },
+  { id: 'imagens', rotulo: 'Imagens' },
   { id: 'lixeira', rotulo: 'Lixeira' },
 ]
 
@@ -116,6 +118,7 @@ export function HostOpcoes() {
             </>
           )}
           {aba === 'ia' && <OpcoesIA />}
+          {aba === 'imagens' && <OpcoesOrganizarImagens />}
           {aba === 'lixeira' && <OpcoesLixeira />}
         </div>
       </div>

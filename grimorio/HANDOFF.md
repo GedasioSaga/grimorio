@@ -1,10 +1,42 @@
-# HANDOFF — Grimório (13/09/2026)
+# HANDOFF — Grimório (01/10/2026)
 
 Retrato para retomar sem contexto. **Código ganha de qualquer afirmação daqui.**
 
+## PRONTO (01/10/2026): organizar imagens com nomes legíveis — commitado, NÃO publicado
+
+### Objetivo
+Imagens do cofre em pasta por tipo/dono com nome legível (`imagens/personagens/<Nome>/retrato.png`, `imagens/cenarios/<Pai>/<Filho>/retrato.png`, `imagens/itens/<Nome>.png`, `imagens/canvas/<Sessão>/01.png`, `imagens/mapas/<Mapa>/01.png`), botão em Opções › Imagens com prévia + desfazer, imagem nova já nascendo com nome certo, duplicatas do mesmo dono juntadas, freio do sync entendendo renomeação. Plano: `C:\Users\gedasio.filho\.claude\plans\zazzy-gathering-torvalds.md`.
+
+### Estado atual
+- Motor: `src/lib/organizarImagens/` (nomes, planejar, executar, referencias, citacoes, impressao, novaImagem, ultima, tipos). Costura: `src/state/organizarImagens.ts`, `src/components/destinoImagem.ts`. Tela: `src/components/OpcoesOrganizarImagens.tsx` (aba 'imagens' de `Opcoes.tsx`). Freio: `src/lib/sync/reconciliar.ts`; ordem de apagar imagem no Drive: `src/lib/sync/executar.ts`.
+- Diário de desfazer em `appConfigDir()/organizar/<plano.id>`, registro da última em `organizar/ultimas.json` (por cofre).
+- Rodada 4 (30/09-01/10, sem gauntlet, por pedido do usuário): 11 achados da re-revisão 3 corrigidos — volta via temporário + rename, retomada pulando o que já voltou, ficha não volta citando imagem que não voltou, recusa de organizar com volta pendente, diário gravado antes de cada fase ('aplicando' desfazível), exceção final vira problema; sync adia apagar imagem no Drive até a ficha e a imagem nova subirem, ficha ilegível vira 'adiado', desfazer e upload longo pareiam no freio. Revisão única + 3 céticos por achado: 2 médios confirmados e corrigidos (inclui o botão novo "Manter o cofre como está" para sair de organização pela metade).
+- Ajustes vindos do ensaio no cofre REAL (cópia), decididos pelo usuário em 01/10:
+  - O cofre real já tinha `Imagens/` (I maiúsculo, pasta do usuário com subpastas Marinha, Pirata, Reino de Goa…). O NTFS trata como a mesma raiz `imagens/`. O freio comparava caixa e travava o sync (834 "deleções" de 1598); agora compara pela chave canônica (`reconciliar.ts:218`). A segunda prévia gerava 606 reescritas só de caixa; agora sai vazia (`planejar.ts`, `abreOMesmoArquivo`).
+  - Imagem sem citação FORA de lugar onde o app cria imagem (imagens-canvas/, imagens-notas/, imagens-cenarios/, imagens-itens/, `assets/`) fica onde está: nem move, nem sai como duplicata (`ehLugarDoApp` em `planejar.ts`).
+  - Avisos "mesmo conteúdo, donos diferentes" viram 1 linha com "ver" (`Plano.repetidasEntreDonos`).
+  - `tldrawFile` (nome do clipboard do tldraw) é nome genérico: vira 01, 02…
+- `scripts/portaoOrganizarImagens.mjs` é de sessão antiga, untracked, fica de lado (fixa um sha256 de `tipos.ts` que já não bate).
+
+### Próximos passos
+1. Publicar numa release só quando o usuário pedir. Hoje está commitado e fora da v0.13.0.
+2. No cofre real, Organizar só pelo botão, pelo usuário. Depois do primeiro sync, conferir no outro PC que as fichas abrem com imagem.
+3. Feature separada pedida em 27/09: ao colar/arrastar imagem nova (mapa, nota, galeria, retrato), abrir campo para o usuário escolher o nome, já preenchido com a sugestão. Fazer plano curto + grilling antes (colar múltiplo, sufixo anti-colisão '-a3f9').
+4. Limpeza opcional, pede OK do usuário: `%APPDATA%\com.gedasio.grimorio\organizar\` só contém o diário e o registro do teste feito na CÓPIA do cofre (estado 'desfeito').
+5. Ideia do construtor, não feita: na lista "ver" das repetidas, mostrar o destino legível em vez do caminho-código.
+
+### Critério de pronto
+`npm test` 0 falha; `rtk proxy npx tsc --noEmit` limpo; teste mostra 40 renomeações num manifesto de 50 sem disparar o freio e 40 deleções reais disparando; organizar + desfazer no fake devolve o cofre byte a byte; no app, na cópia do cofre real: personagens, mapa e sessões abrem sem imagem quebrada depois de Organizar e depois de Desfazer, e a cópia volta byte a byte.
+
+### Evidência
+- 01/10, portão do workflow `wf_7e5c1ce8-696`: `rtk proxy npm test` → `Test Files 151 passed (151) / Tests 2223 passed (2223)`, exit 0; `rtk proxy npx tsc --noEmit` exit 0, sem saída.
+- Freio: `src/test/reconciliar.test.ts` '40 renomeações num manifesto de 50 não disparam o freio' e '40 deleções reais … disparam'; novo 'cofre que já tinha a pasta "Imagens" (I maiúsculo)' nasceu vermelho (`plano recusado: delecao-em-massa`) e passou com o fix.
+- Ensaio no cofre real copiado para o scratchpad (1598 arquivos, 1276 imagens, 1,4 GB), motor com FsBridge de disco: plano 609 movimentos / 236 reescritas / 63 remoções / 1 aviso (referência que já estava quebrada); `RESULTADO fase concluido, problemas []`; referências quebradas 27 antes e 27 depois; freio `ok: true`; desfazer `completo: true`, `VOLTA faltando 0 diferentes 0 sobrando 0`.
+- App de verdade (build de debug, WebView2 com pasta de dados isolada, pilotado por CDP), na cópia: prévia 609 · 236 · 63 com "284 imagens repetidas … ver"; Organizar → "Pronto: 609 imagens organizadas, 236 arquivos atualizados, 63 cópias repetidas juntadas"; Fenrir/Hwaran/Bellatrix com retrato em `imagens/personagens/<Nome>/retrato.png`; Sessão 3 com 159 imagens e 0 quebradas antes e depois; mapa com 1 imagem ok; segunda prévia "Tudo já está organizado"; Desfazer → "Organização desfeita"; cópia comparada com o cofre real: 1598 = 1598, 0 diferentes. Prints em `scratchpad/app-*.png` da sessão `e82e1416`.
+
 ## Publicado x commitado — LEIA ANTES DE PROMETER QUALQUER COISA
 
-**No ar: v0.13.0** (13/09/2026, commit `20bd4b9`). Nada commitado ficou fora dela. Levou:
+**No ar: v0.13.0** (13/09/2026, commit `20bd4b9`). **Fora dela:** o "Organizar imagens" (commit de 01/10/2026), commitado e NÃO publicado. Levou:
 - faixa com o acervo de itens grudada no card de cenário (`FaixaItensCenario.tsx`, `lib/faixaItensCenario.ts`);
 - imagem dentro de Frame vira card no mesmo lugar (`lugarDoCardNaImagem`, `lib/transformarImagem.ts`);
 - pasta de retratos e pastas com ponto fora da árvore; subcenário pelo Espaço com "Pai: "; opção de nome próprio na árvore;

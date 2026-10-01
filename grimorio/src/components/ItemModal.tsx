@@ -13,6 +13,7 @@ import { htmlParaMarkdown, markdownParaHtml } from '../lib/markdownHtml'
 import { carregarImagensIA } from '../lib/imagensIA'
 import { promptDescreverItem, SYSTEM_ESCRITOR } from '../lib/promptsIA'
 import { EnquadrarRetrato } from './EnquadrarRetrato'
+import { destinoImagemNova } from './destinoImagem'
 import { BarraLocalizacao } from './BarraLocalizacao'
 import { posicaoCss } from '../lib/focoRetrato'
 import '../estilos/localizacao.css'
@@ -155,8 +156,12 @@ export function ItemModal({ itemId }: { itemId: string }) {
       if (typeof arquivo !== 'string') return
       const nomeArquivo = arquivo.split(/[\\/]/).pop() ?? ''
       const ext = (nomeArquivo.includes('.') ? nomeArquivo.split('.').pop()! : 'png').toLowerCase()
-      // central e estável: mover o item de pasta não quebra o rel
-      const destinoRel = `imagens-itens/retrato-${itemId}.${ext}`
+      // imagens/itens/<Nome>-<hash>.<ext>. A imagem atual só é sobrescrita se nenhuma outra ficha
+      // (um card num mapa, por exemplo) a cita; modificadoEm abaixo faz o cache-bust quando sobrescreve
+      const destinoRel = await destinoImagemNova(
+        { tipo: 'item', nome: item.nome }, { papel: 'retrato' }, ext,
+        { caminho: arquivo }, { atual: item.retrato, entidade: item, arquivo: useApp.getState().caminhoItemPorId[itemId] ?? null },
+      )
       await repo.copiarParaCofre(arquivo, destinoRel)
       // foco volta ao centro: o da imagem antiga não quer dizer nada na nova
       agendarSalvar({ retrato: destinoRel, foco: undefined, modificadoEm: new Date().toISOString() })

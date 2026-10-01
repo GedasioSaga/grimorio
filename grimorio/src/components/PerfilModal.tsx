@@ -4,6 +4,7 @@ import { convertFileSrc } from '@tauri-apps/api/core'
 import { registrarFlushModal, useApp } from '../state/store'
 import { EditorTexto } from './EditorTexto'
 import { GaleriaPersonagem } from './GaleriaPersonagem'
+import { destinoImagemNova } from './destinoImagem'
 import { AbaVinculos } from './AbaVinculos'
 import { AcervoCenario } from './AcervoCenario'
 import { AcoesIA, type AcaoIA } from './AcoesIA'
@@ -165,9 +166,13 @@ export function PerfilModal({ personagemId }: { personagemId: string }) {
       if (typeof arquivo !== 'string') return
       const nomeArquivo = arquivo.split(/[\\/]/).pop() ?? ''
       const ext = (nomeArquivo.includes('.') ? nomeArquivo.split('.').pop()! : 'png').toLowerCase()
-      // assets/ da mesma campanha do personagem: campanhas/<slug>/personagens/x.json
-      const dirCampanha = caminho.split('/').slice(0, 2).join('/')
-      const destinoRel = `${dirCampanha}/assets/retrato-${personagemId}-${p.versaoAtivaId}.${ext}`
+      // imagens/personagens/<primeira forma>/retrato-<hash>.<ext>. O retrato atual só é sobrescrito
+      // se nenhuma outra forma (versão clonada herda o mesmo arquivo) nem outra ficha o cita;
+      // modificadoEm abaixo faz o cache-bust quando sobrescreve
+      const destinoRel = await destinoImagemNova(
+        { tipo: 'personagem', nome: p.versoes[0]?.nome || p.nome }, { papel: 'retrato' }, ext,
+        { caminho: arquivo }, { atual: va.retrato, entidade: p, arquivo: caminho },
+      )
       await repo.copiarParaCofre(arquivo, destinoRel)
       // modificadoEm novo muda o ?v= do retratoSrc na hora (cache-bust otimista).
       // foco volta ao centro: o da imagem antiga não quer dizer nada na nova.
@@ -264,7 +269,9 @@ export function PerfilModal({ personagemId }: { personagemId: string }) {
         </div>
         {aba === 'imagens' ? (
           <GaleriaPersonagem
-            personagemId={personagemId}
+            dono={{ tipo: 'personagem', nome: p.versoes[0]?.nome || p.nome }}
+            entidade={p}
+            arquivoEntidade={caminhoPorId[personagemId] ?? null}
             imagens={va.imagens}
             onImagensChange={(imagens) => agendarSalvar({ imagens })}
           />

@@ -6,6 +6,8 @@ import { encontrarCenarioNode } from '../lib/cenarioArvore'
 import { desvincularPersonagem, personagensVivos, vincularPersonagem } from '../lib/cenarioVinculo'
 import { EditorTexto } from './EditorTexto'
 import { GaleriaPersonagem } from './GaleriaPersonagem'
+import { cadeiaDoCenario, destinoImagemNova } from './destinoImagem'
+import type { DonoImagem } from '../lib/organizarImagens/nomes'
 import { AbaVinculos } from './AbaVinculos'
 import { AcervoCenario } from './AcervoCenario'
 import { AcoesIA, type AcaoIA } from './AcoesIA'
@@ -175,6 +177,18 @@ export function CenarioModal({ cenarioId }: { cenarioId: string }) {
     }
   }
 
+  /** Dono das imagens deste cenário: a cadeia de nomes desde o cenário raiz (pasta dentro da do pai). */
+  function donoDoCenario(): DonoImagem {
+    const dir = useApp.getState().caminhoCenarioPorId[cenarioId]
+    return { tipo: 'cenario', nomes: dir ? cadeiaDoCenario(dir) : [c.nome] }
+  }
+
+  /** JSON deste cenário no cofre, para a checagem de citação separar a memória do disco. */
+  function arquivoDoCenario(): string | null {
+    const dir = useApp.getState().caminhoCenarioPorId[cenarioId]
+    return dir ? `${dir}/cenario.json` : null
+  }
+
   async function trocarRetrato() {
     if (!repo || !vaultPath) return
     try {
@@ -185,8 +199,13 @@ export function CenarioModal({ cenarioId }: { cenarioId: string }) {
       if (typeof arquivo !== 'string') return
       const nomeArquivo = arquivo.split(/[\\/]/).pop() ?? ''
       const ext = (nomeArquivo.includes('.') ? nomeArquivo.split('.').pop()! : 'png').toLowerCase()
-      // central e estável: mover o cenário não quebra o rel
-      const destinoRel = `imagens-cenarios/retrato-${cenarioId}-${c.versaoAtivaId}.${ext}`
+      // imagens/cenarios/<Pai>/<Nome>/retrato-<hash>.<ext>. O retrato atual só é sobrescrito se
+      // nenhuma outra versão (a clonada herda o mesmo arquivo) nem outra ficha o cita;
+      // modificadoEm abaixo faz o cache-bust quando sobrescreve
+      const destinoRel = await destinoImagemNova(
+        donoDoCenario(), { papel: 'retrato' }, ext,
+        { caminho: arquivo }, { atual: va.retrato, entidade: c, arquivo: arquivoDoCenario() },
+      )
       await repo.copiarParaCofre(arquivo, destinoRel)
       // foco volta ao centro: o da imagem antiga não quer dizer nada na nova
       agendarSalvar({ retrato: destinoRel, foco: undefined, modificadoEm: new Date().toISOString() })
@@ -282,7 +301,9 @@ export function CenarioModal({ cenarioId }: { cenarioId: string }) {
         </div>
         {aba === 'imagens' ? (
           <GaleriaPersonagem
-            dirAssets="imagens-cenarios"
+            dono={donoDoCenario()}
+            entidade={c}
+            arquivoEntidade={arquivoDoCenario()}
             imagens={va.imagens}
             onImagensChange={(imagens) => agendarSalvar({ imagens })}
           />

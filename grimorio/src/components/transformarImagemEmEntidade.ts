@@ -6,7 +6,7 @@ import { CARD_ALTURA_PADRAO, CARD_LARGURA_PADRAO } from './CharacterCardShape'
 import { cardsPorEntidade, ligarCenarioNoCanvas, ligarRelacoesNoCanvas } from './ligacoesCanvas'
 import {
   ROTULO_TIPO,
-  destinoRetrato,
+  donoDoRetrato,
   extensaoDe,
   lugarDoCardNaImagem,
   novaVersaoCenarioComRetrato,
@@ -19,12 +19,22 @@ import { versaoAtivaPersonagem } from '../lib/personagemVersao'
 import { pedirTexto, pedirTextoComPrefixo } from './dialogos'
 import { associarEscolhendoCampanhas } from './dialogoCampanhas'
 import { pedirTransformacao } from './dialogoTransformar'
+import { cadeiaDoCenario, destinoImagemNova } from './destinoImagem'
+import type { DonoImagem } from '../lib/organizarImagens/nomes'
+
+/**
+ * Endereço legível e livre para o retrato novo, na pasta do dono. Sempre um arquivo novo (nada é
+ * sobrescrito): a imagem do mapa é copiada, e o retrato da versão anterior continua dela.
+ */
+function destinoDoRetrato(dono: DonoImagem, ext: string, origemAbs: string): Promise<string> {
+  return destinoImagemNova(dono, { papel: 'retrato' }, ext, { caminho: origemAbs })
+}
 
 /**
  * Espaço numa imagem solta: cria a entidade escolhida com a imagem como retrato e
  * troca o shape de imagem pelo card correspondente, no mesmo lugar do canvas.
  * A cópia do arquivo segue o padrão de retrato de cada entidade; a imagem original
- * em imagens-canvas/ fica intocada (outros canvases podem referenciá-la).
+ * na pasta do mapa fica intocada (outros canvases podem referenciá-la).
  */
 export async function transformarImagemEmEntidade(editor: Editor, shape: TLImageShape) {
   const { repo, vaultPath } = useApp.getState()
@@ -59,15 +69,14 @@ export async function transformarImagemEmEntidade(editor: Editor, shape: TLImage
         'Criar',
       )
       if (!nomeVersao) return
-      // id da versão precisa existir ANTES de copiar o arquivo: destinoRetrato embute o
-      // id no nome, e a versão só nasce depois que o arquivo já está no destino final.
       const idVersao = crypto.randomUUID()
 
       if (tipo === 'personagem') {
         const p = useApp.getState().personagens[escolha.id]
         const caminho = useApp.getState().caminhoPorId[escolha.id]
         if (!p || !caminho) throw new Error(`Personagem "${escolha.id}" não encontrado.`)
-        const destino = destinoRetrato('personagem', { id: p.id, caminho, versaoAtivaId: idVersao }, ext)
+        // A nova forma vira a ativa: é o `retrato` da pasta do personagem (a da primeira forma).
+        const destino = await destinoDoRetrato(donoDoRetrato('personagem', p.versoes[0]?.nome ?? p.nome), ext, origem)
         await repo.copiarParaCofre(origem, destino)
         const atualizado = novaVersaoPersonagemComRetrato(p, nomeVersao, destino, idVersao)
         atualizado.modificadoEm = new Date().toISOString()
@@ -79,7 +88,7 @@ export async function transformarImagemEmEntidade(editor: Editor, shape: TLImage
         const c = useApp.getState().cenarios[escolha.id]
         const caminho = useApp.getState().caminhoCenarioPorId[escolha.id]
         if (!c || !caminho) throw new Error(`Cenário "${escolha.id}" não encontrado.`)
-        const destino = destinoRetrato('cenario', { id: c.id, caminho, versaoAtivaId: idVersao }, ext)
+        const destino = await destinoDoRetrato(donoDoRetrato('cenario', c.nome, cadeiaDoCenario(caminho)), ext, origem)
         await repo.copiarParaCofre(origem, destino)
         const atualizado = novaVersaoCenarioComRetrato(c, nomeVersao, destino, idVersao)
         atualizado.modificadoEm = new Date().toISOString()
@@ -112,7 +121,7 @@ export async function transformarImagemEmEntidade(editor: Editor, shape: TLImage
       if (tipo === 'personagem') {
         const ref = await repo.criarPersonagemEm(dir, nome)
         const p = await repo.lerPersonagem(ref.caminho)
-        const destino = destinoRetrato(tipo, { id: ref.id, caminho: ref.caminho, versaoAtivaId: p.versaoAtivaId }, ext)
+        const destino = await destinoDoRetrato(donoDoRetrato(tipo, nome), ext, origem)
         await repo.copiarParaCofre(origem, destino)
         versaoAtivaPersonagem(p).retrato = destino
         p.modificadoEm = new Date().toISOString()
@@ -124,7 +133,7 @@ export async function transformarImagemEmEntidade(editor: Editor, shape: TLImage
       } else if (tipo === 'cenario') {
         const ref = await repo.criarCenarioEm(dir, nome)
         const c = await repo.lerCenario(ref.caminho)
-        const destino = destinoRetrato(tipo, { id: ref.id, caminho: ref.caminho, versaoAtivaId: c.versaoAtivaId }, ext)
+        const destino = await destinoDoRetrato(donoDoRetrato(tipo, nome, cadeiaDoCenario(ref.caminho, nome)), ext, origem)
         await repo.copiarParaCofre(origem, destino)
         versaoAtiva(c).retrato = destino
         c.modificadoEm = new Date().toISOString()
@@ -136,7 +145,7 @@ export async function transformarImagemEmEntidade(editor: Editor, shape: TLImage
       } else {
         const ref = await repo.criarItemEm(dir, nome)
         const item = await repo.lerItem(ref.caminho)
-        const destino = destinoRetrato(tipo, { id: ref.id, caminho: ref.caminho }, ext)
+        const destino = await destinoDoRetrato(donoDoRetrato(tipo, nome), ext, origem)
         await repo.copiarParaCofre(origem, destino)
         item.retrato = destino
         item.modificadoEm = new Date().toISOString()

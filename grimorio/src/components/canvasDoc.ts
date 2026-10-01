@@ -3,7 +3,6 @@ import {
   createTLStore,
   getSnapshot,
   loadSnapshot,
-  uniqueId,
   type TLAnyShapeUtilConstructor,
   type TLAssetStore,
   type TLEditorSnapshot,
@@ -14,22 +13,37 @@ import { useApp } from '../state/store'
 import type { VaultRepo } from '../lib/vaultRepo'
 import { caminhoAbsolutoImagem } from '../lib/caminhos'
 import { uint8ParaBase64 } from '../lib/bin'
+import { donoDoDocumento, papelDoNomeOriginal, reservarDestino } from '../lib/organizarImagens/novaImagem'
+import { sha256Bytes } from '../lib/organizarImagens/impressao'
+import { sufixoDoConteudo } from '../lib/organizarImagens/nomes'
 
 const AUTOSAVE_DEBOUNCE_MS = 1000
 
 /**
- * Asset store do tldraw: imagens coladas/arrastadas vão para `<cofre>/imagens-canvas/`.
+ * Asset store do tldraw: imagens coladas/arrastadas vão para a pasta do documento,
+ * `imagens/mapas/<Nome do mapa>/` (ou `imagens/canvas/<Nome>/`), com o nome original do
+ * arquivo — ou número, quando o nome é de clipboard (`image.png`). O nome original fica em
+ * `meta.nomeOriginal` para o "Organizar imagens" poder refazer o nome depois.
  * O snapshot guarda só o caminho RELATIVO em `meta.rel`; `resolve()` remonta a URL
  * a partir do vaultPath atual — o cofre continua portátil entre máquinas.
  */
-function criarAssetStore(vaultPath: string, repo: VaultRepo): TLAssetStore {
+function criarAssetStore(vaultPath: string, repo: VaultRepo, caminho: string): TLAssetStore {
   return {
     async upload(_asset, file) {
       const ext = (file.name.match(/\.([a-z0-9]+)$/i)?.[1] ?? 'png').toLowerCase()
-      const rel = `imagens-canvas/${uniqueId()}.${ext}`
       const bytes = new Uint8Array(await file.arrayBuffer())
+      // Nome do documento lido agora, não no load: pode ter sido renomeado com o mapa aberto.
+      const doc = await repo.lerCanvasDoc(caminho).catch(() => ({}))
+      const rel = await reservarDestino(
+        (pasta) => repo.listarArquivosEm(pasta),
+        donoDoDocumento(caminho, doc),
+        papelDoNomeOriginal(file.name),
+        ext,
+        // imagem colada sem nome vira número: o sufixo do conteúdo evita dois PCs no mesmo `01`
+        { sufixo: sufixoDoConteudo(await sha256Bytes(bytes)) },
+      )
       await repo.escreverBinario(rel, uint8ParaBase64(bytes))
-      return { src: convertFileSrc(caminhoAbsolutoImagem(vaultPath, rel)), meta: { rel } }
+      return { src: convertFileSrc(caminhoAbsolutoImagem(vaultPath, rel)), meta: { rel, nomeOriginal: file.name } }
     },
     resolve(asset) {
       const rel = (asset.meta as { rel?: string } | undefined)?.rel
@@ -39,10 +53,10 @@ function criarAssetStore(vaultPath: string, repo: VaultRepo): TLAssetStore {
 }
 
 /** Ponto único de criação do store do tldraw. */
-function criarStoreCanvas(vaultPath: string, repo: VaultRepo, shapeUtils: TLAnyShapeUtilConstructor[]): TLStore {
+function criarStoreCanvas(vaultPath: string, repo: VaultRepo, caminho: string, shapeUtils: TLAnyShapeUtilConstructor[]): TLStore {
   return createTLStore({
     shapeUtils,
-    assets: criarAssetStore(vaultPath, repo),
+    assets: criarAssetStore(vaultPath, repo, caminho),
   })
 }
 
@@ -83,7 +97,7 @@ export function useDocumentoTldraw(
       try {
         const doc = await repo.lerCanvasDoc(caminho)
         if (!ativo) return
-        const s = criarStoreCanvas(vaultPath, repo, shapeUtils)
+        const s = criarStoreCanvas(vaultPath, repo, caminho, shapeUtils)
         if (doc.documento) loadSnapshot(s, doc.documento as Partial<TLEditorSnapshot>)
         setStore(s)
       } catch (e) {

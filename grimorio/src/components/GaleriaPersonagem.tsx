@@ -5,27 +5,35 @@ import { useApp } from '../state/store'
 import { caminhoAbsolutoImagem } from '../lib/caminhos'
 import { adicionarImagem, removerImagem } from '../lib/imagemPersonagem'
 import type { ImagemPersonagem } from '../lib/types'
+import type { DonoImagem } from '../lib/organizarImagens/nomes'
+import { destinoImagemNova } from './destinoImagem'
 
 /**
- * Galeria em grade da aba Imagens. Copia arquivos escolhidos para
- * `<dir-do-personagem>/assets/` (mesmo padrão do retrato) e guarda só `rel`.
- * A persistência é do pai (via `onImagensChange` → autosave do modal).
+ * Galeria em grade da aba Imagens. Copia arquivos escolhidos para a pasta do dono
+ * (`imagens/personagens/<Nome>/01-a3f9.png`…) — o mesmo endereço que o "Organizar imagens" daria —
+ * e guarda só `rel`. A persistência é do pai (via `onImagensChange` → autosave do modal).
+ *
+ * Tirar uma imagem da galeria só apaga o ARQUIVO se ninguém mais o cita: versão clonada herda os
+ * mesmos arquivos da galeria de origem, e um mapa pode ter a mesma imagem num card.
  */
 export function GaleriaPersonagem({
-  personagemId,
+  dono,
   imagens,
   onImagensChange,
-  dirAssets,
+  entidade,
+  arquivoEntidade,
 }: {
-  personagemId?: string
+  /** de quem são as imagens: decide a pasta onde as cópias nascem */
+  dono: DonoImagem
   imagens: ImagemPersonagem[]
   onImagensChange: (novo: ImagemPersonagem[]) => void
-  /** destino das cópias; default = assets/ da campanha do personagem */
-  dirAssets?: string
+  /** a entidade inteira em memória (todas as versões), para a checagem de citação */
+  entidade: unknown
+  /** JSON da entidade no cofre; `null` = desconhecido, e aí o arquivo removido nunca é apagado */
+  arquivoEntidade: string | null
 }) {
   const vaultPath = useApp((s) => s.vaultPath)
   const repo = useApp((s) => s.repo)
-  const caminhoPorId = useApp((s) => s.caminhoPorId)
   const [ampliadaRel, setAmpliadaRel] = useState<string | null>(null)
 
   const ampliada = imagens.find((i) => i.rel === ampliadaRel) ?? null
@@ -39,10 +47,7 @@ export function GaleriaPersonagem({
   }, [ampliadaRel])
 
   async function adicionar() {
-    const caminho = personagemId ? caminhoPorId[personagemId] : null
-    // assets/ da mesma pasta do personagem (igual ao retrato), salvo destino explícito
-    const dir = dirAssets ?? (caminho ? `${caminho.split('/').slice(0, 2).join('/')}/assets` : null)
-    if (!repo || !dir) return
+    if (!repo) return
     let lista = imagens
     try {
       const escolha = await open({
@@ -54,7 +59,7 @@ export function GaleriaPersonagem({
       for (const arquivo of arquivos) {
         const nomeArquivo = arquivo.split(/[\\/]/).pop() ?? ''
         const ext = (nomeArquivo.includes('.') ? nomeArquivo.split('.').pop()! : 'png').toLowerCase()
-        const destinoRel = `${dir}/galeria-${crypto.randomUUID()}.${ext}`
+        const destinoRel = await destinoImagemNova(dono, { papel: 'numerada' }, ext, { caminho: arquivo })
         await repo.copiarParaCofre(arquivo, destinoRel)
         lista = adicionarImagem(lista, destinoRel)
       }
@@ -67,10 +72,14 @@ export function GaleriaPersonagem({
 
   async function remover(rel: string) {
     if (!(await ask('Remover esta imagem do personagem?', { title: 'Grimório', kind: 'warning' }))) return
+    // a entidade de ANTES da remoção: ainda tem esta citação, que é a única permitida
+    const antes = entidade
     onImagensChange(removerImagem(imagens, rel))
     setAmpliadaRel(null)
+    if (!repo || arquivoEntidade === null) return // na dúvida, o arquivo fica
     try {
-      await repo?.removerArquivoCofre(rel)
+      const ninguemMais = await repo.citacaoUnicaDaImagem(rel, { valor: antes, arquivo: arquivoEntidade, permitidas: 1 })
+      if (ninguemMais) await repo.removerArquivoCofre(rel)
     } catch (e) {
       console.error('Falha ao apagar arquivo da galeria:', e)
     }

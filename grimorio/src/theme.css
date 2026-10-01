@@ -1200,6 +1200,43 @@ button:hover { border-color: var(--dourado); color: var(--dourado-claro); }
   background: var(--fundo); color: var(--texto); border: 1px solid var(--borda);
 }
 
+/* ---- aba Imagens: organizar as imagens do cofre (prévia → organizar → desfazer) ---- */
+.opcoes-caminho code { font-size: 0.95em; word-break: normal; }
+.organizar-acoes { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0 6px; }
+.organizar-acoes .opcoes-acao { margin-right: 0; }
+.organizar-dica { margin: 0 0 8px; font-size: 0.8rem; color: var(--texto-fraco); }
+.organizar-resumo { margin: 8px 0; font-size: 0.86rem; color: var(--texto); }
+.organizar-resumo strong { color: var(--dourado-claro); font-variant-numeric: tabular-nums; }
+.organizar-resultado { margin: 0 0 12px; font-size: 0.85rem; color: var(--dourado-claro); }
+.organizar-previa {
+  max-height: 38vh; overflow-y: auto; margin: 0 0 12px; padding: 6px 10px;
+  background: var(--fundo); border: 1px solid var(--borda); border-radius: 6px;
+}
+.organizar-grupo + .organizar-grupo { margin-top: 2px; }
+.organizar-grupo summary { cursor: pointer; padding: 3px 0; font-size: 0.84rem; color: var(--texto); }
+.organizar-grupo summary:focus-visible { outline: 2px solid var(--dourado); outline-offset: 2px; border-radius: 3px; }
+.organizar-conta { margin-left: 6px; font-size: 0.75rem; color: var(--texto-fraco); font-variant-numeric: tabular-nums; }
+.organizar-grupo ul { margin: 2px 0 6px; padding: 0 0 0 14px; list-style: none; }
+.organizar-grupo li { display: flex; align-items: baseline; gap: 6px; min-width: 0; font-size: 0.78rem; line-height: 1.55; }
+.organizar-de { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--texto-fraco); }
+.organizar-seta { flex: none; color: var(--texto-fraco); }
+.organizar-para { flex: none; max-width: 55%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--texto); }
+.organizar-avisos { margin: 0 0 12px; padding-left: 18px; font-size: 0.8rem; color: var(--texto-fraco); }
+/* repetidas entre donos: uma linha de aviso; o "ver" no fim abre a lista (o marcador do details sai, o da lista fica) */
+.organizar-repetidas { padding-top: 3px; } /* o contorno de foco não invade o aviso de cima */
+.organizar-repetidas summary { cursor: pointer; list-style: none; }
+.organizar-repetidas summary::-webkit-details-marker { display: none; }
+.organizar-repetidas summary:focus-visible { outline: 2px solid var(--dourado); outline-offset: 2px; border-radius: 3px; }
+.organizar-ver { color: var(--dourado-claro); text-decoration: underline; text-underline-offset: 2px; }
+.organizar-repetidas[open] .organizar-ver-abrir, .organizar-repetidas:not([open]) .organizar-ver-fechar { display: none; }
+.organizar-repetidas ul { max-height: 30vh; overflow-y: auto; margin: 4px 0 2px; padding-left: 12px; list-style: none; }
+/* recuo deslocado: o caminho longo quebra em várias linhas, e o começo de cada grupo tem de saltar aos olhos */
+.organizar-repetidas li { overflow-wrap: anywhere; line-height: 1.5; padding-left: 12px; text-indent: -12px; }
+.organizar-repetidas li + li { margin-top: 4px; }
+.organizar-andamento { margin: 0 0 10px; }
+.organizar-progresso { display: block; width: 100%; height: 8px; accent-color: var(--dourado); }
+.organizar-fase { margin: 4px 0 0; font-size: 0.8rem; color: var(--texto-fraco); font-variant-numeric: tabular-nums; }
+
 /* ---- aba IA: escolha do modelo (do mais barato ao mais caro) ---- */
 .opcoes-modelos { display: flex; flex-direction: column; gap: 6px; }
 .opcao-modelo {

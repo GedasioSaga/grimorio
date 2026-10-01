@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
-  destinoRetrato,
   dirDoCaminho,
+  donoDoRetrato,
   extensaoDe,
   novaVersaoCenarioComRetrato,
   novaVersaoPersonagemComRetrato,
@@ -9,6 +9,7 @@ import {
   sugestaoDeNome,
 } from '../lib/transformarImagem'
 import type { Cenario, Personagem, VaultTree, VersaoCenario, VersaoPersonagem } from '../lib/types'
+import { destinoDe } from '../lib/organizarImagens/nomes'
 
 describe('sugestaoDeNome', () => {
   it('remove a extensão e espaços das pontas', () => {
@@ -48,23 +49,25 @@ describe('dirDoCaminho', () => {
   })
 })
 
-describe('destinoRetrato', () => {
-  it('personagem: assets/ da própria pasta, com id e versão', () => {
-    expect(
-      destinoRetrato('personagem', { id: 'p1', caminho: 'personagens-soltos/heroi/heroi.json', versaoAtivaId: 'v1' }, 'png'),
-    ).toBe('personagens-soltos/heroi/assets/retrato-p1-v1.png')
+describe('donoDoRetrato — retrato novo nasce com nome legível', () => {
+  const retrato = { papel: 'retrato' } as const
+  it('personagem: pasta com o nome dele, arquivo retrato', () => {
+    expect(destinoDe(donoDoRetrato('personagem', 'Herói'), retrato, 'png', [])).toBe('imagens/personagens/Herói/retrato.png')
   })
 
-  it('cenário: pasta global imagens-cenarios com id e versão', () => {
-    expect(destinoRetrato('cenario', { id: 'c1', caminho: 'cenarios/taverna', versaoAtivaId: 'v9' }, 'jpg')).toBe(
-      'imagens-cenarios/retrato-c1-v9.jpg',
-    )
+  it('personagem com retrato já ocupado (nova forma): retrato-2, sem sobrescrever a forma anterior', () => {
+    expect(destinoDe(donoDoRetrato('personagem', 'Herói'), retrato, 'png', ['imagens/personagens/Herói/retrato.png']))
+      .toBe('imagens/personagens/Herói/retrato-2.png')
   })
 
-  it('item: pasta global imagens-itens só com id', () => {
-    expect(destinoRetrato('item', { id: 'i1', caminho: 'itens/espada.json' }, 'webp')).toBe(
-      'imagens-itens/retrato-i1.webp',
-    )
+  it('cenário: dentro da pasta do pai quando há cadeia', () => {
+    expect(destinoDe(donoDoRetrato('cenario', 'Reino: Taverna', ['Reino', 'Taverna']), retrato, 'jpg', []))
+      .toBe('imagens/cenarios/Reino/Taverna/retrato.jpg')
+    expect(destinoDe(donoDoRetrato('cenario', 'Taverna'), retrato, 'jpg', [])).toBe('imagens/cenarios/Taverna/retrato.jpg')
+  })
+
+  it('item: arquivo com o nome do item', () => {
+    expect(destinoDe(donoDoRetrato('item', 'Espada'), retrato, 'webp', [])).toBe('imagens/itens/Espada.webp')
   })
 })
 

@@ -13,6 +13,7 @@ import { htmlParaMarkdown, markdownParaHtml } from '../lib/markdownHtml'
 import { extrairImagens, reinserirImagens } from '../lib/imagensMarcador'
 import { htmlParaTexto } from '../lib/htmlTexto'
 import { contextoDoCaminho } from '../lib/contextoIA'
+import { destinoImagemNova, type FonteImagem } from './destinoImagem'
 
 const AUTOSAVE_MS = 800
 
@@ -26,8 +27,13 @@ const ACOES_IA_ESCRITA: AcaoIA[] = [
   },
 ]
 
-function idImagem(): string {
-  return crypto.randomUUID().replace(/-/g, '').slice(0, 16)
+/**
+ * Destino de uma imagem nova da página: `imagens/notas/<título da página>/01-a3f9.png`, o mesmo
+ * endereço que o "Organizar imagens" daria a ela, com o sufixo do conteúdo (dois PCs offline não
+ * escolhem o mesmo `01`). Página sem título cai em "sem título".
+ */
+function destinoImagemDaNota(titulo: string, ext: string, fonte: FonteImagem): Promise<string> {
+  return destinoImagemNova({ tipo: 'nota', nome: titulo.trim() || 'sem título' }, { papel: 'numerada' }, ext, fonte)
 }
 
 /** Carregador: busca o corpo da página e só então monta o editor (keyed pelo slug). */
@@ -142,10 +148,10 @@ function EditorInterno({ repo, slug, corpoInicial, titulo, cadernoDirRel }: {
       if (typeof arquivo !== 'string') return
       const nome = arquivo.split(/[\\/]/).pop() ?? ''
       const ext = (nome.includes('.') ? nome.split('.').pop()! : 'png').toLowerCase()
-      const rel = `imagens-notas/${idImagem()}.${ext}`
       // grava a imagem no cofre reusando o VaultRepo do store (copiarParaCofre já existe na v1)
       const repoCofre = useApp.getState().repo
       if (!repoCofre) throw new Error('cofre não carregado')
+      const rel = await destinoImagemDaNota(titulo, ext, { caminho: arquivo })
       await repoCofre.copiarParaCofre(arquivo, rel)
       editor.chain().focus().insertContent({ type: 'image', attrs: { rel } }).run()
     } catch (e) {
@@ -161,8 +167,8 @@ function EditorInterno({ repo, slug, corpoInicial, titulo, cadernoDirRel }: {
       if (!repoCofre) throw new Error('cofre não carregado')
       const subtipo = (file.type.split('/')[1] || 'png').toLowerCase()
       const ext = subtipo === 'jpeg' ? 'jpg' : subtipo
-      const rel = `imagens-notas/${idImagem()}.${ext}`
       const bytes = new Uint8Array(await file.arrayBuffer())
+      const rel = await destinoImagemDaNota(titulo, ext, { bytes })
       await repoCofre.escreverBinario(rel, uint8ParaBase64(bytes))
       editor.chain().focus().insertContent({ type: 'image', attrs: { rel } }).run()
     } catch (e) {

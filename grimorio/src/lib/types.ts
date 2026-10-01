@@ -15,7 +15,7 @@ export interface FocoRetrato {
 export interface VersaoPersonagem {
   id: string
   nome: string        // nome do personagem NESTA forma (ex: "Bruce Banner", "Hulk")
-  retrato: string | null // caminho relativo ao cofre, ex.: "campanhas/x/assets/foo.png"
+  retrato: string | null // caminho relativo ao cofre, ex.: "imagens/personagens/Gandalf/retrato.png" (legado: "campanhas/x/assets/foo.png")
   foco?: FocoRetrato  // enquadramento do retrato; ausente = centro
   resumo: string
   descricao: string  // HTML TipTap (era `corpo`)
@@ -58,7 +58,7 @@ export interface ItemNoCenario {
 export interface VersaoCenario {
   id: string
   nome: string          // "Base", "Dia", "Noite", "Destruído"
-  retrato: string | null // rel ao cofre, ex.: "imagens-cenarios/retrato-<cenId>-<verId>.png"
+  retrato: string | null // rel ao cofre, ex.: "imagens/cenarios/Reino/Taverna/retrato.png" (legado: "imagens-cenarios/retrato-<cenId>-<verId>.png")
   foco?: FocoRetrato    // enquadramento do retrato; ausente = centro
   resumo: string
   descricao: string  // HTML TipTap
@@ -93,7 +93,7 @@ export interface Item {
   id: string
   nome: string
   resumo: string       // aparece na sidebar, no contexto da IA e no grafo
-  retrato: string | null // rel ao cofre, ex.: "imagens-itens/retrato-<itemId>.png"
+  retrato: string | null // rel ao cofre, ex.: "imagens/itens/Espada Élfica.png" (legado: "imagens-itens/retrato-<itemId>.png")
   foco?: FocoRetrato   // enquadramento do retrato; ausente = centro
   descricao: string    // HTML TipTap — o que é e como se parece
   informacao: string   // HTML — dados secos: peso, raridade, valor, requisitos
